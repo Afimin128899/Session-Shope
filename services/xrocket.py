@@ -1,31 +1,68 @@
 import logging
+
 import aiohttp
 
 from config import XROCKET_API_KEY
 
-BASE_URL = "https://pay.xrocket.tg/api/v1"
+BASE_URL = "https://pay.api.xrocket.exchange/api/v1"
 
 
-async def _request(method: str, path: str, payload: dict | None = None):
+async def _request(method: str, path: str, payload: dict | None = None, params: dict | None = None):
     if not XROCKET_API_KEY:
         logging.error("[xrocket] XROCKET_API_KEY is not configured")
         return None
 
-    headers = {"Authorization": f"Bearer {XROCKET_API_KEY}"}
-    async with aiohttp.ClientSession() as session:
-        async with session.request(method, f"{BASE_URL}{path}", headers=headers, json=payload) as r:
-            data = await r.json()
-            return data
+    headers = {
+        "Authorization": f"Bearer {XROCKET_API_KEY}",
+        "Accept": "application/json",
+        "Content-Type": "application/json",
+    }
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.request(
+                method,
+                f"{BASE_URL}{path}",
+                headers=headers,
+                json=payload,
+                params=params,
+            ) as response:
+                data = await response.json(content_type=None)
+                if response.status >= 400:
+                    logging.warning("[xrocket] HTTP %s: %s", response.status, data)
+                    return None
+                return data.get("data", data) if isinstance(data, dict) else data
+    except Exception:
+        logging.exception("[xrocket] request failed")
+        return None
 
 
-async def create_invoice(amount: float, description: str, payload: str):
-    return await _request("POST", "/invoice", {
-        "amount": amount,
-        "currency": "RUB",
-        "description": description,
-        "payload": payload,
+async def create_invoice(
+    amount_usdt: float,
+    description: str,
+    client_invoice_id: str,
+    payload: str,
+    telegram_id: int,
+    telegram_username: str | None = None,
+):
+    return await _request("POST", "/invoices", {
+        "priceAmount": f"{amount_usdt:.6f}",
+        "priceCurrency": "USDT",
+        "payoutCurrency": "USDT",
+        "payCurrencies": ["USDT"],
+        "clientInvoiceId": client_invoice_id,
+        "description": description[:1000],
+        "expiresIn": 3600000,
+        "callback": {"payload": payload},
+        "customer": {
+            "telegramId": str(telegram_id),
+            "telegramUsername": (telegram_username or "").lstrip("@"),
+        },
     })
 
 
 async def get_invoice(invoice_id: str):
-    return await _request("GET", f"/invoice/{invoice_id}")
+    return await _request("GET", "/invoice", params={"invoiceId": invoice_id})
+
+
+def is_paid(invoice: dict | None) -> bool:
+    return bool(invoice and str(invoice.get("status", "")).lower() == "paid")
