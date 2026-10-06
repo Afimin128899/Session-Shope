@@ -15,7 +15,7 @@ from aiogram.fsm.state import State, StatesGroup
 from config import ADMIN_IDS, SUPPORT_USERNAME, RUB_DETAILS
 from utils.nav import edit_balance, edit_message_safe, edit_main, answer_safe
 from utils.emoji_map import EMOJI_WALLET, EMOJI_CHECK, EMOJI_CROSS, EMOJI_BACK, EMOJI_INFO, EMOJI_CHAT, EMOJI_COIN
-from database.db import get_user, add_balance, try_mark_comment_used, is_comment_used, log_payment, get_setting
+from database.db import get_user, add_balance, add_deposit_with_first_bonus, try_mark_comment_used, is_comment_used, log_payment, get_setting
 from services.exchange import get_rub_usdt_rate
 
 balance_router = Router()
@@ -184,7 +184,7 @@ async def process_stars_successful_payment(message: Message):
     stars = int(payment.total_amount)
     rub_amount = float(stars)
 
-    await add_balance(message.from_user.id, rub_amount)
+    credited_amount, bonus_amount = await add_deposit_with_first_bonus(message.from_user.id, rub_amount)
     await log_payment(
         message.from_user.id,
         rub_amount,
@@ -195,9 +195,10 @@ async def process_stars_successful_payment(message: Message):
 
     await message.answer(
         "⭐ <b>Оплата получена!</b>\n\n"
-        f"На ваш баланс зачислено: <b>{stars} ₽</b>\n"
-        f"Оплачено: <b>{stars} ⭐</b>\n\n"
-        "<i>Курс: 1 ⭐ = 1 ₽</i>"
+        f"На баланс зачислено: <b>{credited_amount:.2f} ₽</b>\n"
+        f"Оплачено: <b>{stars} ⭐</b>\n"
+        + (f"🎁 Бонус за первое пополнение: <b>+{bonus_amount:.2f} ₽</b>\n" if bonus_amount > 0 else "")
+        + "\n<i>Курс: 1 ⭐ = 1 ₽</i>"
     )
 
 
