@@ -239,13 +239,13 @@ async def admin_balance_step_1(call: CallbackQuery, state: FSMContext):
         return
 
     mode = "add" if call.data == "admin_add_balance" else "set"
-    await state.update_data(balance_mode=mode, balance_currency="USDT")
+    await state.update_data(balance_mode=mode, balance_currency="RUB")
     await state.set_state(AdminBalanceState.waiting_for_user_id)
 
     msg = (
-        f"{PLUS} <b>Введите ID или Username (@username)</b> пользователя для пополнения баланса (USDT $):"
+        f"{PLUS} <b>Введите ID или Username (@username)</b> пользователя для пополнения баланса (RUB ₽):"
         if mode == "add"
-        else f"{STAR} <b>Введите ID или Username (@username)</b> пользователя для установки баланса (USDT $):"
+        else f"{STAR} <b>Введите ID или Username (@username)</b> пользователя для установки баланса (RUB ₽):"
     )
     await edit_message_safe(call, msg, reply_markup=back_to_admin())
     await answer_safe(call)
@@ -294,7 +294,7 @@ async def admin_balance_step_2(message: Message, state: FSMContext):
     await state.set_state(AdminBalanceState.waiting_for_amount)
 
     data = await state.get_data()
-    currency = data.get("balance_currency", "USDT")
+    currency = data.get("balance_currency", "RUB")
     curr_text = "USDT ($)" if currency == "USDT" else "RUB (₽)"
     user_label = f"@{target_username}" if target_username else f"ID: {target_user_id}"
 
@@ -315,7 +315,7 @@ async def admin_balance_step_3(message: Message, state: FSMContext):
         uid = data["target_user_id"]
         target_username = data.get("target_username")
         mode = data["balance_mode"]
-        currency = data.get("balance_currency", "USDT")
+        currency = data.get("balance_currency", "RUB")
 
         user_label = f"@{target_username} (<code>{uid}</code>)" if target_username else f"<code>{uid}</code>"
 
@@ -371,7 +371,7 @@ async def start_change_price(call: CallbackQuery, state: FSMContext):
 
     await edit_message_safe(
         call,
-        f"{EXCHANGE} Категория: <b>{cat['name'] if cat else slug}</b>\n\n{ART} Введите новую цену в TON:",
+        f"{EXCHANGE} Категория: <b>{cat['name'] if cat else slug}</b>\n\n{ART} Введите новую цену в рублях (₽):",
         reply_markup=back_to_admin(),
     )
     await answer_safe(call)
@@ -405,7 +405,7 @@ async def process_new_price(message: Message, state: FSMContext):
     await message.answer(
         f"{OK} <b>Цена обновлена</b>\n\n"
         f"{EXCHANGE} Категория: <b>{cat_name}</b>\n"
-        f"{COIN} Новая цена: <code>{new_price:.4f}</code> TON\n"
+        f"{COIN} Новая цена: <code>{new_price:.2f}</code> ₽\n"
         f"{INFO} Обновлено записей: <code>{updated}</code>",
         reply_markup=get_admin_panel(),
     )
@@ -527,7 +527,7 @@ async def show_account_detail(call: CallbackQuery):
         f"{EXCHANGE} Категория: <b>{cat_display}</b>\n"
         f"{MAIL} Номер: <code>{account['number']}</code>\n"
         f"{LOCK} 2FA пароль: <code>{account.get('password') or '-'}</code>\n"
-        f"{COIN} Цена: <code>{float(account['price']):.4f}</code> TON\n"
+        f"{COIN} Цена: <code>{float(account['price']):.2f}</code> ₽\n"
         f"{CHART} Статус: {status_text}\n"
     )
 
@@ -650,8 +650,8 @@ async def edit_price_ask(call: CallbackQuery, state: FSMContext):
     await edit_message_safe(
         call,
         f"{COIN} <b>Изменение цены</b>\n\n"
-        f"Текущая цена: <b>{float(account['price']):.4f} TON</b>\n\n"
-        f"Введите новую цену в TON (до 2 знаков после запятой):\n"
+        f"Текущая цена: <b>{float(account['price']):.2f} ₽</b>\n\n"
+        f"Введите новую цену в рублях (₽) (до 2 знаков после запятой):\n"
         f"Пример: <code>1.50</code>",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="« Отмена", callback_data=f"admin_account_detail:{acc_id}")]
@@ -690,7 +690,7 @@ async def edit_price_save(message: Message, state: FSMContext):
         await message.answer(
             f"{OK} <b>Цена изменена</b>\n\n"
             f"{ACCOUNT} ID: <code>{acc_id}</code>\n"
-            f"{COIN} Новая цена: <b>{new_price:.4f} TON</b>",
+            f"{COIN} Новая цена: <b>{new_price:.2f} ₽</b>",
             reply_markup=back_to_admin(),
         )
     else:
