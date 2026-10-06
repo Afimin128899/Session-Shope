@@ -222,6 +222,32 @@ async def show_users(call: CallbackQuery):
     await answer_safe(call)
 
 
+@admin_router.callback_query(F.data == "admin_maintenance")
+async def admin_maintenance_handler(call: CallbackQuery):
+    if not is_admin(call.from_user.id):
+        return
+    from database.db import get_setting, set_setting
+    enabled = (await get_setting("maintenance_mode", "0")).strip() == "1"
+    new_value = "0" if enabled else "1"
+    await set_setting("maintenance_mode", new_value)
+    status = "ВКЛЮЧЕН" if new_value == "1" else "ВЫКЛЮЧЕН"
+    await edit_message_safe(
+        call,
+        f"🔧 <b>Режим техработ</b>\n\n"
+        f"Статус: <b>{status}</b>\n\n"
+        f"{'Пользователи сейчас видят экран техработ.' if new_value == '1' else 'Пользователи снова могут пользоваться ботом.'}",
+        reply_markup=get_admin_panel(),
+    )
+    await answer_safe(call, f"Режим техработ: {status}")
+
+
+@admin_router.callback_query(F.data == "check_maintenance")
+async def check_maintenance_from_admin(call: CallbackQuery):
+    from database.db import get_setting
+    enabled = (await get_setting("maintenance_mode", "0")).strip() == "1"
+    await answer_safe(call, "🔧 Технические работы ещё идут." if enabled else "🟢 Бот доступен!", show_alert=True)
+
+
 @admin_router.callback_query(F.data == "admin_balance_menu")
 async def admin_balance_menu_handler(call: CallbackQuery):
     if not is_admin(call.from_user.id):
