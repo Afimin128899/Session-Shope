@@ -28,6 +28,9 @@ ADMIN_IDS = [
 ]
 
 LAVE_PAY_API_KEY = os.getenv("LAVE_PAY_API_KEY", "").strip()
+CRYPTO_PAY_TOKEN = os.getenv("CRYPTO_PAY_TOKEN", "").strip()
+XROCKET_API_KEY = os.getenv("XROCKET_API_KEY", "").strip()
+
 SUPPORT_USERNAME = os.getenv("SUPPORT_USERNAME", "").strip()
 REVIEWS_LINK = os.getenv("REVIEWS_LINK", "").strip()
 TONKEEPER_WALLET = os.getenv("TONKEEPER_WALLET", "").strip()
