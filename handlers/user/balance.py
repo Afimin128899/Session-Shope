@@ -57,8 +57,8 @@ async def topup_balance_menu(call: CallbackQuery, state: FSMContext):
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text="⭐ Оплатить",
-                    callback_data="stars_menu",
+                    text="Telegram Stars ⭐ — 1 ⭐ = 1 ₽",
+                    callback_data="deposit_stars",
                 ),
             ],
             [
@@ -96,47 +96,6 @@ async def topup_balance_menu(call: CallbackQuery, state: FSMContext):
 
     await edit_message_safe(call, text, reply_markup=kb)
     await answer_safe(call)
-
-
-# ── Меню Telegram Stars ─────────────────────────────────────────────
-
-@balance_router.callback_query(F.data == "stars_menu")
-async def stars_menu(call: CallbackQuery, state: FSMContext):
-    await state.set_state(StarsDepositState.waiting_amount)
-    kb = InlineKeyboardMarkup(inline_keyboard=[
-        [
-            InlineKeyboardButton(
-                text="Назад",
-                callback_data="topup_balance",
-                icon_custom_emoji_id=EMOJI_BACK,
-            ),
-        ],
-    ])
-    text = (
-        "⭐ <b>Пополнение Telegram Stars</b>\n\n"
-        "Введите количество звёзд для пополнения:\n"
-        "<i>Курс фиксированный: </i><b>1 ⭐ = 1 ₽</b>\n\n"
-        "Например: <code>100</code> ⭐ = <code>100 ₽</code>"
-    )
-    await edit_message_safe(call, text, reply_markup=kb)
-    await answer_safe(call)
-
-
-@balance_router.callback_query(F.data == "stars_bonus_info")
-async def stars_bonus_info(call: CallbackQuery):
-    await call.answer(
-        "🎁 Бонус +10% действует на первое пополнение.",
-        show_alert=True,
-    )
-
-
-@balance_router.callback_query(F.data == "my_stars")
-async def my_stars(call: CallbackQuery):
-    await call.answer(
-        "⭐ Баланс Telegram Stars хранится в вашем аккаунте Telegram. "
-        "Для пополнения нажмите «Оплатить».",
-        show_alert=True,
-    )
 
 
 # ── Пополнение Telegram Stars: 1 ⭐ = 1 ₽ ─────────────────────────────
