@@ -61,11 +61,11 @@ async def edit_main(call: CallbackQuery) -> None:
 async def edit_balance(call: CallbackQuery, currency: str = "USDT") -> None:
     await ensure_user(call.from_user.id, call.from_user.username)
     user = await get_user(call.from_user.id)
-    bal_usdt = float(user["balance_usdt"]) if user and "balance_usdt" in user else 0.0
+    balance = float(user["balance"]) if user and "balance" in user else 0.0
 
     text = (
         f"<tg-emoji emoji-id=\"5258260149037965799\">💼</tg-emoji> <b>Мой кошелёк</b>\n\n"
-        f"<tg-emoji emoji-id=\"5406841020769936275\">💵</tg-emoji> <b>Баланс:</b> <code>{bal_usdt:.2f} USDT ($)</code>\n\n"
+        f"<tg-emoji emoji-id=\"5406841020769936275\">💵</tg-emoji> <b>Баланс:</b> <code>{balance:.2f} ₽</code>\n\n"
         f"Выберите способ пополнения баланса ниже <tg-emoji emoji-id=\"5470177992950946662\">👇</tg-emoji>"
     )
 
