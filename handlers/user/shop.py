@@ -22,7 +22,7 @@ from keyboards.user_kb import (
 from utils import constants as c
 from utils.nav import edit_message_safe, answer_safe
 from utils.emoji_map import EMOJI_CHECK, EMOJI_PHONE, EMOJI_LOCK
-from services.exchange import convert_rub_to_usdt
+
 
 shop_router = Router()
 
@@ -30,7 +30,7 @@ shop_router = Router()
 @shop_router.callback_query(F.data == "buy")
 async def open_shop(call: CallbackQuery):
     user = await get_user(call.from_user.id)
-    bal_usdt = float(user.get("balance_usdt", 0.0)) if user else 0.0
+    balance = float(user.get("balance", 0.0)) if user else 0.0
 
     kb, has_any = await shop_menu()
     if not has_any:
@@ -38,7 +38,7 @@ async def open_shop(call: CallbackQuery):
     else:
         text = (
             f"Покупка Telegram аккаунта <tg-emoji emoji-id=\"5258134813302332906\">📦</tg-emoji>\n\n"
-            f"<tg-emoji emoji-id=\"5406841020769936275\">💵</tg-emoji> <b>Баланс:</b> <code>{bal_usdt:.2f} USDT ($)</code>\n\n"
+            f"<tg-emoji emoji-id=\"5406841020769936275\">💵</tg-emoji> <b>Баланс:</b> <code>{balance:.2f} ₽</code>\n\n"
             f"<tg-emoji emoji-id=\"5258509201306557640\">📍</tg-emoji> Выберите категорию аккаунта:"
         )
     await edit_message_safe(call, text, reply_markup=kb)
@@ -48,7 +48,7 @@ async def open_shop(call: CallbackQuery):
 @shop_router.callback_query(F.data == "back_buy")
 async def back_buy(call: CallbackQuery):
     user = await get_user(call.from_user.id)
-    bal_usdt = float(user.get("balance_usdt", 0.0)) if user else 0.0
+    balance = float(user.get("balance", 0.0)) if user else 0.0
 
     kb, has_any = await shop_menu()
     if not has_any:
@@ -56,7 +56,7 @@ async def back_buy(call: CallbackQuery):
     else:
         text = (
             f"Покупка Telegram аккаунта <tg-emoji emoji-id=\"5258134813302332906\">📦</tg-emoji>\n\n"
-            f"<tg-emoji emoji-id=\"5406841020769936275\">💵</tg-emoji> <b>Баланс:</b> <code>{bal_usdt:.2f} USDT ($)</code>\n\n"
+            f"<tg-emoji emoji-id=\"5406841020769936275\">💵</tg-emoji> <b>Баланс:</b> <code>{balance:.2f} ₽</code>\n\n"
             f"<tg-emoji emoji-id=\"5258509201306557640\">📍</tg-emoji> Выберите категорию аккаунта:"
         )
     await edit_message_safe(call, text, reply_markup=kb)
@@ -130,7 +130,7 @@ async def select_product(call: CallbackQuery):
         else:
             acc_display_price = acc_price
 
-        price_str = f"{acc_display_price:.2f} USDT ($)"
+        price_str = f"{acc_display_price:.2f} ₽"
         btn_text = f"{mask_phone(acc['number'])} — {price_str}"
         rows.append([
             InlineKeyboardButton(
@@ -171,7 +171,7 @@ async def select_specific_account(call: CallbackQuery):
     else:
         display_price = price
 
-    price_str = f"{display_price:.2f} USDT ($)"
+    price_str = f"{display_price:.2f} ₽"
 
     cat_emoji = cat.get("emoji") if cat else None
     if cat_emoji and cat_emoji.isdigit():
@@ -236,20 +236,20 @@ async def confirm_purchase(call: CallbackQuery):
     display_country = cat.get("name") if cat else sku
 
     user = await get_user(call.from_user.id)
-    price_in_usdt = float(account["price"])
+    price_rub = float(account["price"])
 
     referrer_id = await get_referrer(call.from_user.id)
     if referrer_id:
         settings = await get_referral_settings()
-        effective_price_usdt = round(price_in_usdt * (1 - settings["discount_pct"] / 100), 2)
+        effective_price_rub = round(price_rub * (1 - settings["discount_pct"] / 100), 2)
     else:
         settings = None
-        effective_price_usdt = price_in_usdt
+        effective_price_rub = price_rub
 
-    user_balance = float(user.get("balance_usdt", 0.0)) if user else 0.0
+    user_balance = float(user.get("balance", 0.0)) if user else 0.0
 
-    if user_balance < effective_price_usdt:
-        price_fmt = f"{effective_price_usdt:.2f} USDT ($)"
+    if user_balance < effective_price_rub:
+        price_fmt = f"{effective_price_rub:.2f} ₽"
         await answer_safe(call, f"❌ Недостаточно средств на долларовом балансе. Требуется {price_fmt}.", show_alert=True)
         return
 
@@ -257,13 +257,13 @@ async def confirm_purchase(call: CallbackQuery):
 
     if referrer_id and settings:
         purchase_id = await buy_account_with_referral(
-            call.from_user.id, account["id"], price_in_usdt, date_str,
+            call.from_user.id, account["id"], price_rub, date_str,
             settings["discount_pct"], settings["bonus_pct"],
-            referrer_id=referrer_id, currency="USDT"
+            referrer_id=referrer_id, currency="RUB"
         )
     else:
         purchase_id = await buy_account(
-            call.from_user.id, account["id"], price_in_usdt, date_str, currency="USDT"
+            call.from_user.id, account["id"], price_rub, date_str, currency="USDT"
         )
 
     if not purchase_id:
@@ -275,7 +275,7 @@ async def confirm_purchase(call: CallbackQuery):
     import logging
 
     buyer_info = f"@{call.from_user.username}" if call.from_user.username else f"<a href='tg://user?id={call.from_user.id}'>{call.from_user.first_name}</a>"
-    price_str = f"{effective_price_usdt:.2f} USDT"
+    price_str = f"{effective_price_rub:.2f} ₽"
 
     admin_text = (
         f'<tg-emoji emoji-id="5224268678345794470">🛍</tg-emoji> <b>Уведомление о продаже аккаунта!</b>\n\n'
@@ -291,9 +291,9 @@ async def confirm_purchase(call: CallbackQuery):
         except Exception as admin_err:
             logging.error(f"[shop] Не удалось отправить уведомление админу {admin_id}: {admin_err}")
 
-    remaining_balance = user_balance - effective_price_usdt
-    display_spent = f"{effective_price_usdt:.2f} USDT"
-    display_balance = f"<tg-emoji emoji-id='5406841020769936275'>☺️</tg-emoji> Баланс: <b>{remaining_balance:.2f} USDT</b>"
+    remaining_balance = user_balance - effective_price_rub
+    display_spent = f"{effective_price_rub:.2f} ₽"
+    display_balance = f"<tg-emoji emoji-id='5406841020769936275'>☺️</tg-emoji> Баланс: <b>{remaining_balance:.2f} ₽</b>"
 
     cat_emoji = cat.get("emoji") if cat else None
     if cat_emoji and cat_emoji.isdigit():
