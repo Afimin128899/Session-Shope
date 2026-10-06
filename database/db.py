@@ -105,6 +105,20 @@ async def init_db ():
                     except Exception as alter_err:
                         logging.warning(f"[db] ALTER TABLE users ADD COLUMN balance_usdt skipped: {alter_err}")
 
+                    # Безопасная миграция: флаг использования бонуса за первое пополнение
+                    try:
+                        await cur.execute(
+                            "SELECT COLUMN_NAME FROM information_schema.COLUMNS "
+                            "WHERE TABLE_SCHEMA = %s AND TABLE_NAME = 'users' AND COLUMN_NAME = 'first_deposit_bonus_used'",
+                            (DB_CONFIG['db'],)
+                        )
+                        if not await cur.fetchone():
+                            await cur.execute(
+                                "ALTER TABLE users ADD COLUMN first_deposit_bonus_used TINYINT(1) NOT NULL DEFAULT 0"
+                            )
+                    except Exception as alter_err:
+                        logging.warning(f"[db] ALTER TABLE users ADD COLUMN first_deposit_bonus_used skipped: {alter_err}")
+
                     # Безопасная миграция: добавляем username, если её нет
                     try:
                         await cur.execute(
@@ -352,6 +366,30 @@ async def add_balance (user_id :int ,amount :float ):
     async with _get_pool().acquire() as conn :
         async with conn .cursor ()as cur :
             await cur .execute ("UPDATE users SET balance = balance + %s WHERE id = %s",(amount ,user_id ))
+
+
+async def add_deposit_with_first_bonus(user_id: int, amount: float) -> tuple[float, float]:
+    """Зачисляет пополнение и одноразовый бонус 10% за первое пополнение."""
+    amount = round(float(amount), 2)
+    if amount <= 0:
+        return 0.0, 0.0
+
+    async with _get_pool().acquire() as conn:
+        async with conn.cursor() as cur:
+            bonus = round(amount * 0.10, 2)
+            await cur.execute(
+                "UPDATE users SET balance = balance + %s, first_deposit_bonus_used = 1 "
+                "WHERE id = %s AND first_deposit_bonus_used = 0",
+                (amount + bonus, user_id),
+            )
+            if cur.rowcount > 0:
+                return amount + bonus, bonus
+
+            await cur.execute(
+                "UPDATE users SET balance = balance + %s WHERE id = %s",
+                (amount, user_id),
+            )
+            return amount, 0.0
 
 async def add_balance_usdt (user_id :int ,amount :float ):
     async with _get_pool().acquire() as conn :
