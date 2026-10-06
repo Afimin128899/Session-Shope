@@ -8,8 +8,8 @@ from aiogram.fsm.state import State, StatesGroup
 from config import ADMIN_IDS, SUPPORT_USERNAME, RUB_DETAILS
 from utils.nav import edit_balance, edit_message_safe, edit_main, answer_safe
 from utils.emoji_map import EMOJI_WALLET, EMOJI_CHECK, EMOJI_CROSS, EMOJI_BACK, EMOJI_INFO, EMOJI_CHAT, EMOJI_COIN
-from database.db import get_user, add_balance_usdt, try_mark_comment_used, is_comment_used, log_payment, get_setting
-from services.exchange import get_rub_usdt_rate, convert_rub_to_usdt
+from database.db import get_user, add_balance, try_mark_comment_used, is_comment_used, log_payment, get_setting
+from services.exchange import get_rub_usdt_rate
 
 balance_router = Router()
 
@@ -108,14 +108,13 @@ async def process_rub_deposit_amount(message: Message, state: FSMContext):
         req_id = uuid.uuid4().hex[:8]
         support_val = await get_setting("support_username", SUPPORT_USERNAME or "—")
         rub_details = await get_setting("rub_details", RUB_DETAILS or "Реквизиты уточняйте у администратора")
-        rate = await get_rub_usdt_rate()
-        usdt_amount = await convert_rub_to_usdt(amount_rub)
+        
 
         kb = InlineKeyboardMarkup(inline_keyboard=[
             [
                 InlineKeyboardButton(
                     text="Я оплатил (Отправить заявку)",
-                    callback_data=f"confirm_rub_paid:{req_id}:{amount_rub:.2f}:{usdt_amount:.2f}",
+                    callback_data=f"confirm_rub_paid:{req_id}:{amount_rub:.2f}:{amount_rub:.2f}",
                     icon_custom_emoji_id=EMOJI_CHECK
                 )
             ],
@@ -132,7 +131,7 @@ async def process_rub_deposit_amount(message: Message, state: FSMContext):
             f"<tg-emoji emoji-id='5258368777350816286'>🪙</tg-emoji> <b>Заявка на пополнение №<code>{req_id}</code></b>\n\n"
             f"<blockquote>"
             f"<tg-emoji emoji-id='5258260149037965799'>💼</tg-emoji> Сумма к оплате: <b>{amount_rub:.2f} ₽</b>\n"
-            f"<tg-emoji emoji-id='5406841020769936275'>💵</tg-emoji> К зачислению: <b>{usdt_amount:.2f} USDT ($)</b>\n"
+            f"<tg-emoji emoji-id='5406841020769936275'>💵</tg-emoji> К зачислению: <b>{amount_rub:.2f} ₽</b>\n"
             f"<tg-emoji emoji-id='5258391025281408576'>📈</tg-emoji> Курс конвертации: <b>1 USDT = {rate:.2f} ₽</b>\n"
             f"<tg-emoji emoji-id='5312110302966343332'>🏦</tg-emoji> Реквизиты: <code>{rub_details}</code>\n"
             f"<tg-emoji emoji-id='5258215846450305872'>💬</tg-emoji> Поддержка / Оператор: <b>{support_val}</b>"
@@ -156,7 +155,7 @@ async def confirm_rub_paid(call: CallbackQuery):
     parts = call.data.split(":")
     req_id = parts[1]
     amount_rub = float(parts[2])
-    usdt_amount = float(parts[3]) if len(parts) > 3 else await convert_rub_to_usdt(amount_rub)
+    
 
     user_id = call.from_user.id
     user_name = call.from_user.full_name or f"User {user_id}"
@@ -165,13 +164,13 @@ async def confirm_rub_paid(call: CallbackQuery):
     admin_kb = InlineKeyboardMarkup(inline_keyboard=[
         [
             InlineKeyboardButton(
-                text=f"Подтвердить ({usdt_amount:.2f} USDT)",
-                callback_data=f"approve_rub:{user_id}:{usdt_amount:.2f}:{req_id}",
+                text=f"Подтвердить ({amount_rub:.2f} ₽)",
+                callback_data=f"approve_rub:{user_id}:{amount_rub:.2f}:{req_id}",
                 icon_custom_emoji_id=EMOJI_CHECK
             ),
             InlineKeyboardButton(
                 text="Отклонить",
-                callback_data=f"reject_rub:{user_id}:{usdt_amount:.2f}:{req_id}",
+                callback_data=f"reject_rub:{user_id}:{amount_rub:.2f}:{req_id}",
                 icon_custom_emoji_id=EMOJI_CROSS
             )
         ]
@@ -182,7 +181,7 @@ async def confirm_rub_paid(call: CallbackQuery):
         f"<blockquote>"
         f"<tg-emoji emoji-id='5258362837411045098'>👤</tg-emoji> Пользователь: <b>{user_name}</b> (ID: <code>{user_id}</code>)\n"
         f"<tg-emoji emoji-id='5258260149037965799'>💼</tg-emoji> Сумма оплаты: <b>{amount_rub:.2f} ₽</b>\n"
-        f"<tg-emoji emoji-id='5406841020769936275'>💵</tg-emoji> К зачислению: <b>{usdt_amount:.2f} USDT ($)</b>\n"
+        f"<tg-emoji emoji-id='5406841020769936275'>💵</tg-emoji> К зачислению: <b>{amount_rub:.2f} ₽</b>\n"
         f"<tg-emoji emoji-id='5226513232549664618'>🔢</tg-emoji> ID Заявки: <code>{req_id}</code>"
         f"</blockquote>"
     )
@@ -197,7 +196,7 @@ async def confirm_rub_paid(call: CallbackQuery):
 
     await edit_message_safe(
         call,
-        f"<tg-emoji emoji-id='5258419835922030550'>⏳</tg-emoji> <b>Заявка №<code>{req_id}</code> на {amount_rub:.2f} ₽ ({usdt_amount:.2f} USDT) отправлена администраторам.</b>\n\n"
+        f"<tg-emoji emoji-id='5258419835922030550'>⏳</tg-emoji> <b>Заявка №<code>{req_id}</code> на {amount_rub:.2f} ₽ ({amount_rub:.2f} ₽) отправлена администраторам.</b>\n\n"
         f"<i>Средства будут зачислены сразу после проверки перевода оператором.</i>"
     )
     await answer_safe(call, "Заявка отправлена на проверку!", show_alert=True)
@@ -228,8 +227,8 @@ async def approve_rub_deposit(call: CallbackQuery):
         return
 
     # Зачисляем баланс USDT
-    await add_balance_usdt(user_id, usdt_amount)
-    await log_payment(user_id, usdt_amount, "USDT", "manual_rub_request", req_id)
+    await add_balance(user_id, amount_rub)
+    await log_payment(user_id, amount_rub, "RUB", "manual_rub_request", req_id)
 
     # Уведомляем пользователя
     try:
@@ -237,7 +236,7 @@ async def approve_rub_deposit(call: CallbackQuery):
             user_id,
             f"<tg-emoji emoji-id='5260726538302660868'>✅</tg-emoji> <b>Ваша заявка №<code>{req_id}</code> успешно подтверждена!</b>\n\n"
             f"<blockquote>"
-            f"<tg-emoji emoji-id='5406841020769936275'>💵</tg-emoji> На ваш баланс зачислено: <b>{usdt_amount:.2f} USDT ($)</b>"
+            f"<tg-emoji emoji-id='5406841020769936275'>💵</tg-emoji> На ваш баланс зачислено: <b>{amount_rub:.2f} ₽</b>"
             f"</blockquote>"
         )
     except Exception as e:
@@ -248,7 +247,7 @@ async def approve_rub_deposit(call: CallbackQuery):
         f"<tg-emoji emoji-id='5260726538302660868'>✅</tg-emoji> <b>Заявка №<code>{req_id}</code> ПОДТВЕРЖДЕНА!</b>\n\n"
         f"<blockquote>"
         f"<tg-emoji emoji-id='5258362837411045098'>👤</tg-emoji> Пользователь: <code>{user_id}</code>\n"
-        f"<tg-emoji emoji-id='5406841020769936275'>💵</tg-emoji> Зачислено: <b>{usdt_amount:.2f} USDT ($)</b>\n"
+        f"<tg-emoji emoji-id='5406841020769936275'>💵</tg-emoji> Зачислено: <b>{amount_rub:.2f} ₽</b>\n"
         f"<tg-emoji emoji-id='5258450450448915742'>👨‍🎨</tg-emoji> Админ: <b>{call.from_user.full_name}</b>"
         f"</blockquote>"
     )
