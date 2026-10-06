@@ -132,3 +132,57 @@ async def convert_rub_to_usdt(rub_amount: float) -> float:
     if rate <= 0:
         rate = 100.0
     return round(rub_amount / rate, 2)
+
+
+async def get_ton_rub_rate() -> float:
+    """Возвращает курс 1 TON в рублях."""
+    from services.cryptobot import get_exchange_rates
+    try:
+        rates = await get_exchange_rates()
+        if rates:
+            for r in rates:
+                if r.get("source") == "TON" and r.get("target") == "RUB":
+                    val = float(r.get("rate", 0))
+                    if val > 0:
+                        return val
+    except Exception as e:
+        logging.warning(f"[exchange] Failed to fetch TON/RUB rate: {e}")
+
+    # Запасной путь через TON/USDT × USDT/RUB.
+    try:
+        ton_usdt = await get_ton_usdt_rate()
+        usdt_rub = await get_rub_usdt_rate()
+        if ton_usdt > 0 and usdt_rub > 0:
+            return ton_usdt * usdt_rub
+    except Exception as e:
+        logging.warning(f"[exchange] Failed to calculate TON/RUB rate: {e}")
+
+    return 200.0
+
+
+async def convert_to_rub(amount: float, asset: str) -> float:
+    """Конвертирует входящую сумму из TON/USDT/USD в единую валюту магазина — RUB."""
+    asset = str(asset or "RUB").upper()
+    amount = float(amount)
+    if amount <= 0:
+        return 0.0
+    if asset == "RUB":
+        return round(amount, 2)
+    if asset in ("USD", "USDT"):
+        return round(amount * await get_rub_usdt_rate(), 2)
+    if asset == "TON":
+        return round(amount * await get_ton_rub_rate(), 2)
+
+    # Для других активов пробуем получить их курс к USDT через CryptoBot.
+    try:
+        from services.cryptobot import get_exchange_rates
+        rates = await get_exchange_rates()
+        if rates:
+            for r in rates:
+                if r.get("source") == asset and r.get("target") == "USDT":
+                    rate = float(r.get("rate", 0))
+                    if rate > 0:
+                        return round(amount * rate * await get_rub_usdt_rate(), 2)
+    except Exception as e:
+        logging.warning(f"[exchange] Failed to convert {asset} to RUB: {e}")
+    return 0.0
