@@ -57,8 +57,8 @@ async def topup_balance_menu(call: CallbackQuery, state: FSMContext):
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text="Telegram Stars ⭐ — 1 ⭐ = 1 ₽",
-                    callback_data="deposit_stars",
+                    text="⭐ Оплатить",
+                    callback_data="stars_menu",
                 ),
             ],
             [
@@ -96,6 +96,64 @@ async def topup_balance_menu(call: CallbackQuery, state: FSMContext):
 
     await edit_message_safe(call, text, reply_markup=kb)
     await answer_safe(call)
+
+
+# ── Меню Telegram Stars ─────────────────────────────────────────────
+
+@balance_router.callback_query(F.data == "stars_menu")
+async def stars_menu(call: CallbackQuery, state: FSMContext):
+    await state.clear()
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(
+                text="⭐ Оплатить",
+                callback_data="deposit_stars",
+            ),
+        ],
+        [
+            InlineKeyboardButton(
+                text="✅ Бонус +10%",
+                callback_data="stars_bonus_info",
+            ),
+        ],
+        [
+            InlineKeyboardButton(
+                text="👤 Мои звёзды",
+                callback_data="my_stars",
+            ),
+        ],
+        [
+            InlineKeyboardButton(
+                text="Назад",
+                callback_data="topup_balance",
+                icon_custom_emoji_id=EMOJI_BACK,
+            ),
+        ],
+    ])
+    text = (
+        "⭐ <b>Telegram Stars</b>\n\n"
+        "Пополняйте баланс магазина через Telegram Stars.\n"
+        "<b>1 ⭐ = 1 ₽</b>"
+    )
+    await edit_message_safe(call, text, reply_markup=kb)
+    await answer_safe(call)
+
+
+@balance_router.callback_query(F.data == "stars_bonus_info")
+async def stars_bonus_info(call: CallbackQuery):
+    await call.answer(
+        "🎁 Бонус +10% действует на первое пополнение.",
+        show_alert=True,
+    )
+
+
+@balance_router.callback_query(F.data == "my_stars")
+async def my_stars(call: CallbackQuery):
+    await call.answer(
+        "⭐ Баланс Telegram Stars хранится в вашем аккаунте Telegram. "
+        "Для пополнения нажмите «Оплатить».",
+        show_alert=True,
+    )
 
 
 # ── Пополнение Telegram Stars: 1 ⭐ = 1 ₽ ─────────────────────────────
