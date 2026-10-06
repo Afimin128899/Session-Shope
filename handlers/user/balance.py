@@ -1,7 +1,14 @@
 import uuid
 import logging
 from aiogram import Router, F
-from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
+from aiogram.types import (
+    CallbackQuery,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    Message,
+    LabeledPrice,
+    PreCheckoutQuery,
+)
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 
@@ -15,6 +22,10 @@ balance_router = Router()
 
 
 class RubDepositState(StatesGroup):
+    waiting_amount = State()
+
+
+class StarsDepositState(StatesGroup):
     waiting_amount = State()
 
 
@@ -40,10 +51,16 @@ async def back_to_main(call: CallbackQuery):
 
 @balance_router.callback_query(F.data == "topup_balance")
 async def topup_balance_menu(call: CallbackQuery, state: FSMContext):
-    """Меню выбора платежной системы (CryptoBot USDT или Рубли по заявке)"""
+    """Меню выбора платежной системы."""
     await state.clear()
     kb = InlineKeyboardMarkup(
         inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="Telegram Stars ⭐ — 1 ⭐ = 1 ₽",
+                    callback_data="deposit_stars",
+                ),
+            ],
             [
                 InlineKeyboardButton(
                     text="CryptoBot (USDT $)",
@@ -71,13 +88,117 @@ async def topup_balance_menu(call: CallbackQuery, state: FSMContext):
     text = (
         "<tg-emoji emoji-id='5258260149037965799'>💳</tg-emoji> <b>Выберите способ пополнения баланса</b>\n\n"
         "<b>Доступные методы:</b>\n"
-        "• <b><tg-emoji emoji-id='5406841020769936275'>☺️</tg-emoji> CryptoBot</b> — моментальное пополнение в USDT ($)\n"
-        "• <b><tg-emoji emoji-id='5258368777350816286'>🪙</tg-emoji> Карта / СБП (Заявка)</b> — переведите рубли по реквизитам, средства зачислятся на долларовый баланс в USDT ($)\n\n"
+        "• <b>Telegram Stars ⭐</b> — <b>1 ⭐ = 1 ₽</b>, моментальное зачисление\n"
+        "• <b><tg-emoji emoji-id='5406841020769936275'>☺️</tg-emoji> CryptoBot</b> — пополнение через USDT ($)\n"
+        "• <b><tg-emoji emoji-id='5258368777350816286'>🪙</tg-emoji> Карта / СБП</b> — ручная заявка\n\n"
         "<i>Выберите удобный способ ниже 👇</i>"
     )
 
     await edit_message_safe(call, text, reply_markup=kb)
     await answer_safe(call)
+
+
+# ── Пополнение Telegram Stars: 1 ⭐ = 1 ₽ ─────────────────────────────
+
+@balance_router.callback_query(F.data == "deposit_stars")
+async def deposit_stars_entry(call: CallbackQuery, state: FSMContext):
+    await state.set_state(StarsDepositState.waiting_amount)
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="Отмена", callback_data="topup_balance", icon_custom_emoji_id=EMOJI_CROSS)]
+    ])
+    text = (
+        "⭐ <b>Пополнение Telegram Stars</b>\n\n"
+        "Введите количество звёзд для пополнения:\n"
+        "<i>Курс фиксированный: </i><b>1 ⭐ = 1 ₽</b>\n\n"
+        "Например: <code>100</code> ⭐ = <code>100 ₽</code>"
+    )
+    await edit_message_safe(call, text, reply_markup=kb)
+    await answer_safe(call)
+
+
+@balance_router.message(StarsDepositState.waiting_amount, F.text)
+async def process_stars_deposit_amount(message: Message, state: FSMContext):
+    try:
+        stars = int(message.text.strip())
+        if stars <= 0:
+            await message.answer("❌ Количество звёзд должно быть больше нуля.")
+            return
+        if stars > 100000:
+            await message.answer("❌ Максимум за один платёж — 100 000 ⭐.")
+            return
+
+        payload = f"stars_topup:{message.from_user.id}:{uuid.uuid4().hex}"
+        await message.answer_invoice(
+            title="Пополнение баланса",
+            description=f"Пополнение на {stars} ₽. Курс: 1 ⭐ = 1 ₽.",
+            payload=payload,
+            provider_token="",
+            currency="XTR",
+            prices=[LabeledPrice(label=f"{stars} ₽", amount=stars)],
+        )
+        await state.clear()
+    except ValueError:
+        await message.answer("❌ Введите целое число звёзд, например: <code>100</code>")
+
+
+@balance_router.pre_checkout_query()
+async def process_stars_pre_checkout(pre_checkout: PreCheckoutQuery):
+    if not pre_checkout.invoice_payload.startswith("stars_topup:"):
+        await pre_checkout.answer(ok=True)
+        return
+
+    try:
+        stars = int(pre_checkout.total_amount)
+        if stars <= 0 or stars > 100000:
+            await pre_checkout.answer(
+                ok=False,
+                error_message="Некорректная сумма пополнения.",
+            )
+            return
+        await pre_checkout.answer(ok=True)
+    except Exception:
+        await pre_checkout.answer(
+            ok=False,
+            error_message="Не удалось проверить платёж. Попробуйте ещё раз.",
+        )
+
+
+@balance_router.message(F.successful_payment)
+async def process_stars_successful_payment(message: Message):
+    payment = message.successful_payment
+    if not payment or not payment.invoice_payload.startswith("stars_topup:"):
+        return
+
+    charge_id = payment.telegram_payment_charge_id
+    comment_key = f"stars_{charge_id}"
+
+    if await is_comment_used(comment_key):
+        logging.warning(f"[stars] Duplicate payment ignored: {charge_id}")
+        return
+
+    marked = await try_mark_comment_used(comment_key)
+    if not marked:
+        logging.warning(f"[stars] Duplicate payment race ignored: {charge_id}")
+        return
+
+    stars = int(payment.total_amount)
+    rub_amount = float(stars)
+
+    await add_balance(message.from_user.id, rub_amount)
+    await log_payment(
+        message.from_user.id,
+        rub_amount,
+        "RUB",
+        "telegram_stars",
+        charge_id,
+    )
+
+    await message.answer(
+        "⭐ <b>Оплата получена!</b>\n\n"
+        f"На ваш баланс зачислено: <b>{stars} ₽</b>\n"
+        f"Оплачено: <b>{stars} ⭐</b>\n\n"
+        "<i>Курс: 1 ⭐ = 1 ₽</i>"
+    )
 
 
 # ── Пополнение в RUB через ручную заявку ──────────────────────────────
@@ -108,7 +229,7 @@ async def process_rub_deposit_amount(message: Message, state: FSMContext):
         req_id = uuid.uuid4().hex[:8]
         support_val = await get_setting("support_username", SUPPORT_USERNAME or "—")
         rub_details = await get_setting("rub_details", RUB_DETAILS or "Реквизиты уточняйте у администратора")
-        
+        rate = await get_rub_usdt_rate()
 
         kb = InlineKeyboardMarkup(inline_keyboard=[
             [
@@ -155,12 +276,10 @@ async def confirm_rub_paid(call: CallbackQuery):
     parts = call.data.split(":")
     req_id = parts[1]
     amount_rub = float(parts[2])
-    
 
     user_id = call.from_user.id
     user_name = call.from_user.full_name or f"User {user_id}"
 
-    # Отправляем уведомления администраторам
     admin_kb = InlineKeyboardMarkup(inline_keyboard=[
         [
             InlineKeyboardButton(
@@ -202,8 +321,6 @@ async def confirm_rub_paid(call: CallbackQuery):
     await answer_safe(call, "Заявка отправлена на проверку!", show_alert=True)
 
 
-# ── Обработка заявок Администратором ─────────────────────────────────
-
 @balance_router.callback_query(F.data.startswith("approve_rub:"))
 async def approve_rub_deposit(call: CallbackQuery):
     if call.from_user.id not in ADMIN_IDS:
@@ -226,11 +343,9 @@ async def approve_rub_deposit(call: CallbackQuery):
         await answer_safe(call, "❌ Заявка уже была обработана ранее!", show_alert=True)
         return
 
-    # Зачисляем баланс USDT
     await add_balance(user_id, amount_rub)
     await log_payment(user_id, amount_rub, "RUB", "manual_rub_request", req_id)
 
-    # Уведомляем пользователя
     try:
         await call.bot.send_message(
             user_id,
@@ -273,7 +388,6 @@ async def reject_rub_deposit(call: CallbackQuery):
 
     await try_mark_comment_used(comment_key)
 
-    # Уведомляем пользователя
     try:
         await call.bot.send_message(
             user_id,
