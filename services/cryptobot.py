@@ -6,7 +6,7 @@ from aiogram .fsm .state import State ,StatesGroup
 from aiogram .types import CallbackQuery ,InlineKeyboardButton ,InlineKeyboardMarkup ,Message 
 
 from config import CRYPTOBOT_TOKEN 
-from database.db import add_balance, add_balance_usdt, is_comment_used, mark_comment_used, try_mark_comment_used, log_payment
+from database.db import add_balance, add_deposit_with_first_bonus, add_balance_usdt, is_comment_used, mark_comment_used, try_mark_comment_used, log_payment
 from keyboards .user_kb import balance_menu 
 from services.exchange import convert_to_ton, convert_to_rub
 from utils .nav import edit_message_safe, answer_safe 
@@ -189,19 +189,19 @@ async def crypto_check_paid (call :CallbackQuery ):
 
     if asset == "USDT":
         rub_amount = await convert_to_rub(amount, "USDT")
-        await add_balance(call.from_user.id, rub_amount)
+        credited_amount, bonus_amount = await add_deposit_with_first_bonus(call.from_user.id, rub_amount)
         await log_payment(call.from_user.id, rub_amount, "RUB", "cryptobot", comment_key)
         logging.info(f"[cryptobot] Payment credited: user={call.from_user.id}, amount={amount:.8f} USDT, invoice={inv_id}")
         
         await edit_message_safe (
             call ,
             f"<tg-emoji emoji-id='5427009714745517609'>✅</tg-emoji> <b>Оплата получена!</b>\n\n"
-            f"Ваш баланс пополнен на <b>{rub_amount:.2f} ₽</b>.",
+            f"Ваш баланс пополнен на <b>{credited_amount:.2f} ₽</b>." + (f"\n🎁 Бонус за первое пополнение: <b>+{bonus_amount:.2f} ₽</b>." if bonus_amount > 0 else ""),
             reply_markup =balance_menu (),
         )
     elif asset == "TON":
         rub_amount = await convert_to_rub(amount, "TON")
-        await add_balance(call.from_user.id, rub_amount)
+        credited_amount, bonus_amount = await add_deposit_with_first_bonus(call.from_user.id, rub_amount)
         await log_payment(call.from_user.id, rub_amount, "RUB", "cryptobot", comment_key)
         logging.info(f"[cryptobot] Payment credited: user={call.from_user.id}, amount={amount:.8f} TON, invoice={inv_id}")
         
@@ -217,7 +217,7 @@ async def crypto_check_paid (call :CallbackQuery ):
             ton_amount = amount # fallback
 
         rub_amount = await convert_to_rub(ton_amount, "TON")
-        await add_balance(call.from_user.id, rub_amount)
+        credited_amount, bonus_amount = await add_deposit_with_first_bonus(call.from_user.id, rub_amount)
         await log_payment(call.from_user.id, rub_amount, "RUB", "cryptobot", comment_key)
         logging.info(f"[cryptobot] Payment credited: user={call.from_user.id}, amount={rub_amount:.2f} RUB, invoice={inv_id}")
         
