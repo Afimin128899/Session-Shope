@@ -8,7 +8,7 @@ from aiogram .types import CallbackQuery ,InlineKeyboardButton ,InlineKeyboardMa
 from config import CRYPTOBOT_TOKEN 
 from database.db import add_balance, add_balance_usdt, is_comment_used, mark_comment_used, try_mark_comment_used, log_payment
 from keyboards .user_kb import balance_menu 
-from services.exchange import convert_to_ton
+from services.exchange import convert_to_ton, convert_to_rub
 from utils .nav import edit_message_safe, answer_safe 
 
 crypto_router =Router ()
@@ -188,25 +188,27 @@ async def crypto_check_paid (call :CallbackQuery ):
         return
 
     if asset == "USDT":
-        await add_balance_usdt(call.from_user.id, amount)
-        await log_payment(call.from_user.id, amount, "USDT", "cryptobot", comment_key)
+        rub_amount = await convert_to_rub(amount, "USDT")
+        await add_balance(call.from_user.id, rub_amount)
+        await log_payment(call.from_user.id, rub_amount, "RUB", "cryptobot", comment_key)
         logging.info(f"[cryptobot] Payment credited: user={call.from_user.id}, amount={amount:.8f} USDT, invoice={inv_id}")
         
         await edit_message_safe (
             call ,
             f"<tg-emoji emoji-id='5427009714745517609'>✅</tg-emoji> <b>Оплата получена!</b>\n\n"
-            f"Ваш баланс пополнен на <b>{amount :.2f} USDT</b>.",
+            f"Ваш баланс пополнен на <b>{rub_amount:.2f} ₽</b>.",
             reply_markup =balance_menu (),
         )
     elif asset == "TON":
-        await add_balance(call.from_user.id, amount)
-        await log_payment(call.from_user.id, amount, "TON", "cryptobot", comment_key)
+        rub_amount = await convert_to_rub(amount, "TON")
+        await add_balance(call.from_user.id, rub_amount)
+        await log_payment(call.from_user.id, rub_amount, "RUB", "cryptobot", comment_key)
         logging.info(f"[cryptobot] Payment credited: user={call.from_user.id}, amount={amount:.8f} TON, invoice={inv_id}")
         
         await edit_message_safe (
             call ,
             f"<tg-emoji emoji-id='5427009714745517609'>✅</tg-emoji> <b>Оплата получена!</b>\n\n"
-            f"Ваш баланс пополнен на <b>{amount :.4f} TON</b>.",
+            f"Ваш баланс пополнен на <b>{rub_amount:.2f} ₽</b>.",
             reply_markup =balance_menu (),
         )
     else:
