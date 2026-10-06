@@ -1,4 +1,4 @@
-from aiogram import BaseMiddleware, F
+from aiogram import BaseMiddleware
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 from typing import Any, Awaitable, Callable
 
@@ -18,12 +18,8 @@ async def is_maintenance() -> bool:
 
 def maintenance_text() -> str:
     return (
-        "🔧 <b>Технические работы</b>
-
-"
-        "Бот временно недоступен. Мы уже работаем над обновлением.
-
-"
+        "🔧 <b>Технические работы</b>\n\n"
+        "Бот временно недоступен. Мы уже работаем над обновлением.\n\n"
         "Нажмите кнопку ниже, чтобы проверить доступность."
     )
 
