@@ -102,38 +102,22 @@ async def topup_balance_menu(call: CallbackQuery, state: FSMContext):
 
 @balance_router.callback_query(F.data == "stars_menu")
 async def stars_menu(call: CallbackQuery, state: FSMContext):
-    await state.clear()
+    # Сразу запрашиваем количество Stars.
+    await state.set_state(StarsDepositState.waiting_amount)
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [
             InlineKeyboardButton(
-                text="⭐ Оплатить",
-                callback_data="deposit_stars",
-            ),
-        ],
-        [
-            InlineKeyboardButton(
-                text="✅ Бонус +10%",
-                callback_data="stars_bonus_info",
-            ),
-        ],
-        [
-            InlineKeyboardButton(
-                text="👤 Мои звёзды",
-                callback_data="my_stars",
-            ),
-        ],
-        [
-            InlineKeyboardButton(
-                text="Назад",
+                text="Отмена",
                 callback_data="topup_balance",
-                icon_custom_emoji_id=EMOJI_BACK,
-            ),
+                icon_custom_emoji_id=EMOJI_CROSS,
+            )
         ],
     ])
     text = (
-        "⭐ <b>Telegram Stars</b>\n\n"
-        "Пополняйте баланс магазина через Telegram Stars.\n"
-        "<b>1 ⭐ = 1 ₽</b>"
+        "⭐ <b>Пополнение Telegram Stars</b>\n\n"
+        "Введите количество звёзд для пополнения:\n"
+        "<i>Курс фиксированный: </i><b>1 ⭐ = 1 ₽</b>\n\n"
+        "Например: <code>100</code> ⭐ = <code>100 ₽</code>"
     )
     await edit_message_safe(call, text, reply_markup=kb)
     await answer_safe(call)
@@ -186,6 +170,22 @@ async def process_stars_deposit_amount(message: Message, state: FSMContext):
             return
 
         payload = f"stars_topup:{message.from_user.id}:{uuid.uuid4().hex}"
+        # После ввода суммы показываем именно меню оплаты Stars:
+        # встроенная кнопка Telegram «Оплатить» + наши кнопки «Бонус +10%» и «Мои звёзды».
+        stars_menu_kb = InlineKeyboardMarkup(inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="✅ Бонус +10%",
+                    callback_data="stars_bonus_info",
+                ),
+            ],
+            [
+                InlineKeyboardButton(
+                    text="👤 Мои звёзды",
+                    callback_data="my_stars",
+                ),
+            ],
+        ])
         await message.answer_invoice(
             title="Пополнение баланса",
             description=f"Пополнение на {stars} ₽. Курс: 1 ⭐ = 1 ₽.",
@@ -193,6 +193,7 @@ async def process_stars_deposit_amount(message: Message, state: FSMContext):
             provider_token="",
             currency="XTR",
             prices=[LabeledPrice(label=f"{stars} ₽", amount=stars)],
+            reply_markup=stars_menu_kb,
         )
         await state.clear()
     except ValueError:
