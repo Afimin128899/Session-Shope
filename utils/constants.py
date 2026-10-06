@@ -18,18 +18,18 @@ START_TEXT =f"""<blockquote>
 </blockquote>"""
 
 BALANCE_TEXT =(
-f"{MSG_EMOJI_MONEY } <b>Ваш баланс:</b> {{balance:.4f}} TON {MSG_EMOJI_FLYING_MONEY }\n\n"
+f"{MSG_EMOJI_MONEY } <b>Ваш баланс:</b> {{balance:.2f}} ₽ {MSG_EMOJI_FLYING_MONEY }\n\n"
 f"Выберите способ пополнения:"
 )
 
 BALANCE_TEXT_USDT =(
-f"{MSG_EMOJI_MONEY } <b>Ваш баланс:</b> {{balance:.2f}} USDT {MSG_EMOJI_FLYING_MONEY }\n\n"
+f"{MSG_EMOJI_MONEY } <b>Ваш баланс:</b> {{balance:.2f}} ₽ {MSG_EMOJI_FLYING_MONEY }\n\n"
 f"Выберите способ пополнения:"
 )
 
 SHOP_TEXT =f"""Покупка Telegram аккаунта {MSG_EMOJI_CART }
 
-{MSG_EMOJI_MONEY } <b>Ваш баланс:</b> {{balance:.4f}} TON {MSG_EMOJI_FLYING_MONEY }
+{MSG_EMOJI_MONEY } <b>Ваш баланс:</b> {{balance:.2f}} ₽ {MSG_EMOJI_FLYING_MONEY }
 
 {MSG_EMOJI_EARTH } Выберите категорию аккаунта:"""
 
@@ -37,7 +37,7 @@ CONFIRM_BUY_TEXT =(
 "<b>Подтверждение покупки:</b>\n\n"
 f"{MSG_EMOJI_GLOBE } Категория: <b>{{country}}</b>\n"
 f"<tg-emoji emoji-id='{EMOJI_PACKAGE}'>📦</tg-emoji> В наличии: <b>{{count}}</b> шт.\n"
-f"{MSG_EMOJI_MONEY } Цена: <b>{{price:.4f}}</b> TON {MSG_EMOJI_FLYING_MONEY }\n\n"
+f"{MSG_EMOJI_MONEY } Цена: <b>{{price:.2f}}</b> ₽ {MSG_EMOJI_FLYING_MONEY }\n\n"
 "<blockquote>"
 f"{MSG_EMOJI_WARN } <b>Важно:</b> после покупки вам будет выдан номер, после ввода придет код.\n\n"
 f"{MSG_EMOJI_WARN } Если есть сессия — удалить через 24ч.\n\n"
