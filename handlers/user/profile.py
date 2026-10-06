@@ -13,7 +13,7 @@ profile_router = Router()
 @profile_router.callback_query(F.data == "my_profile")
 async def my_profile(call: CallbackQuery):
     user = await get_user(call.from_user.id)
-    bal_usdt = float(user.get("balance_usdt", 0.0)) if user else 0.0
+    balance = float(user.get("balance", 0.0)) if user else 0.0
     ref_count = await get_referral_count(call.from_user.id)
     username = call.from_user.username or "—"
 
@@ -21,7 +21,7 @@ async def my_profile(call: CallbackQuery):
         "<tg-emoji emoji-id='5258362837411045098'>👤</tg-emoji> <b>Мой профиль</b>\n\n"
         f"┏ <tg-emoji emoji-id='5258011929993026890'>👤</tg-emoji> <b>Пользователь:</b> <code>@{username}</code>\n"
         f"┣ <tg-emoji emoji-id='5258476306152038031'>🔒</tg-emoji> <b>ID:</b> <code>{call.from_user.id}</code>\n"
-        f"┣ <tg-emoji emoji-id='5406841020769936275'>💵</tg-emoji> <b>Баланс:</b> <code>{bal_usdt:.2f} USDT ($)</code>\n"
+        f"┣ <tg-emoji emoji-id='5406841020769936275'>💵</tg-emoji> <b>Баланс:</b> <code>{balance:.2f} ₽</code>\n"
         f"┗ <tg-emoji emoji-id='{EMOJI_HAND}'>✋</tg-emoji> <b>Рефералов:</b> <code>{ref_count}</code>"
     )
 
