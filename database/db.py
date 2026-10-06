@@ -369,14 +369,14 @@ async def add_balance (user_id :int ,amount :float ):
 
 
 async def add_deposit_with_first_bonus(user_id: int, amount: float) -> tuple[float, float]:
-    """Зачисляет пополнение и одноразовый бонус 25% за первое пополнение."""
+    """Зачисляет пополнение и одноразовый бонус 10% за первое пополнение."""
     amount = round(float(amount), 2)
     if amount <= 0:
         return 0.0, 0.0
 
     async with _get_pool().acquire() as conn:
         async with conn.cursor() as cur:
-            bonus = round(amount * 0.25, 2)
+            bonus = round(amount * 0.10, 2)
             await cur.execute(
                 "UPDATE users SET balance = balance + %s, first_deposit_bonus_used = 1 "
                 "WHERE id = %s AND first_deposit_bonus_used = 0",
