@@ -8,7 +8,7 @@ from aiogram .fsm .state import State ,StatesGroup
 from aiogram .types import CallbackQuery ,InlineKeyboardButton ,InlineKeyboardMarkup ,Message 
 
 from config import TONKEEPER_WALLET 
-from database.db import add_balance, is_comment_used, mark_comment_used, try_mark_comment_used, log_payment, get_setting
+from database.db import add_balance, add_deposit_with_first_bonus, is_comment_used, mark_comment_used, try_mark_comment_used, log_payment, get_setting
 from keyboards .user_kb import balance_menu 
 from utils .nav import edit_message_safe, answer_safe
 
@@ -208,7 +208,7 @@ async def tonkeeper_check_payment (call :CallbackQuery ):
         await edit_message_safe (
         call ,
         f"<tg-emoji emoji-id='5427009714745517609'>✅</tg-emoji> <b>Успешно!</b>\n\n"
-        f"Ваш баланс пополнен на <b>{rub_amount:.2f} ₽</b>.",
+        f"Ваш баланс пополнен на <b>{credited_amount:.2f} ₽</b>." + (f"\n🎁 Бонус за первое пополнение: <b>+{bonus_amount:.2f} ₽</b>." if bonus_amount > 0 else ""),
         reply_markup =balance_menu ()
         )
     else :
