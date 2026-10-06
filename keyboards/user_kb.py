@@ -93,12 +93,12 @@ async def shop_menu() -> tuple[InlineKeyboardMarkup, bool]:
 
         cat_emoji = cat.get("emoji")
         if cat_emoji and cat_emoji.isdigit():
-            label, _ = await _btn_text(f"shop_{slug}", f"{display_name} — {price:.2f} USDT ($)", c.FLAG_US)
+            label, _ = await _btn_text(f"shop_{slug}", f"{display_name} — {price:.2f} ₽", c.FLAG_US)
             rows.append([
                 InlineKeyboardButton(text=label, callback_data=f"buy_{slug}", icon_custom_emoji_id=cat_emoji),
             ])
         else:
-            default_text = f"{display_name} — {price:.2f} USDT ($)"
+            default_text = f"{display_name} — {price:.2f} ₽"
             label, emoji = await _btn_text(f"shop_{slug}", default_text, c.FLAG_US)
             rows.append([
                 InlineKeyboardButton(text=label, callback_data=f"buy_{slug}", icon_custom_emoji_id=emoji),
@@ -112,7 +112,7 @@ async def shop_menu() -> tuple[InlineKeyboardMarkup, bool]:
 
 
 async def confirm_buy_menu(sku: str, price_usdt: float) -> InlineKeyboardMarkup:
-    label_buy_usdt, emoji_buy_usdt = await _btn_text("btn_buy_confirm_usdt", f"Купить за {price_usdt:.2f} USDT ($)", c.BTN_ICON_BUY)
+    label_buy_usdt, emoji_buy_usdt = await _btn_text("btn_buy_confirm_usdt", f"Купить за {price_usdt:.2f} ₽", c.BTN_ICON_BUY)
     label_cancel, emoji_cancel = await _btn_text("btn_cancel", "Отмена", c.BTN_ICON_CANCEL)
     return InlineKeyboardMarkup(
         inline_keyboard=[
@@ -227,7 +227,7 @@ def balance_menu() -> InlineKeyboardMarkup:
             ],
             [
                 InlineKeyboardButton(
-                    text="TON / USDT",
+                    text="Только ₽",
                     callback_data="toggle_currency",
                 ),
             ],
