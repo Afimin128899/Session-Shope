@@ -212,7 +212,7 @@ async def approve_rub_deposit(call: CallbackQuery):
 
     parts = call.data.split(":")
     user_id = int(parts[1])
-    usdt_amount = float(parts[2])
+    amount_rub = float(parts[2])
     req_id = parts[3]
 
     comment_key = f"rub_req_{req_id}"
