@@ -185,18 +185,43 @@ async def process_stars_deposit_amount(message: Message, state: FSMContext):
             await message.answer("❌ Максимум за один платёж — 100 000 ⭐.")
             return
 
-        payload = f"stars_topup:{message.from_user.id}:{uuid.uuid4().hex}"
-        await message.answer_invoice(
-            title="Пополнение баланса",
-            description=f"Пополнение на {stars} ₽. Курс: 1 ⭐ = 1 ₽.",
-            payload=payload,
-            provider_token="",
-            currency="XTR",
-            prices=[LabeledPrice(label=f"{stars} ₽", amount=stars)],
+        await state.update_data(stars_amount=stars)
+
+        kb = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="⭐ Оплатить", callback_data="stars_pay")],
+            [InlineKeyboardButton(text="✅ Бонус +10%", callback_data="stars_bonus_info")],
+            [InlineKeyboardButton(text="👤 Мои звёзды", callback_data="my_stars")],
+            [InlineKeyboardButton(text="Назад", callback_data="topup_balance", icon_custom_emoji_id=EMOJI_BACK)],
+        ])
+        await message.answer(
+            f"⭐ <b>Пополнение Telegram Stars</b>\n\n"
+            f"<b>{stars} ⭐ = {stars} ₽</b>\n\n"
+            "Выберите действие:",
+            reply_markup=kb,
         )
-        await state.clear()
     except ValueError:
         await message.answer("❌ Введите целое число звёзд, например: <code>100</code>")
+
+
+@balance_router.callback_query(F.data == "stars_pay")
+async def stars_pay(call: CallbackQuery, state: FSMContext):
+    data = await state.get_data()
+    stars = int(data.get("stars_amount", 0))
+    if stars <= 0:
+        await call.answer("❌ Сначала укажите количество звёзд.", show_alert=True)
+        return
+
+    payload = f"stars_topup:{call.from_user.id}:{uuid.uuid4().hex}"
+    await call.message.answer_invoice(
+        title="Пополнение баланса",
+        description=f"Пополнение на {stars} ₽. Курс: 1 ⭐ = 1 ₽.",
+        payload=payload,
+        provider_token="",
+        currency="XTR",
+        prices=[LabeledPrice(label=f"{stars} ₽", amount=stars)],
+    )
+    await state.clear()
+    await answer_safe(call)
 
 
 @balance_router.pre_checkout_query()
