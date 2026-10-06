@@ -200,14 +200,15 @@ async def tonkeeper_check_payment (call :CallbackQuery ):
             return
 
         ton_amount = round(actual_nano / 1_000_000_000, 8)
-        await add_balance(call.from_user.id, ton_amount)
-        await log_payment(call.from_user.id, ton_amount, "TON", "tonkeeper", expected_comment)
+        rub_amount = round(ton_amount * await get_current_rate("TON","RUB"), 2)
+        await add_balance(call.from_user.id, rub_amount)
+        await log_payment(call.from_user.id, rub_amount, "RUB", "tonkeeper", expected_comment)
         logging.info(f"[tonkeeper] Payment credited: user={call.from_user.id}, amount={ton_amount:.8f} TON, comment={expected_comment}")
 
         await edit_message_safe (
         call ,
         f"<tg-emoji emoji-id='5427009714745517609'>✅</tg-emoji> <b>Успешно!</b>\n\n"
-        f"Ваш баланс пополнен на <b>{ton_amount :.4f} TON</b>.",
+        f"Ваш баланс пополнен на <b>{rub_amount:.2f} ₽</b>.",
         reply_markup =balance_menu ()
         )
     else :
