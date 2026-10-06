@@ -117,6 +117,13 @@ def get_admin_panel() -> InlineKeyboardMarkup:
             ],
             [
                 InlineKeyboardButton(
+                    text="🔧 Техработы",
+                    callback_data="admin_maintenance",
+                    icon_custom_emoji_id=ICON_WARNING,
+                ),
+            ],
+            [
+                InlineKeyboardButton(
                     text="Выйти из админки",
                     callback_data="main_menu",
                     icon_custom_emoji_id=ICON_HOME,
