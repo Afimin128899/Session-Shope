@@ -30,6 +30,8 @@ ADMIN_IDS = [
 LAVE_PAY_API_KEY = os.getenv("LAVE_PAY_API_KEY", "").strip()
 SUPPORT_USERNAME = os.getenv("SUPPORT_USERNAME", "").strip()
 REVIEWS_LINK = os.getenv("REVIEWS_LINK", "").strip()
+TONKEEPER_WALLET = os.getenv("TONKEEPER_WALLET", "").strip()
+RUB_DETAILS = os.getenv("RUB_DETAILS", "").strip()
 
 TELEGRAM_API_ID = int(os.getenv("TELEGRAM_API_ID", "0").strip() or 0)
 TELEGRAM_API_HASH = os.getenv("TELEGRAM_API_HASH", "").strip()
