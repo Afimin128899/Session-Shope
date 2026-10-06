@@ -1,0 +1,71 @@
+import logging
+from aiogram import Bot
+from aiogram.types import CallbackQuery, Message, InlineKeyboardButton, InlineKeyboardMarkup
+
+from config import ADMIN_IDS
+from utils.nav import edit_message_safe, answer_safe
+from utils.emoji_map import EMOJI_MEGA, EMOJI_CHECK, EMOJI_PIN, EMOJI_EXCLAMATION
+
+
+async def is_user_subscribed(bot: Bot, user_id: int) -> bool:
+    """Проверяет подписку пользователя на обязательный канал."""
+    if user_id in ADMIN_IDS:
+        return True
+
+    from database.db import get_subscription_settings
+    settings = await get_subscription_settings()
+    if not settings["enabled"] or not settings["channel_id"]:
+        return True
+
+    channel_id = settings["channel_id"]
+    try:
+        member = await bot.get_chat_member(chat_id=channel_id, user_id=user_id)
+        if member.status in ["creator", "administrator", "member"]:
+            return True
+        return False
+    except Exception as e:
+        logging.warning(f"[sub_check] Could not check subscription for user {user_id} in {channel_id}: {e}")
+        # Если возникла ошибка API или бот не админ, не блокируем пользователя при технических сбоях
+        return True
+
+
+async def send_sub_prompt(event: CallbackQuery | Message, bot: Bot):
+    """Отправляет или обновляет сообщение с требованием подписаться на канал."""
+    from database.db import get_subscription_settings
+    settings = await get_subscription_settings()
+    url = settings.get("channel_url")
+    if not url:
+        ch = settings.get("channel_id", "").lstrip("@")
+        url = f"https://t.me/{ch}"
+
+    text = (
+        f"<tg-emoji emoji-id='{EMOJI_MEGA}'>📢</tg-emoji> <b>Обязательная подписка</b>\n\n"
+        f"Для доступа к боту необходимо подписаться на наш официальный канал!\n\n"
+        f"<blockquote>"
+        f"<tg-emoji emoji-id='{EMOJI_PIN}'>📍</tg-emoji> <b>Ссылка на наш канал:</b>\n{url}"
+        f"</blockquote>\n\n"
+        f"<i>После подписки нажмите кнопку <b>«<tg-emoji emoji-id='{EMOJI_CHECK}'>✅</tg-emoji> Я подписался»</b> ниже 👇</i>"
+    )
+
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(
+                text="Подписаться на канал",
+                url=url,
+                icon_custom_emoji_id=EMOJI_MEGA,
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text="Я подписался",
+                callback_data="check_sub_status",
+                icon_custom_emoji_id=EMOJI_CHECK,
+            )
+        ]
+    ])
+
+    if isinstance(event, CallbackQuery):
+        await edit_message_safe(event, text, reply_markup=kb)
+        await answer_safe(event)
+    elif isinstance(event, Message):
+        await event.answer(text, reply_markup=kb)
