@@ -23,8 +23,6 @@ from handlers.admin.add_account import add_account_router
 from handlers.admin.button_editor import button_editor_router
 from handlers.admin.category_manager import cat_router
 
-from services.cryptobot import crypto_router
-from services.tonkeeper import tonkeeper_router
 from services.telethon_auth import cleanup_all_clients
 from utils.throttling import ThrottlingMiddleware
 from middlewares.subscription_middleware import SubscriptionMiddleware
@@ -81,7 +79,6 @@ async def main():
         start_router, balance_router, shop_router, purchases_router, promo_router, profile_router,
         admin_router, manage_router, broadcast_router, add_account_router, button_editor_router,
         cat_router,
-        crypto_router, tonkeeper_router,
     )
 
     logging.info("Starting bot...")
