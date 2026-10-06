@@ -28,6 +28,7 @@ from services.tonkeeper import tonkeeper_router
 from services.telethon_auth import cleanup_all_clients
 from utils.throttling import ThrottlingMiddleware
 from middlewares.subscription_middleware import SubscriptionMiddleware
+from utils.maintenance import MaintenanceMiddleware
 
 
 def setup_logging():
@@ -73,6 +74,8 @@ async def main():
     # Mandatory channel subscription check middleware
     dp.message.middleware(SubscriptionMiddleware())
     dp.callback_query.middleware(SubscriptionMiddleware())
+    dp.message.middleware(MaintenanceMiddleware())
+    dp.callback_query.middleware(MaintenanceMiddleware())
 
     dp.include_routers(
         start_router, balance_router, shop_router, purchases_router, promo_router, profile_router,
