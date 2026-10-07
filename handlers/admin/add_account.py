@@ -29,6 +29,7 @@ class AddAccountState(StatesGroup):
     waiting_for_phone = State()
     waiting_for_code = State()
     waiting_for_2fa = State()
+    waiting_for_session_file = State()
     waiting_for_price = State()
     waiting_for_category = State()
 
@@ -40,6 +41,25 @@ async def cancel_add_account(message: Message, state: FSMContext):
     await state.clear()
     await remove_cached_client(message.from_user.id)
     await message.answer("❌ Процесс добавления аккаунта отменён.", reply_markup=back_to_admin())
+
+
+@add_account_router.callback_query(F.data == "add_account_session")
+async def start_add_account_session(call: CallbackQuery, state: FSMContext):
+    """Начать добавление уже авторизованного Telegram .session файла."""
+    if call.from_user.id not in ADMIN_IDS:
+        await answer_safe(call, "❌ У вас нет прав админа.", show_alert=True)
+        return
+
+    await state.clear()
+    await state.set_state(AddAccountState.waiting_for_session_file)
+    await edit_message_safe(
+        call,
+        "📁 <b>Загрузка Telegram-сессии</b>\n\n"
+        "Отправьте файл <code>.session</code> от уже авторизованного Telegram-аккаунта.\n\n"
+        "После проверки бот получит номер из сессии, а затем попросит цену и категорию.",
+        reply_markup=back_to_admin(),
+    )
+    await answer_safe(call)
 
 
 @add_account_router.callback_query(F.data == "add_account_telethon")
@@ -182,6 +202,12 @@ async def process_price(message: Message, state: FSMContext):
 
     if pre_set_slug:
         # Категория уже выбрана — сохраняем сразу
+        data = await state.get_data()
+        session_string = data.get("session_string")
+        if session_string:
+            await finalize_imported_session(message, state)
+            return
+
         client = get_cached_client(message.from_user.id)
         if not client:
             await message.answer("❌ Сессия истекла. Начните сначала (/cancel).")
@@ -257,6 +283,11 @@ async def process_category_text_input(message: Message, state: FSMContext):
 
     await state.update_data(category_slug=slug_candidate)
 
+    data = await state.get_data()
+    if data.get("session_string"):
+        await finalize_imported_session(message, state)
+        return
+
     client = get_cached_client(message.from_user.id)
     if not client:
         await message.answer("❌ Сессия истекла. Начните сначала (/cancel).")
@@ -274,16 +305,79 @@ async def process_category_selection(call: CallbackQuery, state: FSMContext):
     slug = call.data.split(":", 1)[1]
     await state.update_data(category_slug=slug)
 
+    data = await state.get_data()
+    await edit_message_safe(call, f"⏳ Сохраняем аккаунт в категорию <b>{slug}</b>...")
+    await answer_safe(call)
+
+    if data.get("session_string"):
+        await finalize_imported_session(call.message, state)
+        return
+
     client = get_cached_client(call.from_user.id)
     if not client:
         await edit_message_safe(call, "❌ Сессия истекла. Начните сначала (/cancel).")
         await state.clear()
-        await answer_safe(call)
         return
 
-    await edit_message_safe(call, f"⏳ Сохраняем аккаунт в категорию <b>{slug}</b>...")
-    await answer_safe(call)
     await finalize_and_save_account(call.message, state, client)
+
+
+async def finalize_imported_session(message: Message, state: FSMContext):
+    """Сохранить уже импортированную авторизованную сессию в магазин."""
+    try:
+        data = await state.get_data()
+        session_string = data.get("session_string")
+        phone = data.get("phone")
+        category_slug = data.get("category_slug")
+        price = float(data.get("custom_price") or 0.35)
+
+        if not session_string or not phone:
+            await state.clear()
+            await message.answer("❌ Данные сессии потеряны. Начните загрузку заново.")
+            return
+
+        code = detect_country_code(phone)
+
+        if not category_slug:
+            from database.db import get_all_categories
+            auto_country = detect_country(phone)
+            all_cats = await get_all_categories()
+            for c in all_cats:
+                if c["name"].lower() == auto_country.lower():
+                    category_slug = c["slug"]
+                    break
+            if not category_slug:
+                category_slug = all_cats[0]["slug"] if all_cats else "us"
+
+        await add_account(
+            country=category_slug,
+            code=code,
+            number=phone,
+            password=data.get("password", "-"),
+            price=price,
+            data=session_string,
+        )
+
+        await state.clear()
+
+        from database.db import get_category
+        cat_display = await get_category(category_slug)
+        cat_name = cat_display["name"] if cat_display else category_slug
+
+        kb = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="« В меню", callback_data="admin_home")]
+        ])
+        await message.answer(
+            f"<tg-emoji emoji-id='{EMOJI_CHECK}'>✅</tg-emoji> <b>Сессия успешно добавлена!</b>\n\n"
+            f"<tg-emoji emoji-id='{EMOJI_PHONE}'>📞</tg-emoji> Номер: <code>{phone}</code>\n"
+            f"📂 Категория: <b>{cat_name}</b>\n"
+            f"<tg-emoji emoji-id='5258368777350816286'>🪙</tg-emoji> Цена: <b>{price:.2f} ₽</b>\n\n"
+            "<i>Сессия сохранена в базе как StringSession. Исходный .session файл удалён с сервера.</i>",
+            reply_markup=kb,
+        )
+    except Exception as e:
+        await state.clear()
+        await message.answer(f"❌ Ошибка сохранения сессии в базу: <code>{e}</code>")
 
 
 async def finalize_and_save_account (message :Message ,state :FSMContext ,client ):
