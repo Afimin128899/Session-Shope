@@ -38,9 +38,14 @@ def get_admin_panel() -> InlineKeyboardMarkup:
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text="Telethon Обычный",
+                    text="📞 По номеру",
                     callback_data="add_account_telethon",
                     icon_custom_emoji_id=ICON_HELPER,
+                ),
+                InlineKeyboardButton(
+                    text="📁 .session",
+                    callback_data="add_account_session",
+                    icon_custom_emoji_id=ICON_ACCOUNTS,
                 ),
             ],
             [
