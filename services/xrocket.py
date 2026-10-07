@@ -52,7 +52,7 @@ async def create_invoice(
         "clientInvoiceId": client_invoice_id,
         "description": description[:1000],
         "expiresIn": 3600000,
-        "callback": {"payload": payload},
+        "callback": {"payload": {"orderId": payload}},
         "customer": {
             "telegramId": str(telegram_id),
             "telegramUsername": (telegram_username or "").lstrip("@"),
