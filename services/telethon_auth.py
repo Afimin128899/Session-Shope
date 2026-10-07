@@ -36,6 +36,50 @@ def _detect_country_by_phone (phone :str )->str :
             return country 
     return "Неизвестно"
 
+async def import_session_file(session_path: str) -> Tuple[Optional[str], Optional[str], Optional[str]]:
+    """Проверить SQLite .session и экспортировать её в StringSession."""
+    client = None
+    try:
+        if not TELEGRAM_API_ID or not TELEGRAM_API_HASH:
+            return None, None, "API_ID/HASH не найдены в конфиге"
+
+        client = TelegramClient(
+            session_path,
+            int(TELEGRAM_API_ID),
+            TELEGRAM_API_HASH,
+            device_model="PC 64bit",
+            system_version="Windows 10",
+            app_version="4.16.8 x64",
+            lang_code="ru",
+            system_lang_code="ru-RU",
+        )
+        await client.connect()
+
+        if not await client.is_user_authorized():
+            return None, None, "Сессия не авторизована в Telegram"
+
+        me = await client.get_me()
+        if not me or not me.phone:
+            return None, None, "Не удалось получить номер телефона из сессии"
+
+        phone = f"+{me.phone}"
+        # Telethon поддерживает экспорт любой Session в StringSession.
+        session_string = StringSession.save(client.session)
+        if not session_string:
+            return None, None, "Не удалось экспортировать сессию"
+
+        return session_string, phone, None
+    except Exception as e:
+        logger.exception("Ошибка импорта .session файла: %s", e)
+        return None, None, str(e)
+    finally:
+        if client:
+            try:
+                await client.disconnect()
+            except Exception:
+                logger.exception("Ошибка отключения импортируемой сессии")
+
+
 async def create_telethon_client() -> TelegramClient:
     if not TELEGRAM_API_ID or not TELEGRAM_API_HASH:
         raise ValueError("API_ID/HASH не найдены в конфиге")
