@@ -125,6 +125,9 @@ async def process_lave_amount(message: Message, state: FSMContext):
 
     if payment_method == "xrocket":
         amount_usdt = await convert_rub_to_usdt(rub_amount)
+        if amount_usdt < 0.5:
+            await message.answer("❌ Для xRocket Pay сумма слишком маленькая. Попробуйте сумму от 50 ₽.")
+            return
         invoice = await xrocket_create_invoice(
             amount_usdt=amount_usdt,
             description=f"Пополнение баланса на {rub_amount:.2f} ₽",
@@ -175,7 +178,13 @@ async def process_lave_amount(message: Message, state: FSMContext):
 
 
 async def _credit_paid(call: CallbackQuery, invoice_id: str, invoice: dict, provider: str):
-    payload = str(invoice.get("payload", ""))
+    if provider == "xrocket":
+        callback = invoice.get("callback") or {}
+        callback_payload = callback.get("payload") or {}
+        payload = callback_payload.get("orderId", "") if isinstance(callback_payload, dict) else str(callback_payload)
+    else:
+        payload = str(invoice.get("payload", ""))
+
     prefix = f"rub_topup:{call.from_user.id}:"
     if not payload.startswith(prefix):
         await answer_safe(call, "❌ Этот счёт не принадлежит вашему аккаунту.", show_alert=True)
