@@ -125,9 +125,6 @@ async def process_lave_amount(message: Message, state: FSMContext):
 
     if payment_method == "xrocket":
         amount_usdt = await convert_rub_to_usdt(rub_amount)
-        if amount_usdt < 0.5:
-            await message.answer("❌ Для xRocket Pay сумма слишком маленькая. Попробуйте сумму от 50 ₽.")
-            return
         invoice = await xrocket_create_invoice(
             amount_usdt=amount_usdt,
             description=f"Пополнение баланса на {rub_amount:.2f} ₽",
