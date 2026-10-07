@@ -155,7 +155,14 @@ async def process_lave_amount(message: Message, state: FSMContext):
         pay_url = invoice.get("pay_url") if invoice else None
 
     if not invoice_id or not pay_url:
-        await message.answer("❌ Не удалось создать счёт. Проверьте настройки платёжного сервиса и попробуйте позже.")
+        if payment_method == "xrocket" and isinstance(invoice, dict) and invoice.get("_xrocket_error"):
+            error = invoice["_xrocket_error"]
+            detail = error.get("detail") or error.get("title") or "Неизвестная ошибка API"
+            await message.answer(f"❌ xRocket Pay: <code>{detail}</code>")
+        elif payment_method == "xrocket":
+            await message.answer("❌ xRocket Pay не вернул ссылку на оплату. Проверьте Pay API Token и настройки приложения xRocket.")
+        else:
+            await message.answer("❌ Не удалось создать счёт. Проверьте настройки платёжного сервиса и попробуйте позже.")
         return
 
     prefix = {"lave": "lave", "xrocket": "xrocket", "crypto": "crypto"}[payment_method]
