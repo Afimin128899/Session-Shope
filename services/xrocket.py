@@ -28,7 +28,17 @@ async def _request(method: str, path: str, payload: dict | None = None, params: 
             ) as response:
                 data = await response.json(content_type=None)
                 if response.status >= 400:
-                    logging.warning("[xrocket] HTTP %s: %s", response.status, data)
+                    if isinstance(data, dict):
+                        logging.warning(
+                            "[xrocket] HTTP %s: type=%s title=%s detail=%s info=%s",
+                            response.status,
+                            data.get("type"),
+                            data.get("title"),
+                            data.get("detail"),
+                            data.get("info"),
+                        )
+                    else:
+                        logging.warning("[xrocket] HTTP %s: %s", response.status, data)
                     return None
                 return data.get("data", data) if isinstance(data, dict) else data
     except Exception:
