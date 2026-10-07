@@ -6,3 +6,5 @@ __pycache__/
 *.rar
 .idea/
 .vscode/
+*.session
+*.session-*
