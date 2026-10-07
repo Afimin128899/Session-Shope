@@ -39,7 +39,7 @@ async def _request(method: str, path: str, payload: dict | None = None, params: 
                         )
                     else:
                         logging.warning("[xrocket] HTTP %s: %s", response.status, data)
-                    return None
+                    return {"_xrocket_error": data} if isinstance(data, dict) else None
                 return data.get("data", data) if isinstance(data, dict) else data
     except Exception:
         logging.exception("[xrocket] request failed")
