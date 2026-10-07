@@ -46,9 +46,9 @@ async def back_to_main(call: CallbackQuery):
 async def topup_balance_menu(call: CallbackQuery, state: FSMContext):
     await state.clear()
     kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="💳 Lave Pay", callback_data="deposit_lave")],
-        [InlineKeyboardButton(text="🚀 xRocket Pay", callback_data="deposit_xrocket")],
-        [InlineKeyboardButton(text="💎 Crypto Pay", callback_data="deposit_crypto")],
+        [InlineKeyboardButton(text="💳 USDT $ (Lave Pay)", callback_data="deposit_lave")],
+        [InlineKeyboardButton(text="🚀 USDT $ (xRocket Pay)", callback_data="deposit_xrocket")],
+        [InlineKeyboardButton(text="💎 USDT $ (Crypto Pay)", callback_data="deposit_crypto")],
         [InlineKeyboardButton(text="Назад", callback_data="balance", icon_custom_emoji_id=EMOJI_BACK)],
     ])
     text = (
@@ -85,17 +85,17 @@ async def _start_deposit(call: CallbackQuery, state: FSMContext, method: str, ti
 
 @balance_router.callback_query(F.data == "deposit_lave")
 async def deposit_lave_entry(call: CallbackQuery, state: FSMContext):
-    await _start_deposit(call, state, "lave", "Lave Pay")
+    await _start_deposit(call, state, "lave", "USDT $ (Lave Pay)")
 
 
 @balance_router.callback_query(F.data == "deposit_xrocket")
 async def deposit_xrocket_entry(call: CallbackQuery, state: FSMContext):
-    await _start_deposit(call, state, "xrocket", "xRocket Pay")
+    await _start_deposit(call, state, "xrocket", "USDT $ (xRocket Pay)")
 
 
 @balance_router.callback_query(F.data == "deposit_crypto")
 async def deposit_crypto_entry(call: CallbackQuery, state: FSMContext):
-    await _start_deposit(call, state, "crypto", "Crypto Pay")
+    await _start_deposit(call, state, "crypto", "USDT $ (Crypto Pay)")
 
 
 @balance_router.message(LaveDepositState.waiting_amount, F.text)
@@ -173,7 +173,7 @@ async def process_lave_amount(message: Message, state: FSMContext):
     ])
 
     await message.answer(
-        f"💳 <b>Счёт {('Lave Pay' if payment_method == 'lave' else 'xRocket Pay' if payment_method == 'xrocket' else 'Crypto Pay')} создан</b>\n\n"
+        f"💳 <b>Счёт {('USDT $ (Lave Pay)' if payment_method == 'lave' else 'USDT $ (xRocket Pay)' if payment_method == 'xrocket' else 'USDT $ (Crypto Pay)')} создан</b>\n\n"
         f"К оплате: <b>{rub_amount:.2f} ₽</b>\n\n"
         "Нажмите «Оплатить», завершите оплату, затем нажмите «Проверить оплату».",
         reply_markup=kb,
