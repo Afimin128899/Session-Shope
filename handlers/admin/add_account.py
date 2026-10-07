@@ -108,6 +108,69 @@ async def execute_send_code (message :Message ,state :FSMContext ,phone :str ,us
 
 
 
+@add_account_router.message(AddAccountState.waiting_for_session_file, F.document)
+async def process_session_file(message: Message, state: FSMContext):
+    """Импортировать уже авторизованную Telethon SQLite .session."""
+    if message.from_user.id not in ADMIN_IDS:
+        return
+
+    document = message.document
+    filename = (document.file_name or "").strip()
+    if not filename.lower().endswith(".session"):
+        await message.answer("❌ Нужен именно файл с расширением <code>.session</code>.")
+        return
+
+    if document.file_size and document.file_size > 20 * 1024 * 1024:
+        await message.answer("❌ Файл слишком большой. Максимальный размер — 20 МБ.")
+        return
+
+    import os
+    import tempfile
+    from services.telethon_auth import import_session_file
+
+    tmp_path = None
+    try:
+        with tempfile.NamedTemporaryFile(prefix="tg_session_", suffix=".session", delete=False) as tmp:
+            tmp_path = tmp.name
+
+        tg_file = await message.bot.get_file(document.file_id)
+        await message.bot.download_file(tg_file.file_path, destination=tmp_path)
+
+        await message.answer("⏳ Проверяю сессию и подключение к Telegram...")
+
+        session_string, phone, error = await import_session_file(tmp_path)
+        if not session_string or not phone:
+            await message.answer(
+                "❌ Не удалось импортировать сессию.\n"
+                f"Причина: <b>{error or 'файл недействителен или авторизация отсутствует'}</b>"
+            )
+            return
+
+        await state.update_data(
+            session_string=session_string,
+            phone=phone,
+            password="-",
+        )
+        await state.set_state(AddAccountState.waiting_for_price)
+
+        await message.answer(
+            f"✅ <b>Сессия успешно загружена</b>\n\n"
+            f"📞 Номер: <code>{phone}</code>\n\n"
+            "🪙 Введите цену аккаунта в рублях (₽):\n"
+            "Пример: <code>150</code>"
+        )
+    except Exception as e:
+        import logging
+        logging.exception("Failed to import .session file")
+        await message.answer(f"❌ Ошибка обработки .session: <code>{e}</code>")
+    finally:
+        if tmp_path:
+            try:
+                os.remove(tmp_path)
+            except OSError:
+                pass
+
+
 @add_account_router .message (AddAccountState .waiting_for_phone ,F .text )
 async def process_phone (message :Message ,state :FSMContext ):
     """Обработка номера телефона."""
