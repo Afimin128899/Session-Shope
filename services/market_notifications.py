@@ -84,6 +84,8 @@ async def market_worker(bot):
         try:
             await price_alerts(bot)
             await send_reports(bot)
+            from database.expansion import stock_notifications
+            await stock_notifications(bot,ADMIN_IDS)
         except Exception:
             log.exception('Marketplace notification batch failed')
         await asyncio.sleep(60)

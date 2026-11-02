@@ -36,6 +36,7 @@ ICON_COIN = EMOJI_COIN
 def get_admin_panel() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
+            [InlineKeyboardButton(text="Инструменты магазина", callback_data="expand_tools")],
             [InlineKeyboardButton(text="🎟 Создать промокод скидки", callback_data="quality_discount")],
             [InlineKeyboardButton(text="📊 Отчёт за вчера", callback_data="market_report")],
             [InlineKeyboardButton(text="🛟 Обращения покупателей", callback_data="tk_admin:active:0")],

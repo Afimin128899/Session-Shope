@@ -104,7 +104,9 @@ async def main():
             runner.app[LIMITS].clear()
             await quality_scenarios(session,connection,headers)
             runner.app[LIMITS].clear()
-            print('All Mini App, marketplace and quality scenarios passed.',flush=True)
+            from integration_expansion import expansion_scenarios
+            await expansion_scenarios(connection)
+            print('All Mini App, marketplace, quality and expansion scenarios passed.',flush=True)
         if '--serve' in sys.argv:
             print('Isolated browser fixture listening on localhost:8085', flush=True)
             await asyncio.Event().wait()

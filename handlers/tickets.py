@@ -78,6 +78,8 @@ async def display_ticket(call, ticket_id, before_id=0):
         text += 'Сообщений на этой странице нет.'
     reply_label = 'Открыть снова и написать' if ticket['status'] == 'closed' else 'Ответить'
     rows = [button(reply_label, f'tk_reply:{ticket_id}')]
+    if messages and messages[0].get('photo_id'):
+        rows.insert(0,button('Открыть скриншот',f'tk_photo:{messages[0]["id"]}'))
     if len(messages) > 1:
         rows.append(button('Предыдущее сообщение', f'tk:{ticket_id}:{messages[0]["id"]}'))
     rows.append(button('К последнему сообщению / Обновить', f'tk:{ticket_id}:0'))
@@ -164,7 +166,7 @@ async def submit_ticket(message, state):
         order_id = data.get('ticket_order_id')
         if order_id is None:
             raise ValueError('Выберите заказ в разделе «Мои покупки».')
-        ticket_id = await store.create_ticket(message.from_user.id, order_id, message.text or '')
+        ticket_id = await store.create_ticket(message.from_user.id, order_id, message.text or getattr(message,'caption',None) or ('Скриншот проблемы' if getattr(message,'photo',None) else ''), **({'photo':message.photo[-1].file_id} if getattr(message,'photo',None) else {}))
     except ValueError as exc:
         await message.answer(escape(str(exc)))
         return
@@ -188,7 +190,7 @@ async def submit_reply(message, state):
         ticket_id = data.get('ticket_id')
         if ticket_id is None:
             raise ValueError('Откройте обращение заново.')
-        user_id = await store.reply(ticket_id, message.from_user.id, message.text or '', admin=admin)
+        user_id = await store.reply(ticket_id, message.from_user.id, message.text or getattr(message,'caption',None) or ('Скриншот проблемы' if getattr(message,'photo',None) else ''), admin=admin, **({'photo':message.photo[-1].file_id} if getattr(message,'photo',None) else {}))
     except ValueError as exc:
         await message.answer(escape(str(exc)))
         return
@@ -263,3 +265,17 @@ async def show_inbox(call, state):
     await edit_message_safe(call, f'🛟 <b>{title}</b>\n\n' + ('Выберите обращение.' if entries else 'Обращений пока нет.'),
                             reply_markup=InlineKeyboardMarkup(inline_keyboard=rows))
     await answer_safe(call)
+
+
+@ticket_router.callback_query(F.data.startswith('tk_photo:'))
+async def view_photo(call):
+    from database.db import _get_pool
+    import aiomysql
+    try: message=identifier(call.data.split(':')[1])
+    except ValueError: await call.answer('Некорректный ID');return
+    async with _get_pool().acquire() as conn:
+        async with conn.cursor(aiomysql.DictCursor) as cur:
+            await cur.execute('SELECT m.photo_id FROM support_messages m JOIN support_tickets t ON t.id=m.ticket_id WHERE m.id=%s'+('' if is_admin(call.from_user.id) else ' AND t.user_id=%s'),(message,) if is_admin(call.from_user.id) else (message,call.from_user.id))
+            row=await cur.fetchone()
+    if not row or not row['photo_id']: await call.answer('Вложение недоступно',show_alert=True);return
+    await call.message.answer_photo(row['photo_id']);await call.answer()

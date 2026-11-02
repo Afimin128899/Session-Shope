@@ -39,7 +39,7 @@ class TicketStorageTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn('FOR UPDATE', calls[0].args[0])
         self.assertEqual(calls[0].args[1], (52, 42))
         self.assertIn('INSERT INTO support_tickets', calls[2].args[0])
-        self.assertEqual(calls[3].args[1], (9, 42, 'user', 'Problem'))
+        self.assertEqual(calls[3].args[1], (9, 42, 'user', 'Problem', None))
         self.conn.commit.assert_awaited_once()
 
     async def test_other_users_order_cannot_create_ticket(self):
@@ -83,7 +83,7 @@ class TicketStorageTests(unittest.IsolatedAsyncioTestCase):
         self.cur.fetchone.return_value = {'id': 9, 'user_id': 42}
         await tickets.reply(9, 7, 'Answer', admin=True)
         calls = self.cur.execute.call_args_list
-        self.assertEqual(calls[1].args[1], (9, 7, 'admin', 'Answer'))
+        self.assertEqual(calls[1].args[1], (9, 7, 'admin', 'Answer', None))
         self.assertEqual(calls[2].args[1], ('waiting_user', 9))
         self.assertIn('INSERT INTO admin_audit_log', calls[3].args[0])
         self.assertNotIn('Answer', str(calls[3].args[1]))

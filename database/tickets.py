@@ -14,11 +14,11 @@ def validate_body(body):
     return body
 
 
-async def _message(cur, ticket_id, author_id, role, body):
+async def _message(cur, ticket_id, author_id, role, body, photo=None):
     await cur.execute(
-        'INSERT INTO support_messages (ticket_id, author_id, author_role, body, created_at) '
-        'VALUES (%s, %s, %s, %s, UTC_TIMESTAMP())',
-        (ticket_id, author_id, role, body),
+        'INSERT INTO support_messages (ticket_id, author_id, author_role, body, photo_id, created_at) '
+        'VALUES (%s, %s, %s, %s, %s, UTC_TIMESTAMP())',
+        (ticket_id, author_id, role, body, photo),
     )
 
 
@@ -32,7 +32,7 @@ async def ticket_for_order(purchase_id, user_id):
             return await cur.fetchone()
 
 
-async def create_ticket(user_id, purchase_id, body, warranty=False):
+async def create_ticket(user_id, purchase_id, body, warranty=False, photo=None):
     body = validate_body(body)
     async with _transaction() as cur:
         # Serializes concurrent submissions for a single order.
@@ -57,7 +57,7 @@ async def create_ticket(user_id, purchase_id, body, warranty=False):
             ticket_id = cur.lastrowid
         if warranty:
             await cur.execute('UPDATE support_tickets SET warranty_claimed_at=COALESCE(warranty_claimed_at,UTC_TIMESTAMP()) WHERE id=%s',(ticket_id,))
-        await _message(cur, ticket_id, user_id, 'user', body)
+        await _message(cur, ticket_id, user_id, 'user', body, photo)
         return ticket_id
 
 
@@ -84,7 +84,7 @@ async def history(ticket_id, user_id=None, before_id=0):
                 conditions.append('m.id < %s')
                 params.append(before_id)
             await cur.execute(
-                'SELECT m.id, m.author_role, m.body, m.created_at FROM support_messages m '
+                'SELECT m.id, m.author_role, m.body, m.photo_id, m.created_at FROM support_messages m '
                 'JOIN support_tickets t ON t.id = m.ticket_id WHERE ' + ' AND '.join(conditions) +
                 ' ORDER BY m.id DESC LIMIT 2', tuple(params),
             )
@@ -108,7 +108,7 @@ async def inbox(user_id=None, closed=False, page=0):
             return await cur.fetchall()
 
 
-async def reply(ticket_id, author_id, body, admin=False):
+async def reply(ticket_id, author_id, body, admin=False, photo=None):
     body = validate_body(body)
     async with _transaction() as cur:
         await cur.execute(
@@ -119,7 +119,7 @@ async def reply(ticket_id, author_id, body, admin=False):
         ticket = await cur.fetchone()
         if ticket is None:
             raise ValueError('Обращение не найдено.')
-        await _message(cur, ticket_id, author_id, 'admin' if admin else 'user', body)
+        await _message(cur, ticket_id, author_id, 'admin' if admin else 'user', body, photo)
         await cur.execute('UPDATE support_tickets SET status = %s, updated_at = UTC_TIMESTAMP() WHERE id = %s',
                           ('waiting_user' if admin else 'open', ticket_id))
         if admin:

@@ -38,6 +38,8 @@ async def init_schema(cur, database):
 
     from database.activity import init_schema as init_activity
     await init_activity(cur)
+    from database.expansion import init_schema as expand_schema
+    await expand_schema(cur)
 
 
 async def snapshot(cur, purchase_id):

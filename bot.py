@@ -21,6 +21,7 @@ from handlers.user.profile import profile_router
 from handlers.user.restock import restock_router
 from handlers.tickets import ticket_router
 from handlers.quality import quality_router
+from handlers.expansion import router as expansion_router
 from services.restock import restock_worker
 
 from handlers.admin.admin_panel import admin_router
@@ -87,7 +88,7 @@ async def main():
     dp.include_routers(
         start_router, balance_router, shop_router, purchases_router, promo_router, profile_router,
         admin_router, manage_router, broadcast_router, add_account_router, button_editor_router,
-        cat_router, restock_router, admin_tools_router, ticket_router, refund_router, quality_router,
+        cat_router, restock_router, admin_tools_router, ticket_router, refund_router, quality_router, expansion_router,
     )
 
     logging.info("Starting bot...")

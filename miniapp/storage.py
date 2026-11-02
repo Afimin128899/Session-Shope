@@ -38,7 +38,7 @@ async def pricing(cur, user_id):
     return ref['referrer_id'], discount, bonus
 
 
-async def catalog(user_id, category='', query='', sort='new', page=0, *, min_price=None, max_price=None, favorites=False, cart=False):
+async def catalog(user_id, category='', query='', sort='new', page=0, *, min_price=None, max_price=None, favorites=False, cart=False, premium=None, min_age=None):
     async with _get_pool().acquire() as conn:
         async with conn.cursor(aiomysql.DictCursor) as cur:
             _, discount, _ = await pricing(cur, user_id)
@@ -57,6 +57,10 @@ async def catalog(user_id, category='', query='', sort='new', page=0, *, min_pri
             else:
                 conditions += ['c.is_active=1', "a.status='available'", '(r.user_id IS NULL OR r.user_id=%s)']
                 params.append(user_id)
+            if premium is not None:
+                conditions.append('a.is_premium=%s');params.append(premium)
+            if min_age is not None:
+                conditions.append('a.registration_date<=DATE_SUB(UTC_DATE(),INTERVAL %s DAY)');params.append(min_age)
             if category:
                 conditions.append('c.slug=%s'); params.append(category)
             if query:
@@ -153,7 +157,7 @@ async def checkout(user_id, account_id, quoted_price):
         return {'id': order_id, 'paid_amount': str(actual_price), 'balance': str(Decimal(str(balances[user_id])) - actual_price)}
 
 
-async def orders(user_id, page=0):
+async def orders(user_id, page=0, query=''):
     async with _get_pool().acquire() as conn:
         async with conn.cursor(aiomysql.DictCursor) as cur:
             await cur.execute(
@@ -161,7 +165,7 @@ async def orders(user_id, page=0):
                 't.id AS ticket_id, t.status AS ticket_status FROM purchases p '
                 'LEFT JOIN accounts a ON a.id = p.account_id LEFT JOIN categories c ON c.slug = a.country '
                 'LEFT JOIN support_tickets t ON t.purchase_id = p.id WHERE p.user_id = %s '
-                'ORDER BY p.id DESC LIMIT 25 OFFSET %s', (user_id, page * 24),
+                "AND (CAST(p.id AS CHAR)=%s OR c.name LIKE %s OR a.country=%s OR p.date LIKE %s OR %s='') ORDER BY p.id DESC LIMIT 25 OFFSET %s", (user_id,query,'%'+query+'%',query,query+'%',query,page*24),
             )
             rows = list(await cur.fetchall())
             for row in rows:
@@ -193,6 +197,12 @@ async def checkout_cart(user_id, requested, promo_code=None, expected_total=None
             raise CheckoutError('Некорректная цена товара.', 'unavailable')
         if any(prices[account]!=quotes[account] or prices[account]<0 for account in ids):
             raise CheckoutError('Цена изменилась. Проверьте корзину и подтвердите заново.', 'price_changed')
+        await cur.execute("SELECT `key`,`value` FROM settings WHERE `key` IN ('wholesale_min_total','wholesale_pct')")
+        wholesale={r['key']:r['value'] for r in await cur.fetchall()}
+        rate=Decimal(wholesale.get('wholesale_pct','15')) if sum(prices.values(),Decimal(0))>=Decimal(wholesale.get('wholesale_min_total','500')) else Decimal(0)
+        if not 0<=rate<=50: raise CheckoutError('Настройки опта недоступны.')
+        if rate:
+            prices={key:money(value*(1-rate/100)) for key,value in prices.items()}
         promo = None
         if promo_code:
             try:
@@ -204,6 +214,8 @@ async def checkout_cart(user_id, requested, promo_code=None, expected_total=None
             prices = {key: money(value*(1-Decimal(str(promo['value']))/100)) for key,value in prices.items()}
             if expected_total is None or sum(prices.values(),Decimal('0')) != Decimal(str(expected_total)):
                 raise CheckoutError('Условия промокода изменились. Проверьте новую сумму.', 'price_changed')
+        if rate and (expected_total is None or sum(prices.values(),Decimal('0'))!=Decimal(str(expected_total))):
+            raise CheckoutError('Оптовые условия изменились. Обновите корзину.','price_changed')
         users=sorted({user_id,referrer}-{None})
         await cur.execute('SELECT id,balance FROM users WHERE id IN ('+','.join(['%s']*len(users))+') ORDER BY id FOR UPDATE',tuple(users))
         balances={row['id']:Decimal(str(row['balance'])) for row in await cur.fetchall()}

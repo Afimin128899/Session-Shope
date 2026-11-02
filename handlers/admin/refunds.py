@@ -8,7 +8,7 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from database.admin_tools import find_order
-from database.refunds import refund_order
+from database.expansion import request_refund as refund_order
 from handlers.admin.admin_panel import is_admin
 from utils.nav import answer_safe, edit_message_safe
 
@@ -103,6 +103,14 @@ async def confirm_refund(call, state):
         await answer_safe(call, 'Не удалось сохранить возврат. Повторите проверку позже.', show_alert=True)
         return
     await state.clear()
+    if result and result.get('pending'):
+        from config import ADMIN_IDS
+        for admin in set(ADMIN_IDS)-{call.from_user.id}:
+            try:
+                await call.bot.send_message(admin,f"Требуется согласование возврата #{value}: {result['amount']} {escape(result['currency'])} на баланс бота. Реферальный бонус будет отменён согласно записи заказа. Причина: {escape(data['refund_reason'])}",reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text='Согласовать возврат',callback_data=f'refund_approve:{value}')]]))
+            except Exception: pass
+        await answer_safe(call,'Заявка сохранена. Нужен второй администратор.',show_alert=True)
+        return
     if result is None:
         await answer_safe(call, 'Этот заказ уже возвращён.', show_alert=True)
         return

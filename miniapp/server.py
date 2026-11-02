@@ -131,7 +131,10 @@ async def catalog(request):
         bounds.append(bound)
     if all(v is not None for v in bounds) and bounds[0] > bounds[1]:
         raise ValueError
-    return response(await storage.catalog(request['user']['id'], category, query, sort, page_number(request), min_price=bounds[0], max_price=bounds[1]))
+    premium=request.query.get('premium','')
+    age=request.query.get('min_age','')
+    if premium not in {'','0','1'} or (age and (not age.isascii() or not age.isdigit() or int(age)>10000)): raise ValueError
+    return response(await storage.catalog(request['user']['id'], category, query, sort, page_number(request), min_price=bounds[0], max_price=bounds[1],premium=int(premium) if premium else None,min_age=int(age) if age else None))
 
 
 async def purchase(request):
@@ -150,7 +153,9 @@ async def purchase(request):
 
 
 async def orders(request):
-    result = await storage.orders(request['user']['id'], page_number(request))
+    query=request.query.get('q','').strip()
+    if len(query)>100: raise ValueError
+    result = await storage.orders(request['user']['id'], page_number(request),query)
     for row in result['items']:
         row['status_label'] = order_status(row)
     return response(result)
@@ -233,7 +238,9 @@ async def cart_checkout(request):
             raise ValueError
         result = await storage.checkout_cart(request['user']['id'],items,promo,Decimal(total))
     else:
-        result = await storage.checkout_cart(request['user']['id'],items)
+        total=body.get('expected_total')
+        if total is not None and (not isinstance(total,str) or len(total)>24 or not Decimal(total).is_finite()): raise ValueError
+        result = await storage.checkout_cart(request['user']['id'],items,expected_total=Decimal(total)) if total else await storage.checkout_cart(request['user']['id'],items)
     return response(result,201)
 
 
@@ -311,6 +318,18 @@ async def customer_activity(request):
     return response(await activity.history(request['user']['id'],page_number(request)))
 
 
+async def shop_info(request):
+    from database.expansion import rules
+    return response({'wholesale':await rules(),'support_hours':await db.get_setting('support_hours','График поддержки пока не указан'),'response_time':await db.get_setting('support_eta','Поддержка отвечает в порядке очереди; точное время не установлено.')})
+
+
+async def product(request):
+    result=await storage.catalog(request['user']['id'],query=str(order_id(request)))
+    item=next((i for i in result['items'] if i['id']==order_id(request)),None)
+    if not item: return response({'error':'Товар недоступен.'},404)
+    return response(item)
+
+
 async def health(request):
     return response({"status": "ok", "version": BOT_VERSION})
 
@@ -327,7 +346,7 @@ def create_app(*, token=None, bot=None, bot_username=''):
     app[LIMITS] = OrderedDict()
     app.add_routes([
         web.get('/', index), web.get('/api/health', health),
-        web.get('/api/activity',customer_activity), web.get('/api/me', me), web.get('/api/catalog', catalog), web.post('/api/purchase', purchase),
+        web.get('/api/shop-info',shop_info),web.get('/api/products/{id}',product),web.get('/api/activity',customer_activity), web.get('/api/me', me), web.get('/api/catalog', catalog), web.post('/api/purchase', purchase),
         web.get('/api/favorites', collection), web.post('/api/favorites', collection_update),
         web.get('/api/cart', collection), web.post('/api/cart', collection_update), web.delete('/api/cart', collection_update),
         web.post('/api/cart/checkout', cart_checkout), web.get('/api/payment-methods', payment_methods),
