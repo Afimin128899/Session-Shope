@@ -57,8 +57,10 @@ spec=importlib.util.spec_from_file_location('service_installer',root/'deploy/cre
 module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
 try:
     print(sys.argv[2] or module.discover_service(root) or '')
-except (ValueError, OSError, module.subprocess.CalledProcessError):
-    raise SystemExit('Не удалось однозначно определить сервис. Укажите --service NAME.service.')
+except ValueError as exc:
+    raise SystemExit(str(exc))
+except (OSError, module.subprocess.CalledProcessError):
+    raise SystemExit('Не удалось прочитать systemd. Проверьте systemctl status и повторите установку.')
 PY
 )"
 if [[ ! -f "$project_dir/.env" && -z "$bot_service" && $fresh -eq 0 ]]; then

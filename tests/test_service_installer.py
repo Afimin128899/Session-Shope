@@ -65,3 +65,53 @@ class ServiceInstallerTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'оставлен без изменений'):
             self.invoke()
         self.assertIn('CUSTOM_SETTING=keep', self.destination.read_text())
+
+
+class ServiceDiscoveryTests(unittest.TestCase):
+    root = Path('/opt/session-shope')
+
+    def command(self, listing, units):
+        def run(*args):
+            if args[1] == 'list-unit-files':
+                return listing
+            name, prop = args[2], args[3]
+            unit = units[name]
+            if isinstance(unit, Exception):
+                raise unit
+            return unit.get(prop, '')
+        return run
+
+    def unit(self, name, bot=False):
+        return {'--property=LoadState': 'loaded', '--property=Id': name,
+                '--property=ExecStart': '/usr/bin/python3 /opt/session-shope/bot.py' if bot else '/usr/bin/other',
+                '--property=WorkingDirectory': str(self.root) if bot else '/'}
+
+    def test_ubuntu_templates_and_masked_units_are_not_inspected(self):
+        listing = 'getty@.service indirect enabled\nmasked.service masked enabled\nssh.service enabled enabled\n'
+        with patch.object(installer, 'run', side_effect=self.command(listing, {'ssh.service': self.unit('ssh.service')})) as run:
+            self.assertIsNone(installer.discover_service(self.root))
+            self.assertFalse(any('getty@.service' in c.args or 'masked.service' in c.args for c in run.call_args_list if c.args[1] == 'show'))
+
+    def test_unavailable_individual_unit_does_not_break_fresh_install(self):
+        import subprocess
+        units = {'gone.service': subprocess.CalledProcessError(1, ['systemctl']), 'ssh.service': self.unit('ssh.service')}
+        with patch.object(installer, 'run', side_effect=self.command('gone.service alias\nssh.service enabled', units)):
+            self.assertIsNone(installer.discover_service(self.root))
+
+    def test_alias_and_actual_service_count_as_one(self):
+        units = {'alias.service': self.unit('shop.service', True), 'shop.service': self.unit('shop.service', True)}
+        with patch.object(installer, 'run', side_effect=self.command('alias.service alias\nshop.service enabled', units)):
+            self.assertEqual(installer.discover_service(self.root), 'shop.service')
+
+    def test_two_real_bot_services_require_explicit_selection(self):
+        units = {'one.service': self.unit('one.service', True), 'two.service': self.unit('two.service', True)}
+        with patch.object(installer, 'run', side_effect=self.command('one.service enabled\ntwo.service enabled', units)):
+            with self.assertRaisesRegex(ValueError, 'несколько сервисов'):
+                installer.discover_service(self.root)
+
+    def test_global_systemd_failure_is_not_treated_as_no_existing_bot(self):
+        import subprocess
+        units = {'ssh.service': subprocess.CalledProcessError(1, ['systemctl'])}
+        with patch.object(installer, 'run', side_effect=self.command('ssh.service enabled', units)):
+            with self.assertRaisesRegex(ValueError, 'не смог прочитать'):
+                installer.discover_service(self.root)

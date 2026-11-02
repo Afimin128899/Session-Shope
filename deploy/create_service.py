@@ -28,15 +28,37 @@ def unit_quote(value):
 
 def discover_service(root):
     units = run('systemctl', 'list-unit-files', '--type=service', '--no-legend', '--no-pager')
-    found = []
+    found, seen = [], set()
+    queried, unavailable, loaded = 0, 0, 0
     for line in units.splitlines():
-        name = line.split()[0]
-        if not name.endswith('.service'):
+        fields = line.split()
+        if not fields:
             continue
-        command = run('systemctl', 'show', name, '--property=ExecStart', '--value')
-        directory = run('systemctl', 'show', name, '--property=WorkingDirectory', '--value')
+        name = fields[0]
+        # A template has no instance to inspect; masked units cannot run the bot.
+        if not name.endswith('.service') or name.endswith('@.service') or 'masked' in fields[1:2]:
+            continue
+        queried += 1
+        try:
+            state = run('systemctl', 'show', name, '--property=LoadState', '--value')
+        except subprocess.CalledProcessError as exc:
+            if exc.returncode != 1:
+                raise
+            unavailable += 1
+            continue
+        if state != 'loaded':
+            continue
+        loaded += 1
+        canonical = run('systemctl', 'show', name, '--property=Id', '--value') or name
+        if canonical in seen:
+            continue
+        seen.add(canonical)
+        command = run('systemctl', 'show', canonical, '--property=ExecStart', '--value')
+        directory = run('systemctl', 'show', canonical, '--property=WorkingDirectory', '--value')
         if str(root / 'bot.py') in command or (directory == str(root) and re.search(r'\bbot\.py\b', command)):
-            found.append(name)
+            found.append(canonical)
+    if queried and unavailable and not loaded:
+        raise ValueError('systemctl не смог прочитать сервисы. Проверьте systemctl status, затем повторите установку.')
     if len(found) > 1:
         raise ValueError('Найдено несколько сервисов бота. Укажите нужный через --service NAME.service.')
     return found[0] if found else None
