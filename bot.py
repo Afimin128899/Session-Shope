@@ -73,6 +73,8 @@ async def main():
         return
 
     bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
+    from utils.button_icons import MissingButtonIcons
+    bot.session.middleware(MissingButtonIcons())
     dp = Dispatcher(storage=MemoryStorage())
 
     # Protect the bot from spam and flood abuse
@@ -95,6 +97,8 @@ async def main():
     notification_tasks = []
     web_runner = None
     try:
+        from utils.button_icons import load_pack
+        await load_pack(bot)
         await bot.delete_webhook(drop_pending_updates=True)
         from utils.miniapp import miniapp_url
         app_url = miniapp_url()

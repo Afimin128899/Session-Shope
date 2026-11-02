@@ -36,7 +36,11 @@ def identifier(value):
 
 
 def button(text, data):
-    return [InlineKeyboardButton(text=text, callback_data=data)]
+    from utils.button_icons import decorate
+    markup = decorate(InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text=text, callback_data=data),
+    ]]))
+    return markup.inline_keyboard[0]
 
 
 def order_back(order_id):

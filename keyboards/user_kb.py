@@ -3,6 +3,7 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 from config import ADMIN_IDS, SUPPORT_USERNAME, REVIEWS_LINK
 from database.db import get_first_available_account_by_country, get_available_categories, get_button_label, get_setting
 from utils import constants as c
+from utils.button_icons import icon_for
 from utils.emoji_map import EMOJI_PACKAGE, EMOJI_STAR, EMOJI_INFO, EMOJI_USER, EMOJI_GAME, EMOJI_HAND
 
 
@@ -61,7 +62,7 @@ async def main_menu(user_id: int | None = None) -> InlineKeyboardMarkup:
     if app_url:
         rows.insert(0, [InlineKeyboardButton(text="🛍 Открыть Mini App", web_app=WebAppInfo(url=app_url))])
 
-    rows.append([InlineKeyboardButton(text="🛟 Мои обращения", callback_data="tk_user:0")])
+    rows.append([InlineKeyboardButton(text="Мои обращения", callback_data="tk_user:0", icon_custom_emoji_id=icon_for("support"))])
 
     reviews_row = [
         InlineKeyboardButton(text=label_reviews, callback_data="quality_reviews:0", icon_custom_emoji_id=emoji_reviews),
