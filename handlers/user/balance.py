@@ -166,6 +166,9 @@ async def process_lave_amount(message: Message, state: FSMContext):
             await message.answer("❌ Не удалось создать счёт. Проверьте настройки платёжного сервиса и попробуйте позже.")
         return
 
+    from database.commerce import register_invoice
+    await register_invoice(payment_method, invoice_id, message.from_user.id, rub_amount)
+
     prefix = {"lave": "lave", "xrocket": "xrocket", "crypto": "crypto"}[payment_method]
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="💳 Оплатить", url=pay_url)],
@@ -176,7 +179,7 @@ async def process_lave_amount(message: Message, state: FSMContext):
     await message.answer(
         f"💳 <b>Счёт {('USDT $ (Lave Pay)' if payment_method == 'lave' else 'USDT $ (xRocket Pay)' if payment_method == 'xrocket' else 'USDT $ (Crypto Pay)')} создан</b>\n\n"
         f"К оплате: <b>{rub_amount:.2f} ₽</b>\n\n"
-        "Нажмите «Оплатить», завершите оплату, затем нажмите «Проверить оплату».",
+        "Нажмите «Оплатить», завершите оплату, баланс пополнится автоматически. Кнопка проверки доступна как запасной вариант.",
         reply_markup=kb,
     )
     await state.clear()

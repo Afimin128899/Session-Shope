@@ -18,7 +18,7 @@ async def _request(method: str, path: str, payload: dict | None = None, params: 
         "Content-Type": "application/json",
     }
     try:
-        async with aiohttp.ClientSession() as session:
+        async with aiohttp.ClientSession(trust_env=True, timeout=aiohttp.ClientTimeout(total=15)) as session:
             async with session.request(
                 method,
                 f"{BASE_URL}{path}",
@@ -51,8 +51,10 @@ async def create_invoice(amount_rub: float, description: str, payload: str):
 
 async def get_invoice(invoice_id: str):
     result = await _request("GET", "/getInvoices", params={"invoice_ids": str(invoice_id), "count": 1})
+    if isinstance(result, dict):
+        result = result.get('items', [])
     if isinstance(result, list):
-        return result[0] if result else None
+        return next((invoice for invoice in result if str(invoice.get('invoice_id')) == str(invoice_id)), None)
     return None
 
 

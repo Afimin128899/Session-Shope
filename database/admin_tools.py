@@ -74,7 +74,7 @@ async def change_account_price(admin_id, account_id, price):
         row = await cur.fetchone()
         if row is None:
             return False
-        await cur.execute('UPDATE accounts SET price = %s WHERE id = %s', (price, account_id))
+        await cur.execute('UPDATE accounts SET compare_price = CASE WHEN price>%s THEN GREATEST(price,COALESCE(compare_price,0)) WHEN compare_price>%s THEN compare_price ELSE NULL END,price=%s WHERE id=%s', (price, price, price, account_id))
         await _record(cur, admin_id, 'account_price', 'account', account_id, {
             'before': str(row['price']), 'after': str(price),
         })
@@ -91,7 +91,7 @@ async def change_category_price(admin_id, slug, price):
         if not rows:
             return 0
         prices = sorted({str(row['price']) for row in rows})
-        await cur.execute('UPDATE accounts SET price = %s WHERE country = %s', (price, slug))
+        await cur.execute('UPDATE accounts SET compare_price = CASE WHEN price>%s THEN GREATEST(price,COALESCE(compare_price,0)) WHEN compare_price>%s THEN compare_price ELSE NULL END,price=%s WHERE country=%s', (price, price, price, slug))
         updated = cur.rowcount
         await _record(cur, admin_id, 'category_price', 'category', slug, {
             'before': prices[:20], 'distinct_prices': len(prices),

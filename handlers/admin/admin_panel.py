@@ -544,7 +544,8 @@ async def show_account_detail(call: CallbackQuery):
 
     text = (
         f"{ACCOUNT} <b>Карточка аккаунта</b>\n\n"
-        f"{INFO} ID: <code>{account['id']}</code>\n"
+        f"{INFO} Товар: <code>SBA-{account['id']:06d}</code>\n"
+        f"Telegram ID: <code>{account.get('telegram_user_id') or 'Не сохранён'}</code>\n"
         f"{EXCHANGE} Категория: <b>{cat_display}</b>\n"
         f"{MAIL} Номер: <code>{account['number']}</code>\n"
         f"{LOCK} 2FA пароль: <code>{account.get('password') or '-'}</code>\n"
@@ -627,7 +628,8 @@ async def ask_delete_account(call: CallbackQuery):
 
     text = (
         f"{ALERT} <b>Подтвердите удаление аккаунта</b>\n\n"
-        f"{INFO} ID: <code>{account['id']}</code>\n"
+        f"{INFO} Товар: <code>SBA-{account['id']:06d}</code>\n"
+        f"Telegram ID: <code>{account.get('telegram_user_id') or 'Не сохранён'}</code>\n"
         f"{MAIL} Номер: <code>{account['number']}</code>\n\n"
         f"<i>{TRASH} Это действие необратимо. Если аккаунт был куплен, он пропадёт из истории покупок пользователя.</i>"
     )
@@ -1107,3 +1109,14 @@ async def admin_sub_process_channel(message: Message, state: FSMContext):
         f"<i>Убедитесь, что бот является администратором канала {channel_id}.</i>",
         reply_markup=kb,
     )
+
+
+@admin_router.callback_query(F.data == "market_report")
+async def market_report(call: CallbackQuery):
+    if call.from_user.id not in ADMIN_IDS:
+        await call.answer("Access denied", show_alert=True)
+        return
+    from datetime import datetime, timedelta
+    from services.market_notifications import report, MOSCOW
+    await call.answer()
+    await call.message.answer(await report(datetime.now(MOSCOW).date() - timedelta(days=1)), parse_mode="HTML")

@@ -328,6 +328,8 @@ async def init_db ():
 
                     from database.support_schema import init_support_schema
                     await init_support_schema(cur, DB_CONFIG["db"])
+                    from database.commerce_schema import init_commerce_schema
+                    await init_commerce_schema(cur, DB_CONFIG["db"])
 
                     await cur.execute("""
                         CREATE TABLE IF NOT EXISTS stock_subscriptions (
@@ -575,6 +577,12 @@ async def buy_account(user_id: int, account_id: int, price: float, date_str: str
                     await conn.rollback()
                     return None
 
+                await cur.execute("SELECT user_id FROM account_reservations WHERE account_id = %s AND expires_at > UTC_TIMESTAMP() FOR UPDATE", (account_id,))
+                reservation = await cur.fetchone()
+                if reservation and reservation[0] != user_id:
+                    await conn.rollback()
+                    return None
+
                 # Проверяем баланс с блокировкой строки
                 balance_col = "balance_usdt" if currency == "USDT" else "balance"
                 await cur.execute(f"SELECT {balance_col} FROM users WHERE id = %s FOR UPDATE", (user_id,))
@@ -587,6 +595,8 @@ async def buy_account(user_id: int, account_id: int, price: float, date_str: str
                 await cur.execute("UPDATE accounts SET status = 'sold' WHERE id = %s", (account_id,))
                 await cur.execute("INSERT INTO purchases (user_id, account_id, date, currency, paid_amount, referral_bonus) VALUES (%s, %s, %s, %s, %s, 0)", (user_id, account_id, date_str, currency, price))
                 purc_id = cur.lastrowid
+                await cur.execute("DELETE FROM shopping_cart WHERE user_id = %s AND account_id = %s", (user_id, account_id))
+                await cur.execute("DELETE FROM account_reservations WHERE account_id = %s", (account_id,))
             await conn.commit()
             logging.info(f"[db] Purchase completed: user={user_id}, account={account_id}, price={price} {currency}, purchase_id={purc_id}")
             return purc_id
@@ -613,7 +623,7 @@ async def get_purchase_for_user (purchase_id :int ,user_id :int ):
     async with _get_pool().acquire() as conn :
         async with conn .cursor (aiomysql .DictCursor )as cur :
             await cur .execute ("""
-                SELECT p.*, a.country, a.code, a.number, a.password, a.data, a.price, t.status AS ticket_status
+                SELECT p.*, a.country, a.code, a.number, a.password, a.data, a.price, a.telegram_user_id, t.status AS ticket_status
                 FROM purchases p JOIN accounts a ON p.account_id = a.id
                 LEFT JOIN support_tickets t ON t.purchase_id = p.id
                 WHERE p.id = %s AND p.user_id = %s
@@ -627,12 +637,12 @@ async def complete_user_purchase(account_id: int):
         await cur.execute("UPDATE accounts SET data = '✅ Сессия удалена (Покупка завершена)' WHERE id = %s AND status <> 'refunded'", (account_id,))
 
 
-async def add_account (country ,code ,number ,password ,price ,data ):
+async def add_account (country ,code ,number ,password ,price ,data, telegram_user_id=None ):
     async with _get_pool().acquire() as conn :
         async with conn .cursor ()as cur :
             await cur .execute (
-            "INSERT INTO accounts (country, code, number, password, price, data) VALUES (%s, %s, %s, %s, %s, %s)",
-            (country ,code ,number ,password ,price ,data )
+            "INSERT INTO accounts (country, code, number, password, price, data, telegram_user_id) VALUES (%s, %s, %s, %s, %s, %s, %s)",
+            (country ,code ,number ,password ,price ,data, telegram_user_id )
             )
 
 async def delete_account (account_id :int ):
@@ -808,7 +818,7 @@ async def get_purchase_for_user (purchase_id :int ,user_id :int ):
     async with _get_pool().acquire() as conn :
         async with conn .cursor (aiomysql .DictCursor )as cur :
             await cur .execute ("""
-                SELECT p.*, a.country, a.code, a.number, a.password, a.data, a.price, t.status AS ticket_status
+                SELECT p.*, a.country, a.code, a.number, a.password, a.data, a.price, a.telegram_user_id, t.status AS ticket_status
                 FROM purchases p JOIN accounts a ON p.account_id = a.id
                 LEFT JOIN support_tickets t ON t.purchase_id = p.id
                 WHERE p.id = %s AND p.user_id = %s
@@ -822,12 +832,12 @@ async def complete_user_purchase(account_id: int):
         await cur.execute("UPDATE accounts SET data = '✅ Сессия удалена (Покупка завершена)' WHERE id = %s AND status <> 'refunded'", (account_id,))
 
 
-async def add_account (country ,code ,number ,password ,price ,data ):
+async def add_account (country ,code ,number ,password ,price ,data, telegram_user_id=None ):
     async with _get_pool().acquire() as conn :
         async with conn .cursor ()as cur :
             await cur .execute (
-            "INSERT INTO accounts (country, code, number, password, price, data) VALUES (%s, %s, %s, %s, %s, %s)",
-            (country ,code ,number ,password ,price ,data )
+            "INSERT INTO accounts (country, code, number, password, price, data, telegram_user_id) VALUES (%s, %s, %s, %s, %s, %s, %s)",
+            (country ,code ,number ,password ,price ,data, telegram_user_id )
             )
 
 async def delete_account (account_id :int ):
@@ -1061,6 +1071,12 @@ async def buy_account_with_referral(
                     await conn.rollback()
                     return None
 
+                await cur.execute("SELECT user_id FROM account_reservations WHERE account_id = %s AND expires_at > UTC_TIMESTAMP() FOR UPDATE", (account_id,))
+                reservation = await cur.fetchone()
+                if reservation and reservation[0] != user_id:
+                    await conn.rollback()
+                    return None
+
                 balance_col = "balance_usdt" if currency == "USDT" else "balance"
                 await cur.execute(
                     f"SELECT {balance_col} FROM users WHERE id = %s FOR UPDATE",
@@ -1078,6 +1094,8 @@ async def buy_account_with_referral(
                     (user_id, account_id, date_str, currency, effective_price),
                 )
                 purc_id = cur.lastrowid
+                await cur.execute("DELETE FROM shopping_cart WHERE user_id = %s AND account_id = %s", (user_id, account_id))
+                await cur.execute("DELETE FROM account_reservations WHERE account_id = %s", (account_id,))
 
                 if referrer_id is None:
                     await cur.execute("SELECT referrer_id FROM referrals WHERE referral_id = %s", (user_id,))

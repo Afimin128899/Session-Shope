@@ -88,7 +88,7 @@ def main():
             if local and str(settings.get('DB_PORT') or '3306') == '3306' and Path('/run/mysqld/mysqld.sock').exists():
                 stream.write('BACKUP_DB_SOCKET=/run/mysqld/mysqld.sock\n')
     config_file.chmod(0o600)
-    variables = dict(dotenv_values(config_file))
+    variables = dict(dotenv_values(config_file, interpolate=False))
     if any(value is None for value in variables.values()):
         raise ValueError('Некорректная настройка backup.env.')
     environment = dict(os.environ) | variables

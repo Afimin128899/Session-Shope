@@ -16,6 +16,10 @@ from aiohttp import ClientSession, web
 from test_payments import db
 from test_miniapp import TEST_TOKEN, signed_data
 from miniapp.server import create_app
+from database import commerce
+from services import payments, market_notifications
+from unittest.mock import AsyncMock, patch
+from datetime import datetime, timedelta
 
 
 async def main():
@@ -35,8 +39,8 @@ async def main():
             for slug, label, emoji in categories:
                 await cur.execute('INSERT INTO categories (slug, name, emoji, is_active) VALUES (%s, %s, %s, 1)', (slug, label, emoji))
             for index in range(12):
-                await cur.execute('INSERT INTO accounts (country, number, password, price, data) VALUES (%s,%s,%s,%s,%s)',
-                                  (categories[index % 6][0], f'+15550000{index:03}', 'fixture-password', 200 + index * 25, 'NEVER_EXPOSE_SESSION'))
+                await cur.execute('INSERT INTO accounts (country, number, password, price, data, telegram_user_id) VALUES (%s,%s,%s,%s,%s,%s)',
+                                  (categories[index % 6][0], f'+15550000{index:03}', 'fixture-password', 200 + index * 25, 'NEVER_EXPOSE_SESSION', 9000000000 + index))
         bot = SimpleNamespace(get_chat_member=None)
         runner = web.AppRunner(create_app(token=TEST_TOKEN, bot=bot, bot_username='session_test_bot'), access_log=None)
         await runner.setup()
@@ -93,7 +97,9 @@ async def main():
             async with connection.cursor() as cur:
                 await cur.execute("UPDATE settings SET `value`='0' WHERE `key`='maintenance_mode'")
             print('PASS: bot maintenance mode enforced by Mini App')
-            print('All 7 Mini App MySQL/API integration scenarios passed.', flush=True)
+            from integration_market import marketplace_scenarios
+            await marketplace_scenarios(session, connection, headers)
+            print('All Mini App and marketplace integration scenarios passed.', flush=True)
         if '--serve' in sys.argv:
             print('Isolated browser fixture listening on localhost:8085', flush=True)
             await asyncio.Event().wait()

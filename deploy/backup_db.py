@@ -14,7 +14,7 @@ import tempfile
 from dotenv import dotenv_values
 
 TAG = 'session-shope'
-CORE_TABLES = ('users', 'accounts', 'purchases', 'settings', 'order_refunds', 'admin_audit_log', 'support_tickets', 'support_messages')
+CORE_TABLES = ('users', 'accounts', 'purchases', 'settings', 'order_refunds', 'admin_audit_log', 'support_tickets', 'support_messages', 'account_reservations', 'shopping_cart', 'account_favorites', 'payment_invoices', 'daily_report_deliveries')
 
 
 def client_options(values):
@@ -61,15 +61,22 @@ def config(project):
     return values, environment
 
 
+def restic_command(environment):
+    command = ['restic']
+    if environment.get('RESTIC_SFTP_COMMAND'):
+        command += ['-o', 'sftp.command=' + environment['RESTIC_SFTP_COMMAND']]
+    return command
+
+
 def restic(environment, *args):
-    result = subprocess.run(['restic', *args], env=environment, capture_output=True, text=True)
+    result = subprocess.run([*restic_command(environment), *args], env=environment, capture_output=True, text=True)
     if result.returncode:
         raise ValueError('Операция restic не выполнена. Проверьте репозиторий, ключ и доступ к хранилищу.')
     return result.stdout
 
 
 def initialize(environment):
-    existing = subprocess.run(['restic', 'cat', 'config'], env=environment, capture_output=True)
+    existing = subprocess.run([*restic_command(environment), 'cat', 'config'], env=environment, capture_output=True)
     if existing.returncode:
         # restic refuses to initialize over an existing repository, including one
         # opened with an incorrect key. Verification remains enabled.
@@ -102,7 +109,7 @@ def backup(values, environment, directory):
             '--skip-lock-tables', '--no-tablespaces', '--hex-blob', values['DB_NAME'],
         ], stdout=subprocess.PIPE, stderr=dump_errors)
         try:
-            saved = subprocess.run(['restic', 'backup', '--stdin', '--stdin-filename', 'database.sql',
+            saved = subprocess.run([*restic_command(environment), 'backup', '--stdin', '--stdin-filename', 'database.sql',
                                     '--tag', TAG, '--json'], env=environment, stdin=dump.stdout,
                                    capture_output=True, text=True)
         finally:
@@ -157,7 +164,7 @@ def verify(values, environment, directory):
         options = Path(directory) / 'restore-client.cnf'
         private_file(options, client_options({'DB_HOST': '127.0.0.1', 'DB_PORT': '3306', 'DB_USER': user, 'DB_PASSWORD': password, 'DB_SOCKET': os.environ.get('BACKUP_DB_SOCKET', '/run/mysqld/mysqld.sock')}))
         with tempfile.TemporaryFile() as errors:
-            source = subprocess.Popen(['restic', 'dump', snapshot, 'database.sql'], env=environment,
+            source = subprocess.Popen([*restic_command(environment), 'dump', snapshot, 'database.sql'], env=environment,
                                       stdout=subprocess.PIPE, stderr=errors)
             try:
                 restored = subprocess.run(['mariadb', f'--defaults-extra-file={options}', '--local-infile=0', database],

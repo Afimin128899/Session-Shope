@@ -144,20 +144,20 @@ class CheckoutTests(unittest.IsolatedAsyncioTestCase):
         patcher.start(); self.addCleanup(patcher.stop)
 
     async def test_changed_price_rolls_back_without_charging(self):
-        self.cur.fetchone.side_effect = [{'id': 1, 'price': 200, 'country': 'us'}, None]
+        self.cur.fetchone.side_effect = [{'id': 1, 'price': 200, 'country': 'us'}, None, None]
         with self.assertRaisesRegex(storage.CheckoutError, 'Цена изменилась'):
             await storage.checkout(42, 1, Decimal('100'))
         self.conn.rollback.assert_awaited_once()
         self.assertFalse(any('UPDATE users' in c.args[0] for c in self.cur.execute.call_args_list))
 
     async def test_purchase_reads_price_under_lock_and_debits_rubles(self):
-        self.cur.fetchone.side_effect = [{'id': 1, 'price': 100, 'country': 'us'}, None]
+        self.cur.fetchone.side_effect = [{'id': 1, 'price': 100, 'country': 'us'}, None, None]
         self.cur.fetchall.return_value = [{'id': 42, 'balance': 500}]
         result = await storage.checkout(42, 1, Decimal('100'))
         self.assertEqual(result, {'id': 5, 'paid_amount': '100.00', 'balance': '400.00'})
         calls = self.cur.execute.call_args_list
         self.assertIn('FOR UPDATE', calls[0].args[0])
-        self.assertIn('UPDATE users SET balance = balance -', calls[3].args[0])
+        self.assertIn('UPDATE users SET balance = balance -', calls[4].args[0])
         self.conn.commit.assert_awaited_once()
 
     async def test_sold_account_never_debits(self):
@@ -167,7 +167,7 @@ class CheckoutTests(unittest.IsolatedAsyncioTestCase):
         self.conn.rollback.assert_awaited_once()
 
     async def test_order_insert_failure_rolls_back_balance_and_stock(self):
-        self.cur.fetchone.side_effect = [{'id': 1, 'price': 100, 'country': 'us'}, None]
+        self.cur.fetchone.side_effect = [{'id': 1, 'price': 100, 'country': 'us'}, None, None]
         self.cur.fetchall.return_value = [{'id': 42, 'balance': 500}]
         self.cur.execute.side_effect = [None, None, None, None, None, OSError('insert failed')]
         with self.assertRaises(OSError): await storage.checkout(42, 1, Decimal('100'))

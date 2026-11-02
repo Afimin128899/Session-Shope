@@ -36,7 +36,7 @@ def _detect_country_by_phone (phone :str )->str :
             return country 
     return "Неизвестно"
 
-async def import_session_file(session_path: str) -> Tuple[Optional[str], Optional[str], Optional[str]]:
+async def import_session_file(session_path: str, metadata=None) -> Tuple[Optional[str], Optional[str], Optional[str]]:
     """Проверить SQLite .session и экспортировать её в StringSession."""
     client = None
     try:
@@ -62,6 +62,8 @@ async def import_session_file(session_path: str) -> Tuple[Optional[str], Optiona
         if not me or not me.phone:
             return None, None, "Не удалось получить номер телефона из сессии"
 
+        if metadata is not None:
+            metadata['telegram_user_id'] = me.id
         phone = f"+{me.phone}"
         # Telethon поддерживает экспорт любой Session в StringSession.
         session_string = StringSession.save(client.session)
@@ -135,13 +137,15 @@ async def verify_2fa_password (client :TelegramClient ,password :str )->Tuple [b
     except Exception as e :
         return False ,f"Ошибка 2FA: {str (e )}"
 
-async def finalize_account (client :TelegramClient )->Tuple [Optional [str ],Optional [str ],Optional [str ]]:
+async def finalize_account (client :TelegramClient, metadata=None )->Tuple [Optional [str ],Optional [str ],Optional [str ]]:
     """Возвращает (session_string, phone, country)"""
     try :
         me =await client .get_me ()
         if not me :
             return None ,None ,"Не удалось получить данные профиля"
 
+        if metadata is not None:
+            metadata['telegram_user_id'] = me.id
         phone =f"+{me .phone }"
         country =_detect_country_by_phone (phone )
         session_string =client .session .save ()

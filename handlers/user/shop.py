@@ -1,4 +1,5 @@
 from datetime import datetime
+from zoneinfo import ZoneInfo
 from aiogram import Router, F
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
 
@@ -188,6 +189,8 @@ async def select_specific_account(call: CallbackQuery):
     text = (
         "<b>Подтверждение покупки:</b>\n\n"
         f"Категория: <b>{display_country}</b>{cat_emoji_html}\n"
+        f"Товар: <code>SBA-{account['id']:06d}</code>\n"
+        f"Telegram ID: <code>{account.get('telegram_user_id') or 'Не сохранён'}</code>\n"
         f"📱 Номер: <code>{mask_phone(account['number'])}</code>\n"
         f"<tg-emoji emoji-id=\"5406841020769936275\">💵</tg-emoji> Цена: <b>{price_str}</b>\n\n"
         "<blockquote>"
@@ -257,7 +260,7 @@ async def confirm_purchase(call: CallbackQuery):
         await answer_safe(call, f"❌ Недостаточно средств на рублёвом балансе. Требуется {price_fmt}.", show_alert=True)
         return
 
-    date_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    date_str = datetime.now(ZoneInfo('Europe/Moscow')).strftime("%Y-%m-%d %H:%M:%S")
 
     if referrer_id and settings:
         purchase_id = await buy_account_with_referral(

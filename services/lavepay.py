@@ -17,7 +17,7 @@ async def _request(method: str, path: str, payload: dict | None = None) -> dict 
     }
 
     try:
-        async with aiohttp.ClientSession() as session:
+        async with aiohttp.ClientSession(trust_env=True, timeout=aiohttp.ClientTimeout(total=15)) as session:
             async with session.request(
                 method,
                 f"{BASE_URL}{path}",

@@ -138,7 +138,8 @@ async def process_session_file(message: Message, state: FSMContext):
 
         await message.answer("⏳ Проверяю сессию и подключение к Telegram...")
 
-        session_string, phone, error = await import_session_file(tmp_path)
+        metadata = {}
+        session_string, phone, error = await import_session_file(tmp_path, metadata=metadata)
         if not session_string or not phone:
             await message.answer(
                 "❌ Не удалось импортировать сессию.\n"
@@ -148,6 +149,7 @@ async def process_session_file(message: Message, state: FSMContext):
 
         await state.update_data(
             session_string=session_string,
+            telegram_user_id=metadata.get('telegram_user_id'),
             phone=phone,
             password="-",
         )
@@ -419,6 +421,7 @@ async def finalize_imported_session(message: Message, state: FSMContext):
             password=data.get("password", "-"),
             price=price,
             data=session_string,
+            telegram_user_id=data.get('telegram_user_id'),
         )
 
         await state.clear()
@@ -447,7 +450,8 @@ async def finalize_and_save_account (message :Message ,state :FSMContext ,client
     """Завершить авторизацию и сохранить аккаунт в базу."""
     try :
 
-        session_string ,phone ,country =await finalize_account (client )
+        metadata = {}
+        session_string ,phone ,country =await finalize_account (client, metadata=metadata )
 
         if not session_string :
             await state .clear ()
@@ -486,7 +490,8 @@ async def finalize_and_save_account (message :Message ,state :FSMContext ,client
         number =phone ,
         password =saved_password ,
         price =price ,
-        data =session_string 
+        data =session_string,
+        telegram_user_id=metadata.get('telegram_user_id'),
         )
 
         await state .clear ()

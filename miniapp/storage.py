@@ -1,5 +1,5 @@
 """Safe projections of the shared inventory and an authoritative checkout."""
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal, ROUND_HALF_UP
 from zoneinfo import ZoneInfo
 
@@ -37,36 +37,65 @@ async def pricing(cur, user_id):
     return ref['referrer_id'], discount, bonus
 
 
-async def catalog(user_id, category='', query='', sort='new', page=0):
+async def catalog(user_id, category='', query='', sort='new', page=0, *, min_price=None, max_price=None, favorites=False, cart=False):
     async with _get_pool().acquire() as conn:
         async with conn.cursor(aiomysql.DictCursor) as cur:
             _, discount, _ = await pricing(cur, user_id)
             await cur.execute(
-                "SELECT c.slug, c.name, COUNT(a.id) AS count FROM categories c "
-                "LEFT JOIN accounts a ON a.country = c.slug AND a.status = 'available' "
-                'WHERE c.is_active = 1 GROUP BY c.slug, c.name ORDER BY c.sort_order, c.name'
+                "SELECT c.slug,c.name,COUNT(a.id) AS count FROM categories c LEFT JOIN accounts a "
+                "ON a.country=c.slug AND a.status='available' AND NOT EXISTS "
+                "(SELECT 1 FROM account_reservations r WHERE r.account_id=a.id AND r.expires_at>UTC_TIMESTAMP() AND r.user_id<>%s) "
+                'WHERE c.is_active=1 GROUP BY c.slug,c.name ORDER BY c.sort_order,c.name', (user_id,),
             )
             categories = list(await cur.fetchall())
-            conditions, params = ["a.status = 'available'", 'c.is_active = 1'], []
+            conditions, params = [], [user_id, user_id]
+            if cart:
+                conditions.append('t.user_id IS NOT NULL')
+            elif favorites:
+                conditions.append('f.user_id IS NOT NULL')
+            else:
+                conditions += ['c.is_active=1', "a.status='available'", '(r.user_id IS NULL OR r.user_id=%s)']
+                params.append(user_id)
             if category:
-                conditions.append('c.slug = %s')
-                params.append(category)
+                conditions.append('c.slug=%s'); params.append(category)
             if query:
-                # Search category names, not undisclosed full phone numbers.
-                conditions.append("c.name LIKE %s ESCAPE '='")
-                params.append('%' + query.replace('=', '==').replace('%', '=%').replace('_', '=_') + '%')
-            ordering = {'new': 'a.id DESC', 'price_asc': 'a.price ASC, a.id DESC', 'price_desc': 'a.price DESC, a.id DESC'}[sort]
+                term = '%' + query.replace('=', '==').replace('%', '=%').replace('_', '=_') + '%'
+                numeric = query.removeprefix('#').removeprefix('SBA-')
+                if numeric.isascii() and numeric.isdigit() and len(numeric)<=18:
+                    conditions.append("(c.name LIKE %s ESCAPE '=' OR a.id=%s OR a.telegram_user_id=%s)")
+                    params += [term, int(numeric), int(numeric)]
+                else:
+                    conditions.append("c.name LIKE %s ESCAPE '='"); params.append(term)
+            factor = 1 - discount / 100
+            for bound, comparator in [(min_price, '>='), (max_price, '<=')]:
+                if bound is not None:
+                    conditions.append(f'ROUND(a.price * %s,2){comparator}%s'); params += [factor, bound]
+            ordering = {
+                'new': 'a.id DESC', 'price_asc': 'a.price ASC,a.id DESC', 'price_desc': 'a.price DESC,a.id DESC',
+                'discount': 'CASE WHEN a.compare_price>a.price THEN 1-a.price/a.compare_price ELSE 0 END DESC,a.id DESC',
+            }[sort]
             await cur.execute(
-                'SELECT a.id, a.number, a.price, c.slug, c.name FROM accounts a '
-                'JOIN categories c ON c.slug = a.country WHERE ' + ' AND '.join(conditions) +
-                f' ORDER BY {ordering} LIMIT 25 OFFSET %s', (*params, page * 24),
+                'SELECT a.id,a.telegram_user_id,a.number,a.price,a.compare_price,a.status,c.is_active,c.slug,c.name,'
+                'f.user_id AS favorite,t.user_id AS in_cart,r.user_id AS reserved_by,r.expires_at '
+                'FROM accounts a JOIN categories c ON c.slug=a.country '
+                'LEFT JOIN account_favorites f ON f.account_id=a.id AND f.user_id=%s '
+                'LEFT JOIN shopping_cart t ON t.account_id=a.id AND t.user_id=%s '
+                'LEFT JOIN account_reservations r ON r.account_id=a.id AND r.expires_at>UTC_TIMESTAMP() '
+                'WHERE ' + ' AND '.join(conditions) + f' ORDER BY {ordering} LIMIT 25 OFFSET %s', (*params,page*24),
             )
-            accounts = list(await cur.fetchall())
-            return {'categories': categories, 'has_more': len(accounts) > 24, 'items': [
-                {'id': row['id'], 'category': row['slug'], 'name': row['name'], 'phone': mask_phone(row['number']),
-                 'price': str(money(Decimal(str(row['price'])) * (1 - discount / 100))),
-                 'original_price': str(row['price']), 'discount': str(discount)} for row in accounts[:24]
-            ]}
+            rows = list(await cur.fetchall())
+            items=[]
+            for row in rows[:24]:
+                price=money(Decimal(str(row['price']))*factor)
+                before=max(Decimal(str(row['price'])),Decimal(str(row['compare_price'] or 0)))
+                reduction=money((1-price/before)*100) if before>0 else Decimal('0')
+                items.append({'id':row['id'],'product_id':f"SBA-{row['id']:06d}", 'telegram_user_id':str(row['telegram_user_id']) if row['telegram_user_id'] else None,
+                              'category':row['slug'],'name':row['name'],'phone':mask_phone(row['number']),
+                              'price':str(price),'original_price':str(before),'discount':str(reduction),
+                              'favorite':bool(row['favorite']), 'in_cart':bool(row['in_cart']),
+                              'available':bool(row['is_active']) and row['status']=='available' and row['reserved_by'] in (None,user_id),
+                              'reserved_until':row['expires_at'].replace(tzinfo=timezone.utc).isoformat() if row['reserved_by']==user_id else None})
+            return {'categories':categories,'has_more':len(rows)>24,'items':items}
 
 
 async def access_settings():
@@ -85,6 +114,10 @@ async def checkout(user_id, account_id, quoted_price):
         account = await cur.fetchone()
         if account is None:
             raise CheckoutError('Этот аккаунт уже куплен. Обновите каталог.', 'sold')
+        await cur.execute('SELECT user_id FROM account_reservations WHERE account_id=%s AND expires_at>UTC_TIMESTAMP() FOR UPDATE', (account_id,))
+        reservation = await cur.fetchone()
+        if reservation and reservation['user_id'] != user_id:
+            raise CheckoutError('Аккаунт зарезервирован другим покупателем.', 'reserved')
         referrer, discount, bonus_pct = await pricing(cur, user_id)
         base = Decimal(str(account['price']))
         actual_price = money(base * (1 - discount / 100))
@@ -112,6 +145,8 @@ async def checkout(user_id, account_id, quoted_price):
             'UPDATE purchases SET referrer_id = %s, referral_bonus = %s WHERE id = %s',
             (referrer if referrer in balances else None, bonus if referrer in balances else 0, order_id),
         )
+        await cur.execute('DELETE FROM shopping_cart WHERE user_id=%s AND account_id=%s',(user_id,account_id))
+        await cur.execute('DELETE FROM account_reservations WHERE account_id=%s',(account_id,))
         return {'id': order_id, 'paid_amount': str(actual_price), 'balance': str(Decimal(str(balances[user_id])) - actual_price)}
 
 
@@ -129,3 +164,50 @@ async def orders(user_id, page=0):
             for row in rows:
                 row['name'] = row['name'] or 'Аккаунт'
             return {'items': rows[:24], 'has_more': len(rows) > 24}
+
+
+async def checkout_cart(user_id, requested):
+    if not requested or len(requested)>20 or len({item['account_id'] for item in requested})!=len(requested):
+        raise CheckoutError('Выберите от 1 до 20 разных аккаунтов.', 'invalid_cart')
+    quotes={item['account_id']:Decimal(item['price']) for item in requested}
+    ids=sorted(quotes)
+    placeholders=','.join(['%s']*len(ids))
+    async with _transaction() as cur:
+        await cur.execute("SELECT a.id,a.price FROM accounts a JOIN categories c ON c.slug=a.country WHERE a.id IN ("+placeholders+") AND a.status='available' AND c.is_active=1 ORDER BY a.id FOR UPDATE",tuple(ids))
+        accounts=list(await cur.fetchall())
+        if len(accounts)!=len(ids):
+            raise CheckoutError('Один из аккаунтов уже недоступен. Корзина не оплачена.', 'sold')
+        await cur.execute('SELECT account_id,user_id FROM account_reservations WHERE account_id IN ('+placeholders+') AND expires_at>UTC_TIMESTAMP() ORDER BY account_id FOR UPDATE',tuple(ids))
+        holds={row['account_id']:row['user_id'] for row in await cur.fetchall()}
+        if any(holds.get(account)!=user_id for account in ids):
+            raise CheckoutError('Резерв истёк или принадлежит другому покупателю. Обновите резерв.', 'reservation_expired')
+        referrer,discount,bonus_pct=await pricing(cur,user_id)
+        prices={row['id']:money(Decimal(str(row['price']))*(1-discount/100)) for row in accounts}
+        if any(Decimal(str(row['price'])) <= 0 for row in accounts):
+            raise CheckoutError('Некорректная цена товара.', 'unavailable')
+        if any(prices[account]!=quotes[account] or prices[account]<0 for account in ids):
+            raise CheckoutError('Цена изменилась. Проверьте корзину и подтвердите заново.', 'price_changed')
+        users=sorted({user_id,referrer}-{None})
+        await cur.execute('SELECT id,balance FROM users WHERE id IN ('+','.join(['%s']*len(users))+') ORDER BY id FOR UPDATE',tuple(users))
+        balances={row['id']:Decimal(str(row['balance'])) for row in await cur.fetchall()}
+        total=sum(prices.values(),Decimal('0'))
+        if user_id not in balances or balances[user_id]<total:
+            raise CheckoutError('Недостаточно средств для всей корзины.', 'insufficient_balance')
+        await cur.execute('SELECT account_id FROM shopping_cart WHERE user_id=%s AND account_id IN ('+placeholders+') FOR UPDATE',(user_id,*ids))
+        if {row['account_id'] for row in await cur.fetchall()}!=set(ids):
+            raise CheckoutError('Корзина изменилась. Обновите страницу.', 'cart_changed')
+        await cur.execute('UPDATE users SET balance=balance-%s WHERE id=%s',(total,user_id))
+        order_ids=[]
+        bonus_total=Decimal('0')
+        for account in accounts:
+            bonus=(Decimal(str(account['price']))*bonus_pct/100).quantize(Decimal('0.00000001')) if referrer in balances else Decimal('0')
+            bonus_total+=bonus
+            await cur.execute("UPDATE accounts SET status='sold' WHERE id=%s",(account['id'],))
+            await cur.execute('INSERT INTO purchases (user_id,account_id,date,currency,paid_amount,referrer_id,referral_bonus) VALUES (%s,%s,%s,%s,%s,%s,%s)',
+                              (user_id,account['id'],datetime.now(ZoneInfo('Europe/Moscow')).strftime('%Y-%m-%d %H:%M:%S'),'RUB',prices[account['id']],referrer if referrer in balances else None,bonus))
+            order_ids.append(cur.lastrowid)
+        if referrer in balances:
+            await cur.execute('UPDATE users SET balance=balance+%s WHERE id=%s',(bonus_total,referrer))
+        await cur.execute('DELETE FROM shopping_cart WHERE user_id=%s AND account_id IN ('+placeholders+')',(user_id,*ids))
+        await cur.execute('DELETE FROM account_reservations WHERE account_id IN ('+placeholders+')',tuple(ids))
+        return {'order_ids':order_ids,'paid_amount':str(total),'balance':str(balances[user_id]-total)}

@@ -90,7 +90,7 @@ async def main():
     )
 
     logging.info("Starting bot...")
-    notification_task = None
+    notification_tasks = []
     web_runner = None
     try:
         await bot.delete_webhook(drop_pending_updates=True)
@@ -102,13 +102,16 @@ async def main():
             await bot.set_chat_menu_button(menu_button=MenuButtonWebApp(
                 text="Магазин", web_app=WebAppInfo(url=app_url),
             ))
-        notification_task = asyncio.create_task(restock_worker(bot))
+        from services.payments import payment_worker
+        from services.market_notifications import market_worker
+        notification_tasks = [asyncio.create_task(worker(bot)) for worker in (restock_worker, payment_worker, market_worker)]
         await dp.start_polling(bot, close_bot_session=False)
     finally:
-        if notification_task is not None:
-            notification_task.cancel()
+        for task in notification_tasks:
+            task.cancel()
+        for task in notification_tasks:
             with suppress(asyncio.CancelledError):
-                await notification_task
+                await task
         if web_runner is not None:
             await web_runner.cleanup()
         await cleanup_all_clients()

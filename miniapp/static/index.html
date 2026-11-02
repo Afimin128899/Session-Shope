@@ -1,61 +1,34 @@
 <!doctype html>
 <html lang="ru">
 <head>
-  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#f5f7f8"><meta name="color-scheme" content="light">
-  <meta name="description" content="Session — каталог аккаунтов, покупки и баланс в одном приложении.">
-  <title>Session · Маркет аккаунтов</title>
-  <link rel="icon" href="/assets/logo.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="/assets/style.css">
-  <script src="https://telegram.org/js/telegram-web-app.js" defer></script>
-  <script src="/assets/app.js" defer></script>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#101510"><meta name="color-scheme" content="dark">
+<meta name="description" content="Sband ACCS — аккаунты, покупки и единый баланс с Telegram-ботом.">
+<title>Sband ACCS · Магазин аккаунтов</title>
+<link rel="icon" href="/assets/sband.png"><link rel="stylesheet" href="/assets/style.css">
+<script src="https://telegram.org/js/telegram-web-app.js" defer></script><script src="/assets/app.js" defer></script>
 </head>
 <body>
-<svg class="sprite" aria-hidden="true"><defs>
-  <symbol id="i-grid" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/></symbol>
-  <symbol id="i-bag" viewBox="0 0 24 24"><path d="M5 7h14l1 14H4L5 7Z"/><path d="M8 8V6a4 4 0 0 1 8 0v2"/></symbol>
-  <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21v-2a8 8 0 0 1 16 0v2"/></symbol>
-  <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
-  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></symbol>
-  <symbol id="i-wallet" viewBox="0 0 24 24"><path d="M20 8V5H6a3 3 0 0 0 0 6h14v10H6a3 3 0 0 1-3-3V8"/><path d="M20 13h-5v5h5M17 15.5h.1"/></symbol>
-  <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></symbol>
-  <symbol id="i-help" viewBox="0 0 24 24"><path d="M3 14v-3a9 9 0 0 1 18 0v3M3 11H2v7h4v-7H3Zm18 0h1v7h-4v-7h3ZM20 18c0 3-3 3-7 3"/></symbol>
-  <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 7v5h-5M4 17v-5h5M5 7a8 8 0 0 1 13-2l2 3M4 16l2 3a8 8 0 0 0 13-2"/></symbol>
-</defs></svg>
-<div class="app-shell">
-  <aside class="sidebar">
-    <a class="brand" href="#catalog" aria-label="Session — главная"><img src="/assets/logo.svg" alt="" width="38" height="38"><span>session<span class="brand-dot">.</span></span></a>
-    <div class="workspace-label">ВАШЕ ПРОСТРАНСТВО</div>
-    <nav class="side-nav" aria-label="Главная навигация">
-      <button class="nav-item active" data-tab="catalog"><svg><use href="#i-grid"/></svg>Каталог<span class="nav-counter" id="sidebar-count">—</span></button>
-      <button class="nav-item" data-tab="orders"><svg><use href="#i-bag"/></svg>Мои покупки</button>
-      <button class="nav-item" data-tab="profile"><svg><use href="#i-user"/></svg>Мой профиль</button>
-    </nav>
-    <div class="sidebar-note"><div class="note-icon">✳</div><strong>Всё под рукой</strong><p>Покупки и баланс синхронизированы с Telegram-ботом.</p><button class="text-link" data-bot-link>Открыть бота <svg class="diagonal-arrow"><use href="#i-arrow"/></svg></button></div>
-    <div class="sidebar-bottom"><span class="online-dot"></span>Session Mini App <span id="sidebar-version"></span></div>
-  </aside>
-  <main>
-    <header class="topbar"><a class="brand mobile-brand" href="#catalog"><img src="/assets/logo.svg" alt="" width="30" height="30"><span>session.</span></a><div class="breadcrumb">Магазин <span>/</span> <strong id="breadcrumb">Каталог</strong></div><div class="topbar-right"><span class="sync-state" id="sync-state"><span class="online-dot"></span>Подключение</span><button class="wallet-pill" data-tab="profile"><svg><use href="#i-wallet"/></svg><span id="header-balance">— ₽</span><span class="plus">+</span></button><button class="avatar" data-tab="profile" id="avatar" aria-label="Открыть профиль">S</button></div></header>
-    <div class="page-content">
-      <div id="notice" class="notice" role="status" hidden></div>
-      <section id="catalog-page" class="page">
-        <div class="hero"><div class="hero-copy"><div class="eyebrow"><span></span>МАРКЕТ АККАУНТОВ</div><h1>Больше возможностей.<br><span>Меньше ожидания.</span></h1><p>Выбери аккаунт под свою задачу.<br>Покупай с баланса — получай сразу в боте.</p><a class="hero-link" href="#products">Перейти к аккаунтам <svg><use href="#i-arrow"/></svg></a></div><div class="hero-art" aria-hidden="true"><div class="orbit orbit-one"></div><div class="orbit orbit-two"></div><div class="floating-card back-card"><span class="art-logo">S</span><div class="art-line"></div><div class="art-line short"></div><div class="art-dots">•••• ••••</div></div><div class="floating-card front-card"><div class="plane">➤</div><span class="art-card-label">TELEGRAM ACCOUNT</span><div class="art-line"></div><div class="art-dots">+•• ••• •• ••</div><div class="art-ready"><span></span>Готов к новым задачам</div></div><div class="art-check"><svg><use href="#i-check"/></svg></div><span class="art-spark">✳</span></div></div>
-        <div class="benefits"><span><svg class="diagonal-arrow"><use href="#i-arrow"/></svg>Выдача сразу после покупки</span><span><svg><use href="#i-wallet"/></svg>Единый баланс с ботом</span><span><svg><use href="#i-help"/></svg>Поддержка по заказу</span></div>
-        <section class="products-section" id="products"><div class="section-heading"><div><div class="section-kicker">НАЙДИ СВОЙ</div><h2>Каталог аккаунтов <span id="total-count">—</span></h2></div><button class="icon-button" id="refresh" aria-label="Обновить каталог"><svg><use href="#i-refresh"/></svg></button></div>
-          <div class="catalog-toolbar"><label class="search-box"><svg><use href="#i-search"/></svg><input type="search" id="search" maxlength="100" placeholder="Поиск по категории…" autocomplete="off" aria-label="Поиск по категории"><kbd>⌕</kbd></label><select id="sort" aria-label="Сортировка"><option value="new">Сначала новые</option><option value="price_asc">Сначала дешевле</option><option value="price_desc">Сначала дороже</option></select></div>
-          <div class="category-tabs" id="categories" aria-label="Категории"><button class="category active" data-category="">Все аккаунты</button></div>
-          <div id="catalog-grid" class="account-grid" aria-live="polite"><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div></div>
-          <div id="catalog-empty" class="empty-state" hidden><div class="empty-symbol">↗</div><h3>Пока ничего не найдено</h3><p>Попробуй другую категорию или подпишись<br>на поступления в Telegram-боте.</p><button class="secondary-button" data-bot-link>Открыть бота ↗</button></div><button class="load-more secondary-button" id="load-more" hidden>Показать ещё</button>
-        </section>
-        <div class="bottom-note"><img src="/assets/logo.svg" alt="" width="20" height="20"><span>Твой аккаунт. Твои возможности.</span><span class="bottom-note-right">SESSION MARKET</span></div>
-      </section>
-      <section id="orders-page" class="page" hidden><div class="section-heading"><div><div class="section-kicker">ВСЁ СОХРАНЕНО</div><h1 class="page-title">Мои покупки</h1></div><button class="icon-button" id="refresh-orders" aria-label="Обновить покупки"><svg><use href="#i-refresh"/></svg></button></div><p class="page-description">Все заказы из бота и Mini App — в одном месте.</p><div id="orders-list" class="orders-list"></div><div class="empty-state" id="orders-empty" hidden><div class="empty-symbol">◈</div><h3>Твоя первая покупка впереди</h3><p>Выбери аккаунт в каталоге.<br>После оплаты он появится здесь.</p><button class="primary-button" data-tab="catalog">Перейти в каталог</button></div><button class="load-more secondary-button" id="more-orders" hidden>Показать ещё</button></section>
-      <section id="profile-page" class="page" hidden><div class="section-kicker">ЛИЧНОЕ ПРОСТРАНСТВО</div><h1 class="page-title">Мой профиль</h1><div class="profile-card"><div class="profile-user"><div class="profile-avatar" id="profile-avatar">S</div><div><h2 id="profile-name">Покупатель</h2><span id="profile-username">Вход через Telegram</span></div></div><div class="balance-panel"><span>Доступно для покупок</span><strong id="profile-balance">— ₽</strong><p>Баланс общий с Telegram-ботом</p><button class="primary-button" data-bot-link>Пополнить в боте <span>↗</span></button></div><div class="profile-info"><span>Баланс USDT</span><strong id="profile-usdt">— USDT</strong></div><div class="profile-info"><span>Telegram ID</span><strong id="profile-id">—</strong></div></div><div class="profile-actions"><button data-tab="orders"><svg><use href="#i-bag"/></svg><span>История покупок</span><span>→</span></button><button data-bot-link><svg><use href="#i-help"/></svg><span>Поддержка и обращения в боте</span><span>↗</span></button></div></section>
-      <div class="login-panel" id="login-panel" hidden><div class="empty-symbol">↗</div><h2>Увидимся в Telegram</h2><p>Открой Mini App из меню нашего бота,<br>чтобы увидеть каталог, баланс и покупки.</p><button class="primary-button" id="retry-login">Проверить подключение</button></div>
-    </div>
-  </main>
-</div>
-<nav class="mobile-nav" aria-label="Навигация"><button class="active" data-tab="catalog"><svg><use href="#i-grid"/></svg><span>Каталог</span></button><button data-tab="orders"><svg><use href="#i-bag"/></svg><span>Покупки</span></button><button data-tab="profile"><svg><use href="#i-user"/></svg><span>Профиль</span></button></nav>
-<dialog id="purchase-dialog" aria-labelledby="dialog-title"><div class="dialog-top"><span class="section-kicker" id="dialog-kicker">ТВОЙ НОВЫЙ АККАУНТ</span><button id="close-dialog" class="close-button" aria-label="Закрыть">×</button></div><div id="dialog-content"></div></dialog>
-<div class="toast" id="toast" role="status" hidden></div>
+<div class="shell">
+<aside><a class="brand" href="#"><img src="/assets/sband.png" alt="" width="44" height="44"><span>SBAND <b>ACCS</b><small>ACCOUNT STORE</small></span></a>
+<p class="eyebrow">ТВОЁ ПРОСТРАНСТВО</p><nav class="side-nav" aria-label="Главная навигация">
+<button data-tab="catalog" class="active"><span>▦</span>Каталог</button><button data-tab="favorites"><span>♡</span>Избранное</button><button data-tab="cart"><span>▣</span>Корзина</button><button data-tab="orders"><span>◈</span>Покупки</button><button data-tab="profile"><span>◎</span>Профиль</button></nav>
+<div class="side-note"><span class="lime"><svg class="arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 18 18 6M6 6h12v12"/></svg></span><h3>Всегда на связи</h3><p>Баланс и покупки общие с Telegram-ботом.</p><button class="text-button" data-bot>Открыть бота <svg class="arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 18 18 6M6 6h12v12"/></svg></button></div><small class="version">SBAND ACCS <span id="version"></span></small></aside>
+<main><header><a class="brand mobile-brand" href="#"><img src="/assets/sband.png" alt="" width="34" height="34"><span>SBAND <b>ACCS</b></span></a><div class="breadcrumb">Магазин <span>/</span> <b id="breadcrumb">Каталог</b></div><div class="header-right"><span id="sync-state" role="status">Подключение…</span><button class="wallet" data-topup aria-label="Пополнить баланс"><span id="header-balance">— ₽</span><b>+</b></button><button id="avatar" class="avatar" data-tab="profile" aria-label="Профиль">S</button></div></header>
+<div class="content"><div id="notice" class="notice" role="alert" hidden></div>
+<section id="market-page" class="page">
+<div id="hero" class="hero"><div><span class="eyebrow"><i></i> SBAND ACCOUNT STORE</span><h1>Твой следующий<br><em>аккаунт — здесь.</em></h1><p>Выбирай. Сохраняй. Забирай.<br>Все покупки в одном пространстве.</p><a href="#products" class="hero-link">Смотреть аккаунты <span><svg class="arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 18 18 6M6 6h12v12"/></svg></span></a></div><div class="hero-art" aria-hidden="true"><div class="orbit"></div><div class="art-card art-back"><span>SBAND ACCS</span><b>+•• ••• •• ••</b></div><div class="art-card art-front"><div class="art-top"><span>➤</span><small>TELEGRAM</small></div><b>Больше<br>возможностей.</b><small><i></i> ОДИН АККАУНТ — НОВЫЙ СТАРТ</small></div><div class="art-star">✳</div></div></div>
+<div id="benefits" class="benefits"><span><svg class="arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 18 18 6M6 6h12v12"/></svg> Выдача после оплаты</span><span>◎ Общий баланс с ботом</span><span>◈ Поддержка по заказу</span></div>
+<div id="products" class="section-heading"><div><span class="eyebrow" id="market-kicker">ВЫБЕРИ СВОЙ</span><h2><span id="market-title">Каталог аккаунтов</span> <small id="total-count">—</small></h2></div><button class="icon-button" id="refresh" aria-label="Обновить">↻</button></div>
+<p id="collection-note" class="muted" hidden></p>
+<div id="filters"><div class="toolbar"><label class="search-box"><span>⌕</span><input id="search" type="search" maxlength="100" placeholder="Категория, ID товара или Telegram ID" aria-label="Поиск"></label><select id="sort" aria-label="Сортировка"><option value="new">Сначала новые</option><option value="price_asc">Сначала дешевле</option><option value="price_desc">Сначала дороже</option><option value="discount">По размеру скидки</option></select><div class="price-range"><input id="min-price" type="number" min="0" max="100000000" placeholder="От ₽" aria-label="Цена от"><span>—</span><input id="max-price" type="number" min="0" max="100000000" placeholder="До ₽" aria-label="Цена до"></div></div><div id="categories" class="categories"></div></div>
+<div id="catalog-grid" class="account-grid" aria-live="polite"></div><div id="catalog-empty" class="empty-state" hidden><span>✳</span><h3 id="empty-title">Пока ничего не найдено</h3><p id="empty-copy">Попробуй изменить фильтры или загляни позже.</p><button data-tab="catalog" class="secondary-button">В каталог <svg class="arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 18 18 6M6 6h12v12"/></svg></button></div><button id="load-more" class="secondary-button more" hidden>Показать ещё</button>
+<div id="cart-summary" class="cart-summary" hidden><div><span class="muted">Итого <span id="cart-count"></span></span><strong id="cart-total">0 ₽</strong></div><button class="primary-button" id="checkout-cart">Оплатить корзину <svg class="arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 18 18 6M6 6h12v12"/></svg></button></div>
+<div class="footer-note"><span>SBAND <b>ACCS</b></span><small>Твой аккаунт. Твои возможности.</small></div></section>
+<section id="orders-page" class="page" hidden><div class="section-heading"><div><span class="eyebrow">ВСЁ СОХРАНЕНО</span><h1>Мои покупки</h1></div><button class="icon-button" id="refresh-orders" aria-label="Обновить покупки">↻</button></div><p class="muted">Заказы из бота и Mini App — в одном месте.</p><div id="orders-list"></div><div id="orders-empty" class="empty-state" hidden><span>◈</span><h3>Первая покупка впереди</h3><button class="primary-button" data-tab="catalog">В каталог <svg class="arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 18 18 6M6 6h12v12"/></svg></button></div><button id="more-orders" class="secondary-button more" hidden>Показать ещё</button></section>
+<section id="profile-page" class="page" hidden><span class="eyebrow">ЛИЧНОЕ ПРОСТРАНСТВО</span><h1>Мой профиль</h1><div class="profile-card"><div class="profile-user"><span id="profile-avatar" class="avatar">S</span><div><h2 id="profile-name">Покупатель</h2><span id="profile-username" class="muted"></span></div></div><div class="balance-panel"><span class="muted">Доступно для покупок</span><strong id="profile-balance">— ₽</strong><p>Единый баланс с Telegram-ботом</p><button class="primary-button" data-topup>Пополнить баланс +</button></div><div class="info"><span>Баланс USDT</span><b id="profile-usdt">—</b></div><div class="info"><span>Твой Telegram ID</span><b id="profile-id">—</b></div></div><button class="profile-action" data-bot>Поддержка и обращения в боте <span><svg class="arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 18 18 6M6 6h12v12"/></svg></span></button></section>
+<div id="login-panel" class="empty-state" hidden><span><svg class="arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 18 18 6M6 6h12v12"/></svg></span><h2>Увидимся в Telegram</h2><p>Открой магазин из меню нашего бота,<br>чтобы увидеть баланс и покупки.</p><button id="retry-login" class="primary-button">Проверить подключение</button></div>
+</div></main></div>
+<nav class="mobile-nav" aria-label="Навигация"><button data-tab="catalog" class="active"><span>▦</span>Каталог</button><button data-tab="favorites"><span>♡</span>Избранное</button><button data-tab="cart"><span>▣</span>Корзина</button><button data-tab="orders"><span>◈</span>Покупки</button><button data-tab="profile"><span>◎</span>Профиль</button></nav>
+<dialog id="purchase-dialog" aria-labelledby="dialog-title"><div class="dialog-top"><span class="eyebrow">SBAND ACCS</span><button id="close-dialog" class="icon-button" aria-label="Закрыть">×</button></div><div id="dialog-content"></div></dialog><div id="toast" role="status" hidden></div>
 </body></html>

@@ -11,7 +11,8 @@ from pathlib import Path
 from aiohttp import web
 
 import config
-from database import db
+from database import db, commerce
+from services import payments
 from miniapp.auth import AuthError, validate_init_data
 from miniapp import storage
 from utils.order_status import order_status
@@ -77,7 +78,7 @@ async def authenticate(request, handler):
     raw = authorization[4:] if authorization.startswith('tma ') else ''
     user = validate_init_data(raw, request.app[TOKEN])
     request['user'] = user
-    if limited(request.app, user['id'], request.method == 'POST' and request.path == '/api/purchase'):
+    if limited(request.app, user['id'], request.method == 'POST' and request.path in {'/api/purchase', '/api/cart/checkout', '/api/invoices'}):
         return response({'error': 'Слишком много запросов. Подождите минуту.', 'code': 'rate_limited'}, 429)
     settings = await storage.access_settings()
     admin = user['id'] in config.ADMIN_IDS
@@ -119,9 +120,18 @@ async def catalog(request):
     sort = request.query.get('sort', 'new')
     category = request.query.get('category', '')
     query = request.query.get('q', '').strip()
-    if sort not in {'new', 'price_asc', 'price_desc'} or len(category) > 64 or len(query) > 100:
+    if sort not in {'new', 'price_asc', 'price_desc', 'discount'} or len(category) > 64 or len(query) > 100:
         raise ValueError
-    return response(await storage.catalog(request['user']['id'], category, query, sort, page_number(request)))
+    bounds = []
+    for key in ('min_price', 'max_price'):
+        value = request.query.get(key, '')
+        bound = Decimal(value) if value else None
+        if bound is not None and (not bound.is_finite() or not 0 <= bound <= 100000000):
+            raise ValueError
+        bounds.append(bound)
+    if all(v is not None for v in bounds) and bounds[0] > bounds[1]:
+        raise ValueError
+    return response(await storage.catalog(request['user']['id'], category, query, sort, page_number(request), min_price=bounds[0], max_price=bounds[1]))
 
 
 async def purchase(request):
@@ -152,8 +162,89 @@ async def order_detail(request):
         return response({'error': 'Покупка не найдена.', 'code': 'not_found'}, 404)
     if row.get('status') == 'refunded':
         row['password'] = None
-    return response({key: row.get(key) for key in ('id', 'number', 'password', 'paid_amount', 'currency', 'date', 'status', 'ticket_status')} |
-                    {'name': row.get('country', 'Аккаунт'), 'status_label': order_status(row)})
+    return response({key: row.get(key) for key in ('id', 'account_id', 'telegram_user_id', 'number', 'password', 'paid_amount', 'currency', 'date', 'status', 'ticket_status')} |
+                    {'name': row.get('country', 'Аккаунт'), 'product_id': f"SBA-{row['account_id']:06d}" if row.get('account_id') else None, 'status_label': order_status(row)})
+
+
+async def collection(request):
+    return response(await storage.catalog(request['user']['id'], page=page_number(request),
+                                          favorites=request.path.endswith('favorites'), cart=request.path.endswith('cart')))
+
+
+async def json_body(request):
+    if request.content_type != 'application/json':
+        raise ValueError
+    body = await request.json()
+    if not isinstance(body, dict):
+        raise ValueError
+    return body
+
+
+def account_value(body):
+    value = body.get('account_id')
+    if type(value) is not int or not 0 < value <= 2147483647:
+        raise ValueError
+    return value
+
+
+async def collection_update(request):
+    body = await json_body(request)
+    account = account_value(body)
+    try:
+        if request.path.endswith('favorites'):
+            if type(body.get('enabled')) is not bool:
+                raise ValueError
+            await commerce.favorite(request['user']['id'], account, body['enabled'])
+        elif request.method == 'DELETE':
+            await commerce.remove_from_cart(request['user']['id'], account)
+        else:
+            await commerce.add_to_cart(request['user']['id'], account)
+    except ValueError as exc:
+        raise storage.CheckoutError(str(exc)) from None
+    return response({'ok': True})
+
+
+async def cart_checkout(request):
+    body = await json_body(request)
+    items = body.get('items')
+    if not isinstance(items, list) or not 1 <= len(items) <= 20:
+        raise ValueError
+    for item in items:
+        if not isinstance(item, dict):
+            raise ValueError
+        account_value(item)
+        price = item.get('price')
+        if not isinstance(price, str) or len(price) > 24:
+            raise ValueError
+        amount = Decimal(price)
+        if not amount.is_finite() or amount < 0 or amount != storage.money(amount):
+            raise ValueError
+    return response(await storage.checkout_cart(request['user']['id'], items), 201)
+
+
+async def payment_methods(request):
+    return response({'items': payments.methods()})
+
+
+async def create_invoice(request):
+    body = await json_body(request)
+    if not isinstance(body.get('amount'), str) or len(body['amount']) > 24 or not isinstance(body.get('provider'), str):
+        raise ValueError
+    try:
+        result = await payments.create_deposit(request['user']['id'], request['user']['username'], body['provider'], body['amount'])
+    except ValueError as exc:
+        raise storage.CheckoutError(str(exc)) from None
+    return response(result, 201)
+
+
+async def invoice_status(request):
+    provider, invoice_id = request.match_info['provider'], request.match_info['invoice']
+    if provider not in payments.PROVIDERS or len(invoice_id) > 128:
+        raise ValueError
+    row = await commerce.invoice(provider, invoice_id, request['user']['id'])
+    if not row:
+        return response({'error': 'Счёт не найден.', 'code': 'not_found'}, 404)
+    return response({key: row[key] for key in ('status', 'amount_rub', 'credited_amount')})
 
 
 async def health(request):
@@ -173,6 +264,10 @@ def create_app(*, token=None, bot=None, bot_username=''):
     app.add_routes([
         web.get('/', index), web.get('/api/health', health),
         web.get('/api/me', me), web.get('/api/catalog', catalog), web.post('/api/purchase', purchase),
+        web.get('/api/favorites', collection), web.post('/api/favorites', collection_update),
+        web.get('/api/cart', collection), web.post('/api/cart', collection_update), web.delete('/api/cart', collection_update),
+        web.post('/api/cart/checkout', cart_checkout), web.get('/api/payment-methods', payment_methods),
+        web.post('/api/invoices', create_invoice), web.get('/api/invoices/{provider}/{invoice}', invoice_status),
         web.get('/api/orders', orders), web.get('/api/orders/{id}', order_detail),
         web.static('/assets', STATIC, show_index=False, follow_symlinks=False),
     ])
