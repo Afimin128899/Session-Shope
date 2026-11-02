@@ -6,6 +6,7 @@ trap 'printf "Установка остановлена на строке %s. П
 project_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 bot_service=""
 skip_https=0
+fresh=0
 
 usage() {
   cat <<'HELP'
@@ -17,9 +18,11 @@ Session Shope / Mini App · Ubuntu 24
 Параметры:
   --service NAME.service  Использовать конкретный существующий сервис бота.
   --skip-https            Настроить только бота и локальный Mini App, без Caddy.
+  --fresh                 Создать локальную MariaDB и запросить данные бота на VPS.
   -h, --help              Показать справку.
 
-Используется существующий .env. Пароли и токены не создаются и не выводятся.
+Обычный режим сохраняет .env. Режим --fresh запрашивает данные бота на VPS.
+Секреты не выводятся в консоль.
 HTTPS: sbandsub.space, адрес VPS: 31.77.59.42.
 HELP
 }
@@ -31,6 +34,7 @@ while (($#)); do
       (($# >= 2)) || fail 'После --service укажите имя сервиса.'
       bot_service="$2"; shift 2 ;;
     --skip-https) skip_https=1; shift ;;
+    --fresh) fresh=1; shift ;;
     -h|--help) usage; exit 0 ;;
     *) fail "Неизвестный параметр: $1" ;;
   esac
@@ -57,7 +61,7 @@ except (ValueError, OSError, module.subprocess.CalledProcessError):
     raise SystemExit('Не удалось однозначно определить сервис. Укажите --service NAME.service.')
 PY
 )"
-if [[ ! -f "$project_dir/.env" && -z "$bot_service" ]]; then
+if [[ ! -f "$project_dir/.env" && -z "$bot_service" && $fresh -eq 0 ]]; then
   fail 'Нет .env и существующего сервиса. Сначала задайте рабочие BOT_TOKEN, TELEGRAM_API_ID/HASH и DB_* в .env на сервере.'
 fi
 if ((skip_https == 0)); then
@@ -72,6 +76,7 @@ export DEBIAN_FRONTEND=noninteractive
 apt-get update
 packages=(python3-venv ca-certificates curl)
 if ((skip_https == 0)); then packages+=(caddy); fi
+if ((fresh)); then packages+=(mariadb-server); fi
 apt-get install -y "${packages[@]}"
 
 printf '\n[2/4] Подготовка отдельного Python-окружения\n'
@@ -81,6 +86,11 @@ printf '\n[2/4] Подготовка отдельного Python-окружен�
   "$project_dir/.venv-miniapp/bin/python" -m pip install --disable-pip-version-check -r "$project_dir/requirements.txt"
   "$project_dir/.venv-miniapp/bin/python" -m pip check
 )
+
+if ((fresh)); then
+  systemctl enable --now mariadb
+  "$project_dir/.venv-miniapp/bin/python" "$project_dir/deploy/bootstrap_env.py" --project "$project_dir"
+fi
 
 printf '\n[3/4] Настройка systemd и запуск Mini App\n'
 service_args=(--python "$project_dir/.venv-miniapp/bin/python")
@@ -120,6 +130,10 @@ if ! caddy validate --config "$caddy_main"; then
   if [[ -f "$backup_dir/Caddyfile" ]]; then cp -p "$backup_dir/Caddyfile" "$caddy_main"; else rm -f "$caddy_main"; fi
   if ((site_existed)); then cp -p "$backup_dir/site.caddy" "$caddy_site"; else rm -f "$caddy_site"; fi
   fail 'Конфигурация Caddy не прошла проверку, прежние файлы восстановлены.'
+fi
+if command -v ufw >/dev/null 2>&1 && LC_ALL=C ufw status | grep '^Status: active' >/dev/null; then
+  ufw allow 80/tcp
+  ufw allow 443/tcp
 fi
 systemctl enable --now caddy
 systemctl reload caddy

@@ -19,6 +19,15 @@ If the bot service name is unknown, list service names without exposing environm
 systemctl list-unit-files --type=service --no-pager | grep -Ei 'bot|shop|telegram'
 ```
 
+## Clean reinstalled VPS
+
+Use `install-fresh.sh` from the repository (the download command is in `MINIAPP.md`).
+It clones into `/opt/session-shope`, prepares a local MariaDB and then invokes
+`install.sh --fresh`. Credentials are entered only in the server's interactive
+terminal; they are not command-line arguments. A private installer marker in
+`/etc/session-shope` permits retries without resetting credentials or taking over
+an unrelated database. Source database contents are not restored by this process.
+
 ## One-command install (Ubuntu 24)
 
 After updating the checkout and keeping its existing `.env`:
