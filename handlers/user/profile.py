@@ -29,7 +29,6 @@ async def my_profile(call: CallbackQuery):
     label_back, emoji_back = await _btn_text("btn_back_profile", "« Назад", c.BTN_ICON_BACK_SMILE)
 
     kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="История действий", callback_data="customer_activity:0")],
         [InlineKeyboardButton(text=label_ref, callback_data="referral_info", icon_custom_emoji_id=emoji_ref)],
         [InlineKeyboardButton(text=label_back, callback_data="back_main", icon_custom_emoji_id=emoji_back)],
     ])

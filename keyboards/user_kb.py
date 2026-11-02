@@ -61,7 +61,6 @@ async def main_menu(user_id: int | None = None) -> InlineKeyboardMarkup:
     if app_url:
         rows.insert(0, [InlineKeyboardButton(text="🛍 Открыть Mini App", web_app=WebAppInfo(url=app_url))])
 
-    rows.append([InlineKeyboardButton(text="История действий", callback_data="customer_activity:0")])
     rows.append([InlineKeyboardButton(text="🛟 Мои обращения", callback_data="tk_user:0")])
 
     reviews_row = [

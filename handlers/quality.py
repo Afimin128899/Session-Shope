@@ -125,31 +125,9 @@ async def submit_discount(message,state):
 
 
 @quality_router.callback_query(F.data.startswith('customer_activity:'))
-async def show_activity(call):
-    from database.activity import history
-    from datetime import datetime
-    from zoneinfo import ZoneInfo
-    try:
-        raw=call.data.split(':',1)[1]
-        if not raw.isascii() or not raw.isdigit() or int(raw)>1000: raise ValueError
-        page=int(raw)
-    except ValueError:
-        await answer_safe(call,'Некорректная страница.',show_alert=True);return
-    data=await history(call.from_user.id,page)
-    lines=['<b>История действий</b>']
-    for item in data['items']:
-        stamp=datetime.fromisoformat(item['occurred_at']).astimezone(ZoneInfo('Europe/Moscow')).strftime('%d.%m.%Y %H:%M МСК') if item['occurred_at'] else 'Дата не сохранена'
-        amount=f"{item['amount']:.2f} {'%' if item['currency']=='PCT' else item['currency']}" if item['amount'] is not None else 'Сумма не сохранена'
-        lines.append(escape(item['label'])+' · '+escape(amount)+'\n'+escape(str(item['reference']))+' · '+stamp)
-    if not data['items']: lines.append('Операций пока нет.')
-    lines.append(escape(data['note']))
-    rows=[]
-    if page: rows.append([InlineKeyboardButton(text='Новее',callback_data=f'customer_activity:{page-1}')])
-    if data['has_more'] and page<1000: rows.append([InlineKeyboardButton(text='Ранее',callback_data=f'customer_activity:{page+1}')])
-    rows.append([InlineKeyboardButton(text='В меню',callback_data='main_menu')])
-    from utils.nav import edit_message_safe
-    await edit_message_safe(call,'\n\n'.join(lines),reply_markup=InlineKeyboardMarkup(inline_keyboard=rows))
-    await call.answer()
+async def removed_activity(call):
+    # Old Telegram messages may still contain this button.
+    await answer_safe(call,'Этот раздел удалён из пользовательского меню.',show_alert=True)
 
 
 @quality_router.callback_query(F.data.startswith('quality_reviews:'))

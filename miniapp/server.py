@@ -11,7 +11,7 @@ from pathlib import Path
 from aiohttp import web
 
 import config
-from database import db, commerce, quality, coupons, tickets, activity
+from database import db, commerce, quality, coupons, tickets
 from services import payments
 from miniapp.auth import AuthError, validate_init_data
 from miniapp import storage
@@ -314,10 +314,6 @@ async def warranty_claim(request):
     return response({'ticket_id':ticket},201)
 
 
-async def customer_activity(request):
-    return response(await activity.history(request['user']['id'],page_number(request)))
-
-
 async def shop_info(request):
     from database.expansion import rules
     return response({'wholesale':await rules(),'support_hours':await db.get_setting('support_hours','График поддержки пока не указан'),'response_time':await db.get_setting('support_eta','Поддержка отвечает в порядке очереди; точное время не установлено.')})
@@ -346,7 +342,7 @@ def create_app(*, token=None, bot=None, bot_username=''):
     app[LIMITS] = OrderedDict()
     app.add_routes([
         web.get('/', index), web.get('/api/health', health),
-        web.get('/api/shop-info',shop_info),web.get('/api/products/{id}',product),web.get('/api/activity',customer_activity), web.get('/api/me', me), web.get('/api/catalog', catalog), web.post('/api/purchase', purchase),
+        web.get('/api/shop-info',shop_info),web.get('/api/products/{id}',product),web.get('/api/me', me), web.get('/api/catalog', catalog), web.post('/api/purchase', purchase),
         web.get('/api/favorites', collection), web.post('/api/favorites', collection_update),
         web.get('/api/cart', collection), web.post('/api/cart', collection_update), web.delete('/api/cart', collection_update),
         web.post('/api/cart/checkout', cart_checkout), web.get('/api/payment-methods', payment_methods),

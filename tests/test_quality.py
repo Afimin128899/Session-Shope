@@ -44,10 +44,10 @@ class QualityAPITests(unittest.IsolatedAsyncioTestCase):
             method=self.client.get if path in {'/api/activity','/api/reviews'} else self.client.post
             self.assertEqual((await method(path)).status,401)
 
-    async def test_history_never_accepts_another_user(self):
+    async def test_removed_history_cannot_be_read(self):
         with patch.object(activity,'history',AsyncMock(return_value={'items':[]})) as get:
             res=await self.client.get('/api/activity?user_id=999&page=2',headers=self.headers)
-            self.assertEqual(res.status,200);get.assert_awaited_once_with(42,2)
+            self.assertEqual(res.status,404);get.assert_not_awaited()
 
     async def test_reviews_use_signed_owner(self):
         with patch.object(quality,'save_review',AsyncMock()) as save:

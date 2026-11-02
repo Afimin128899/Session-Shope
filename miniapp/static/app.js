@@ -215,14 +215,6 @@
       catch(e) { dialogError(e); if($('#redeem-balance-code')) $('#redeem-balance-code').disabled = false; } finally { state.busy = false; }
     };
   }
-  async function showActivity(page = 0) {
-    try {
-      const data = await api('activity?page='+page);
-      modal(`<h2 id="dialog-title">История действий</h2>${data.items.map(i=>`<article class="review"><b>${esc(i.label)} · ${i.amount == null ? 'Сумма не сохранена' : num(i.amount)+' '+esc(i.currency === 'PCT' ? '%' : i.currency)}</b><p>${esc(i.reference)}<br>${i.occurred_at ? esc(new Date(i.occurred_at).toLocaleString('ru-RU',{timeZone:'Europe/Moscow'}))+' МСК' : 'Дата не сохранена'}</p></article>`).join('') || '<p>Операций пока нет.</p>'}<p>${esc(data.note)}</p>${page ? '<button id="activity-newer" class="secondary-button">Новее</button>' : ''}${data.has_more && page<1000 ? '<button id="activity-older" class="secondary-button">Ранее</button>' : ''}`);
-      if($('#activity-newer')) $('#activity-newer').onclick = () => showActivity(page-1);
-      if($('#activity-older')) $('#activity-older').onclick = () => showActivity(page+1);
-    } catch(e) { error(e); }
-  }
   async function topup() {
     if (!state.ready || state.busy) return;
     if (state.invoice) { showInvoice(); return; }
@@ -269,7 +261,6 @@
     if (button.dataset.botOrder) openBot(Number(button.dataset.botOrder));
     if (button.dataset.features) features(Number(button.dataset.features));
     if (button.hasAttribute('data-knowledge')) knowledge();
-    if (button.hasAttribute('data-activity')) showActivity();
     if (button.hasAttribute('data-reviews')) showReviews();
     if (button.hasAttribute('data-balance-promo')) balancePromo();
     if (button.dataset.order) showOrder(Number(button.dataset.order));

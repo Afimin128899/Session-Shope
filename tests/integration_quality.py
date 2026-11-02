@@ -109,10 +109,11 @@ async def quality_scenarios(session,connection,headers):
     # Refunding an order cannot erase a genuine buyer review.
     assert (await quality.reviews())['count']==1
     await activity.history(42)
-    data=(await api('activity?user_id=43'))[1]
+    data=await activity.history(42)
     assert {r['kind'] for r in data['items']} >= {'purchase','payment','refund','balance_code'}
-    assert any(r['reference']=='BONUS25' and r['amount']=='25.00000000' for r in data['items'])
-    assert (await api('activity',auth=other))[1]!=data
+    assert any(r['reference']=='BONUS25' and r['amount']==Decimal('25') for r in data['items'])
+    assert (await api('activity'))[0]==404
+    assert (await api('activity',auth=other))[0]==404
     await payment_health('crypto',False);await payment_health('crypto',False);await payment_health('crypto',False)
     async with connection.cursor() as cur:
         await cur.execute("SELECT active,failures FROM operational_incidents WHERE incident_key='payments:crypto'");assert await cur.fetchone()==(1,3)

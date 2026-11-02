@@ -67,8 +67,7 @@ fs.mkdirSync(output, { recursive: true });
   await m.screenshot({ path: path.join(output, 'miniapp-mobile.png'), fullPage: true });
   await m.locator('.mobile-nav [data-tab="profile"]').click(); await m.waitForSelector('#profile-page:visible');
   assert((await m.locator('#profile-balance').innerText()).includes('₽'));
-  await m.locator('[data-activity]').click(); await m.waitForSelector('#purchase-dialog[open]'); await m.waitForSelector('.review');
-  assert((await m.locator('#dialog-content').innerText()).includes('Покупка')); await m.locator('#close-dialog').click();
+  assert.equal(await m.locator('[data-activity]').count(),0);
   await m.locator('[data-balance-promo]').click(); await m.locator('#balance-code').fill('BROWSER25'); await m.locator('#check-balance-code').click(); await m.waitForSelector('#redeem-balance-code:visible'); await m.locator('#redeem-balance-code').click(); await m.waitForSelector('#purchase-dialog',{state:'hidden'});
   await m.locator('.balance-panel [data-topup]').click(); await m.waitForSelector('#purchase-dialog[open]');
   assert((await m.locator('#dialog-content').innerText()).includes('пока не настроены'));
@@ -79,7 +78,7 @@ fs.mkdirSync(output, { recursive: true });
   const signedOut = await context({ width: 390, height: 844 }, false);
   await signedOut.page.waitForSelector('#login-panel:visible'); assert.equal(await signedOut.page.locator('.account-card').count(), 0);
   assert.deepEqual(errors, []);
-  console.log('PASS: characteristics, review XSS escaping, discounted checkout, review creation, warranty claim, activity and promo credit');
+  console.log('PASS: characteristics, review XSS escaping, discounted checkout, review creation, warranty claim and promo credit');
   console.log('PASS: mobile 390/320px, navigation, wallet, safe sign-in and no browser runtime errors');
  } finally { await browser.close(); }
 })().catch(e => { console.error(e); process.exit(1); });
