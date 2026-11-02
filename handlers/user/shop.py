@@ -250,7 +250,7 @@ async def confirm_purchase(call: CallbackQuery):
 
     if user_balance < effective_price_rub:
         price_fmt = f"{effective_price_rub:.2f} ₽"
-        await answer_safe(call, f"❌ Недостаточно средств на долларовом балансе. Требуется {price_fmt}.", show_alert=True)
+        await answer_safe(call, f"❌ Недостаточно средств на рублёвом балансе. Требуется {price_fmt}.", show_alert=True)
         return
 
     date_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -263,7 +263,7 @@ async def confirm_purchase(call: CallbackQuery):
         )
     else:
         purchase_id = await buy_account(
-            call.from_user.id, account["id"], price_rub, date_str, currency="USDT"
+            call.from_user.id, account["id"], price_rub, date_str, currency="RUB"
         )
 
     if not purchase_id:

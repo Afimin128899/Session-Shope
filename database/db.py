@@ -391,6 +391,72 @@ async def add_deposit_with_first_bonus(user_id: int, amount: float) -> tuple[flo
             )
             return amount, 0.0
 
+async def credit_paid_deposit(
+    user_id: int, amount, provider: str, invoice_id: str,
+) -> tuple[float, float] | None:
+    """Зачисляет платёж, бонус и запись в журнале одной транзакцией.
+
+    None означает, что этот счёт уже зачислен. При ошибке маркер платежа
+    тоже откатывается, поэтому проверку можно безопасно повторить.
+    """
+    from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
+
+    try:
+        amount = Decimal(str(amount))
+        if not amount.is_finite() or not Decimal("10") <= amount <= Decimal("1000000"):
+            raise ValueError("Invalid deposit amount")
+        amount = amount.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    except InvalidOperation as exc:
+        raise ValueError("Invalid deposit amount") from exc
+    if provider not in {"lave", "xrocket", "crypto"} or not invoice_id:
+        raise ValueError("Invalid payment reference")
+    comment_key = f"{provider}_{invoice_id}"
+    if len(comment_key) > 255:
+        raise ValueError("Payment reference is too long")
+
+    async with _get_pool().acquire() as conn:
+        await conn.begin()
+        try:
+            async with conn.cursor() as cur:
+                try:
+                    await cur.execute(
+                        "INSERT INTO used_transactions (comment) VALUES (%s)",
+                        (comment_key,),
+                    )
+                except aiomysql.IntegrityError as exc:
+                    if exc.args[0] != 1062:
+                        raise
+                    await conn.rollback()
+                    return None
+                await cur.execute(
+                    "SELECT first_deposit_bonus_used FROM users WHERE id = %s FOR UPDATE",
+                    (user_id,),
+                )
+                user = await cur.fetchone()
+                if user is None:
+                    raise ValueError("Deposit user does not exist")
+                bonus = (
+                    (amount * Decimal("0.10")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+                    if not user[0] else Decimal("0.00")
+                )
+                credited = amount + bonus
+                await cur.execute(
+                    "UPDATE users SET balance = balance + %s, first_deposit_bonus_used = 1 WHERE id = %s",
+                    (credited, user_id),
+                )
+                await cur.execute(
+                    "INSERT INTO payment_logs (user_id, amount, currency, method, reference) "
+                    "VALUES (%s, %s, %s, %s, %s)",
+                    (user_id, amount, "RUB", f"{provider}_pay", str(invoice_id)),
+                )
+            await conn.commit()
+            return float(credited), float(bonus)
+        except BaseException:
+            # Cancellation must not return a connection with an open transaction.
+            await conn.rollback()
+            raise
+
+
 async def add_balance_usdt (user_id :int ,amount :float ):
     async with _get_pool().acquire() as conn :
         async with conn .cursor ()as cur :

@@ -1,4 +1,5 @@
 import logging
+import math
 import uuid
 
 from aiogram import Router, F
@@ -7,7 +8,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 
 from config import LAVE_PAY_API_KEY, XROCKET_API_KEY, CRYPTO_PAY_TOKEN
-from database.db import add_deposit_with_first_bonus, try_mark_comment_used, is_comment_used, log_payment
+from database.db import credit_paid_deposit
 from keyboards.user_kb import balance_menu
 from services.exchange import convert_rub_to_usdt
 from services.lavepay import create_invoice, get_invoice, is_paid
@@ -106,7 +107,7 @@ async def process_lave_amount(message: Message, state: FSMContext):
         await message.answer("❌ Введите сумму числом, например: <code>500</code>.")
         return
 
-    if rub_amount <= 0:
+    if not math.isfinite(rub_amount) or rub_amount <= 0:
         await message.answer("❌ Сумма должна быть больше нуля.")
         return
     if rub_amount < 10:
@@ -198,24 +199,19 @@ async def _credit_paid(call: CallbackQuery, invoice_id: str, invoice: dict, prov
         await answer_safe(call, "⌛️ Оплата ещё не подтверждена.", show_alert=True)
         return
 
-    comment_key = f"{provider}_{invoice_id}"
-    if await is_comment_used(comment_key):
-        await answer_safe(call, "ℹ️ Этот платёж уже был зачислен.", show_alert=True)
-        return
-
-    marked = await try_mark_comment_used(comment_key)
-    if not marked:
-        await answer_safe(call, "ℹ️ Этот платёж уже обрабатывается.", show_alert=True)
-        return
-
     try:
-        rub_amount = float(payload.split(":", 2)[2])
-        credited_amount, bonus_amount = await add_deposit_with_first_bonus(call.from_user.id, rub_amount)
-        await log_payment(call.from_user.id, rub_amount, "RUB", provider + ("_pay" if provider != "crypto" else "_pay"), str(invoice_id))
+        result = await credit_paid_deposit(
+            call.from_user.id, payload.split(":", 2)[2], provider, invoice_id,
+        )
     except Exception:
         logging.exception("Failed to credit %s payment %s", provider, invoice_id)
-        await answer_safe(call, "❌ Не удалось зачислить платёж. Обратитесь в поддержку.", show_alert=True)
+        await answer_safe(call, "❌ Не удалось зачислить платёж. Попробуйте проверить оплату ещё раз.", show_alert=True)
         return
+
+    if result is None:
+        await answer_safe(call, "ℹ️ Этот платёж уже был зачислен.", show_alert=True)
+        return
+    credited_amount, bonus_amount = result
 
     await edit_message_safe(
         call,

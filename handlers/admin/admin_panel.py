@@ -6,6 +6,7 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 
 from config import ADMIN_IDS
+from utils.version import BOT_VERSION
 from database.db import (
     add_balance,
     add_balance_usdt,
@@ -129,7 +130,7 @@ async def admin_start(message: Message, state: FSMContext):
         return
     await state.clear()
     await message.answer(
-        f"{PANEL} <b>Премиум админ-панель</b>\n\n{CROWN} Добро пожаловать в центр управления.",
+        f"{PANEL} <b>Премиум админ-панель</b>\n\n{CROWN} Добро пожаловать в центр управления.\n\n{ROBOT} Версия бота: <code>{BOT_VERSION}</code>",
         reply_markup=get_admin_panel(),
     )
 
@@ -142,7 +143,7 @@ async def admin_home(call: CallbackQuery, state: FSMContext):
     await state.clear()
     await edit_message_safe(
         call,
-        f"{PANEL} <b>Премиум админ-панель</b>\n\n{CROWN} Управляйте магазином, балансами и аккаунтами.",
+        f"{PANEL} <b>Премиум админ-панель</b>\n\n{CROWN} Управляйте магазином, балансами и аккаунтами.\n\n{ROBOT} Версия бота: <code>{BOT_VERSION}</code>",
         reply_markup=get_admin_panel(),
     )
     await answer_safe(call)
