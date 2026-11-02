@@ -152,6 +152,10 @@ async def open_purchase (call :CallbackQuery ):
         ]
         )
 
+    kb.inline_keyboard.insert(0, [InlineKeyboardButton(
+        text="Есть проблема", callback_data=f"purchase_help:{purc_id}",
+    )])
+
     await edit_message_safe (call ,text ,reply_markup =kb )
     await answer_safe(call)
 
@@ -177,3 +181,35 @@ async def complete_purchase (call :CallbackQuery ):
 
 
     await open_purchase (call )
+
+@purchases_router.callback_query(F.data.startswith("purchase_help:"))
+async def purchase_help(call: CallbackQuery):
+    from config import SUPPORT_USERNAME
+    from database.db import get_setting
+    from utils.support import purchase_support_url
+
+    try:
+        purchase_id = int(call.data.split(":", 1)[1])
+    except (ValueError, IndexError):
+        await answer_safe(call, "Покупка не найдена.", show_alert=True)
+        return
+    purchase = await get_purchase_for_user(purchase_id, call.from_user.id)
+    if not purchase:
+        await answer_safe(call, "Покупка не найдена.", show_alert=True)
+        return
+    contact = await get_setting("support_username", SUPPORT_USERNAME)
+    url = purchase_support_url(contact, purchase_id)
+    if not url:
+        await answer_safe(call, "Контакт поддержки пока не настроен. Попробуйте позже.", show_alert=True)
+        return
+    await edit_message_safe(
+        call,
+        f"🛟 <b>Помощь по заказу #{purchase_id}</b>\n\n"
+        "Нажмите кнопку, опишите проблему и отправьте сообщение в поддержку. "
+        "Номер заказа уже добавлен в черновик. Не сообщайте пароли и коды входа.",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="Написать в поддержку", url=url)],
+            [InlineKeyboardButton(text="Назад к заказу", callback_data=f"open_purchase:{purchase_id}")],
+        ]),
+    )
+    await answer_safe(call)

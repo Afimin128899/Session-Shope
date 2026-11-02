@@ -7,11 +7,9 @@ from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMar
 
 from config import ADMIN_IDS
 from utils.version import BOT_VERSION
+from database.admin_tools import change_balance, change_account_price, change_category_price, remove_account
 from database.db import (
-    add_balance,
-    add_balance_usdt,
     create_user,
-    delete_account,
     delete_promo,
     get_account,
     get_accounts_by_country,
@@ -21,11 +19,7 @@ from database.db import (
     get_user,
     get_user_by_username,
     get_users_with_balance,
-    set_user_balance,
-    set_user_balance_usdt,
     update_account_country,
-    update_account_price,
-    update_country_price,
     get_setting,
     set_setting,
 )
@@ -337,7 +331,7 @@ async def admin_balance_step_3(message: Message, state: FSMContext):
         return
 
     try:
-        amount = float(message.text.replace(",", "."))
+        amount = (message.text or "").replace(",", ".").strip()
         data = await state.get_data()
         uid = data["target_user_id"]
         target_username = data.get("target_username")
@@ -346,26 +340,26 @@ async def admin_balance_step_3(message: Message, state: FSMContext):
 
         user_label = f"@{target_username} (<code>{uid}</code>)" if target_username else f"<code>{uid}</code>"
 
+        await change_balance(message.from_user.id, uid, amount, currency, mode)
+        amount = float(amount)
+
         if currency == "USDT":
             if mode == "add":
-                await add_balance_usdt(uid, amount)
                 res_text = f"{OK} Пользователю {user_label} добавлено <b>{amount:.2f} USDT</b>"
             else:
-                await set_user_balance_usdt(uid, amount)
                 res_text = f"{OK} Пользователю {user_label} установлен баланс <b>{amount:.2f} USDT</b>"
         else:
             if mode == "add":
-                await add_balance(uid, amount)
                 res_text = f"{OK} Пользователю {user_label} добавлено <b>{amount:.2f} RUB</b>"
             else:
-                await set_user_balance(uid, amount)
                 res_text = f"{OK} Пользователю {user_label} установлен баланс <b>{amount:.2f} RUB</b>"
 
         await state.clear()
         await message.answer(res_text, reply_markup=get_admin_panel())
 
-    except ValueError:
-        await message.answer(f"{DENY} Ошибка. Введите число, например <code>100</code> или <code>50.5</code>.")
+    except ValueError as exc:
+        from html import escape
+        await message.answer(f"{DENY} {escape(str(exc))}")
 
 
 @admin_router.callback_query(F.data == "admin_prices_menu")
@@ -411,9 +405,9 @@ async def process_new_price(message: Message, state: FSMContext):
 
     import re
     text = message.text.strip()
-    if not re.match(r'^\d+(\.\d{1,2})?$', text) or float(text) <= 0:
+    if not re.match(r'^\d+(\.\d{1,2})?$', text) or not 0 < float(text) <= 99_999_999.99:
         await message.answer(
-            "❌ Цена должна быть положительным числом с не более чем 2 знаками после запятой.\n"
+            "❌ Цена должна быть от 0.01 до 99 999 999.99 ₽, не более 2 знаков после запятой.\n"
             "Пример: <code>1.50</code>"
         )
         return
@@ -422,7 +416,7 @@ async def process_new_price(message: Message, state: FSMContext):
     data = await state.get_data()
     slug = data.get("target_slug")
 
-    updated = await update_country_price(slug, new_price)
+    updated = await change_category_price(message.from_user.id, slug, new_price)
     await state.clear()
 
     from database.db import get_category
@@ -654,7 +648,9 @@ async def confirm_delete_account(call: CallbackQuery):
         await answer_safe(call, "❌ Аккаунт уже удалён или не найден.", show_alert=True)
         return
 
-    await delete_account(acc_id)
+    if not await remove_account(call.from_user.id, acc_id):
+        await answer_safe(call, "Аккаунт уже удалён.", show_alert=True)
+        return
     await answer_safe(call, "✅ Аккаунт успешно удалён.", show_alert=True)
     await show_accounts_page(call, 0)
 
@@ -694,9 +690,9 @@ async def edit_price_save(message: Message, state: FSMContext):
 
     import re
     text = message.text.strip()
-    if not re.match(r'^\d+(\.\d{1,2})?$', text) or float(text) <= 0:
+    if not re.match(r'^\d+(\.\d{1,2})?$', text) or not 0 < float(text) <= 99_999_999.99:
         await message.answer(
-            "❌ Цена должна быть положительным числом с не более чем 2 знаками после запятой.\n"
+            "❌ Цена должна быть от 0.01 до 99 999 999.99 ₽, не более 2 знаков после запятой.\n"
             "Пример: <code>1.50</code>"
         )
         return
@@ -710,7 +706,7 @@ async def edit_price_save(message: Message, state: FSMContext):
         await message.answer(f"{DENY} Ошибка: ID аккаунта не найден.", reply_markup=back_to_admin())
         return
 
-    success = await update_account_price(acc_id, new_price)
+    success = await change_account_price(message.from_user.id, acc_id, new_price)
     await state.clear()
 
     if success:

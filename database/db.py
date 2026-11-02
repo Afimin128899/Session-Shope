@@ -313,6 +313,34 @@ async def init_db ():
                     except Exception as cat_err:
                         logging.warning(f"[db] Failed to seed default categories: {cat_err}")
 
+                    await cur.execute("""
+                        CREATE TABLE IF NOT EXISTS admin_audit_log (
+                            id BIGINT AUTO_INCREMENT PRIMARY KEY,
+                            admin_id BIGINT NOT NULL,
+                            action VARCHAR(32) NOT NULL,
+                            target_type VARCHAR(16) NOT NULL,
+                            target_id VARCHAR(64) NOT NULL,
+                            details TEXT NOT NULL,
+                            created_at DATETIME NOT NULL,
+                            KEY admin_audit_actor (admin_id, id)
+                        ) ENGINE=InnoDB
+                    """)
+
+                    await cur.execute("""
+                        CREATE TABLE IF NOT EXISTS stock_subscriptions (
+                            user_id BIGINT NOT NULL,
+                            category_slug VARCHAR(64) NOT NULL,
+                            token CHAR(32) NOT NULL,
+                            after_account_id INT NOT NULL DEFAULT 0,
+                            next_attempt_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                            PRIMARY KEY (user_id, category_slug),
+                            UNIQUE KEY stock_subscription_token (token),
+                            KEY stock_notification_queue (next_attempt_at),
+                            CONSTRAINT stock_subscriptions_category_fk FOREIGN KEY (category_slug)
+                                REFERENCES categories(slug) ON DELETE CASCADE
+                        ) ENGINE=InnoDB
+                    """)
+
                     await cur.execute(
                         "INSERT IGNORE INTO settings (`key`, `value`) VALUES (%s, %s), (%s, %s), (%s, %s), (%s, %s)",
                         ("reviews_link", REVIEWS_LINK or "https://t.me", 

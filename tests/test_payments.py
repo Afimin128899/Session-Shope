@@ -1,7 +1,6 @@
 """Offline regression tests; never connect to Telegram or a configured database."""
 import asyncio
 import importlib
-import os
 import sys
 import types
 import unittest
@@ -20,10 +19,10 @@ config.ADMIN_IDS = []
 config.TELEGRAM_API_ID = 0
 config.USDT_RUB_RATE = 100.0
 config.TON_FALLBACK_RATE = config.USDT_FALLBACK_RATE = 1.0
-with patch.dict(sys.modules, config=config):
-    db = importlib.import_module('database.db')
-    balance = importlib.import_module('handlers.user.balance')
-    shop = importlib.import_module('handlers.user.shop')
+sys.modules['config'] = config
+db = importlib.import_module('database.db')
+balance = importlib.import_module('handlers.user.balance')
+shop = importlib.import_module('handlers.user.shop')
 
 
 class PaymentTransactionTests(unittest.IsolatedAsyncioTestCase):

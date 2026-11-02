@@ -4,10 +4,10 @@ from aiogram .types import CallbackQuery ,Message
 from aiogram .fsm .context import FSMContext 
 from aiogram .fsm .state import State ,StatesGroup 
 
+from database.admin_tools import remove_account
 from config import ADMIN_IDS 
 from database .db import (
     add_account ,
-    delete_account ,
     get_all_users ,
     create_promo ,
     update_country_price ,
@@ -94,7 +94,9 @@ async def start_del_account (call :CallbackQuery ):
 async def confirm_delete_account (call :CallbackQuery ):
     if not is_admin (call .from_user .id ):return 
     account_id =int (call .data .split (":")[1 ])
-    await delete_account (account_id )
+    if not await remove_account(call.from_user.id, account_id):
+        await answer_safe(call, "Аккаунт уже удалён.", show_alert=True)
+        return
     await edit_message_safe (call ,f"✅ Аккаунт #{account_id } удален.",reply_markup =back_to_admin ())
     await answer_safe(call)
 

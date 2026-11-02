@@ -37,6 +37,10 @@ def get_admin_panel() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
+                InlineKeyboardButton(text="🔎 Поиск", callback_data="adm_search"),
+                InlineKeyboardButton(text="📋 Журнал действий", callback_data="adm_audit"),
+            ],
+            [
                 InlineKeyboardButton(
                     text="📞 По номеру",
                     callback_data="add_account_telethon",

@@ -81,7 +81,10 @@ async def main_menu(user_id: int | None = None) -> InlineKeyboardMarkup:
 async def shop_menu() -> tuple[InlineKeyboardMarkup, bool]:
     cats = await get_available_categories()
     if not cats:
-        return back_to_main_menu(), False
+        return InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="🔔 Уведомить о поступлении", callback_data="stock_menu")],
+            [InlineKeyboardButton(text="Назад", callback_data="back_main")],
+        ]), False
 
     rows = []
     label_back, emoji_back = await _btn_text("btn_back_shop", "Назад", c.BTN_ICON_BACK_SMILE)
@@ -103,6 +106,8 @@ async def shop_menu() -> tuple[InlineKeyboardMarkup, bool]:
             rows.append([
                 InlineKeyboardButton(text=label, callback_data=f"buy_{slug}", icon_custom_emoji_id=emoji),
             ])
+
+    rows.append([InlineKeyboardButton(text="🔔 Уведомить о поступлении", callback_data="stock_menu")])
 
     rows.append([
         InlineKeyboardButton(text=label_back, callback_data="back_main", icon_custom_emoji_id=emoji_back),
@@ -132,6 +137,7 @@ async def after_purchase_menu(purchase_id: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [InlineKeyboardButton(text=label_code, callback_data=f"get_code:{purchase_id}", icon_custom_emoji_id=emoji_code)],
+            [InlineKeyboardButton(text="Есть проблема", callback_data=f"purchase_help:{purchase_id}")],
             [InlineKeyboardButton(text=label_back, callback_data="back_main", icon_custom_emoji_id=emoji_back)],
         ]
     )
