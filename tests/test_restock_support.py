@@ -10,7 +10,7 @@ from test_payments import db
 from database import restock as storage
 from services import restock as delivery
 from handlers.user import restock as ui
-from handlers.user import purchases
+from handlers import tickets as purchases
 from keyboards import user_kb
 from utils.support import purchase_support_url
 from aiogram.exceptions import TelegramForbiddenError, TelegramRetryAfter
@@ -90,20 +90,21 @@ class UserFlowTests(unittest.IsolatedAsyncioTestCase):
         with patch.object(purchases, 'get_purchase_for_user', AsyncMock(return_value=None)) as get, \
              patch.object(purchases, 'edit_message_safe', AsyncMock()) as edit, \
              patch.object(purchases, 'answer_safe', AsyncMock()) as answer:
-            await purchases.purchase_help(self.call)
+            await purchases.purchase_help(self.call, SimpleNamespace(clear=AsyncMock(), update_data=AsyncMock(), set_state=AsyncMock()))
             get.assert_awaited_once_with(52, 42)
             edit.assert_not_awaited()
             self.assertIn('не найдена', answer.call_args.args[1])
 
     async def test_support_is_available_for_completed_order(self):
-        with patch.object(purchases, 'get_purchase_for_user', AsyncMock(return_value={'id': 52})), \
-             patch.object(db, 'get_setting', AsyncMock(return_value='@help_shop')), \
+        state = SimpleNamespace(clear=AsyncMock(), update_data=AsyncMock(), set_state=AsyncMock())
+        with patch.object(purchases, 'get_purchase_for_user', AsyncMock(return_value={'id': 52, 'status': 'completed'})), \
+             patch.object(purchases.store, 'ticket_for_order', AsyncMock(return_value=None)), \
              patch.object(purchases, 'edit_message_safe', AsyncMock()) as edit, \
              patch.object(purchases, 'answer_safe', AsyncMock()):
-            await purchases.purchase_help(self.call)
+            await purchases.purchase_help(self.call, state)
             self.assertIn('#52', edit.call_args.args[1])
-            kb = edit.call_args.kwargs['reply_markup']
-            self.assertIn('help_shop', kb.inline_keyboard[0][0].url)
+            state.update_data.assert_awaited_once_with(ticket_order_id=52)
+            state.set_state.assert_awaited_once_with(purchases.TicketInput.new)
 
     async def test_empty_shop_still_offers_subscriptions(self):
         with patch.object(user_kb, 'get_available_categories', AsyncMock(return_value=[])):

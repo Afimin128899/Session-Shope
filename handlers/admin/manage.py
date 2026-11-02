@@ -94,7 +94,12 @@ async def start_del_account (call :CallbackQuery ):
 async def confirm_delete_account (call :CallbackQuery ):
     if not is_admin (call .from_user .id ):return 
     account_id =int (call .data .split (":")[1 ])
-    if not await remove_account(call.from_user.id, account_id):
+    try:
+        removed = await remove_account(call.from_user.id, account_id)
+    except ValueError as exc:
+        await answer_safe(call, str(exc), show_alert=True)
+        return
+    if not removed:
         await answer_safe(call, "Аккаунт уже удалён.", show_alert=True)
         return
     await edit_message_safe (call ,f"✅ Аккаунт #{account_id } удален.",reply_markup =back_to_admin ())

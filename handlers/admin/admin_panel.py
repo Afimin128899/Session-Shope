@@ -648,7 +648,12 @@ async def confirm_delete_account(call: CallbackQuery):
         await answer_safe(call, "❌ Аккаунт уже удалён или не найден.", show_alert=True)
         return
 
-    if not await remove_account(call.from_user.id, acc_id):
+    try:
+        removed = await remove_account(call.from_user.id, acc_id)
+    except ValueError as exc:
+        await answer_safe(call, str(exc), show_alert=True)
+        return
+    if not removed:
         await answer_safe(call, "Аккаунт уже удалён.", show_alert=True)
         return
     await answer_safe(call, "✅ Аккаунт успешно удалён.", show_alert=True)

@@ -56,6 +56,8 @@ async def main_menu(user_id: int | None = None) -> InlineKeyboardMarkup:
         ],
     ]
 
+    rows.append([InlineKeyboardButton(text="🛟 Мои обращения", callback_data="tk_user:0")])
+
     reviews_row = [
         InlineKeyboardButton(text=label_reviews, url=reviews_url, icon_custom_emoji_id=emoji_reviews),
     ]

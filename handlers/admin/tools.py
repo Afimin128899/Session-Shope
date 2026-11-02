@@ -11,6 +11,7 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from database.admin_tools import find_user, user_orders, find_order, audit_entries
 from handlers.admin.admin_panel import is_admin
 from utils.nav import answer_safe, edit_message_safe
+from utils.order_status import order_status
 
 admin_tools_router = Router()
 
@@ -75,7 +76,7 @@ def user_card(user, orders):
 
 def order_card(order):
     username = '@' + escape(order['username']) if order.get('username') else 'не указан'
-    status = 'Завершён' if order.get('completed') else 'Оформлен'
+    status = order_status(order)
     return (
         f"🛍 <b>Заказ #{order['id']}</b>\n\n"
         f"Покупатель: <code>{order['user_id']}</code> ({username})\n"
@@ -85,6 +86,15 @@ def order_card(order):
         f"Валюта покупки: {escape(str(order.get('currency') or 'не указана'))}\n"
         f"Статус: <b>{status}</b>"
     )
+
+
+def order_menu(order):
+    keyboard = search_menu()
+    if order.get('ticket_id'):
+        keyboard.inline_keyboard.insert(0, [InlineKeyboardButton(
+            text='Открыть обращение', callback_data=f"tk:{order['ticket_id']}:0",
+        )])
+    return keyboard
 
 
 @admin_tools_router.message(AdminSearch.user)
@@ -118,7 +128,7 @@ async def search_order(message, state):
         await message.answer('Заказ не найден. Проверьте номер покупки.', reply_markup=search_menu())
         return
     await state.clear()
-    await message.answer(order_card(order), reply_markup=search_menu())
+    await message.answer(order_card(order), reply_markup=order_menu(order))
 
 
 @admin_tools_router.callback_query(F.data.startswith('adm_order:'))
@@ -135,7 +145,7 @@ async def open_order(call, state):
         await answer_safe(call, 'Заказ не найден.', show_alert=True)
         return
     await state.clear()
-    await edit_message_safe(call, order_card(order), reply_markup=search_menu())
+    await edit_message_safe(call, order_card(order), reply_markup=order_menu(order))
     await answer_safe(call)
 
 
@@ -143,8 +153,9 @@ ACTIONS = {
     'balance_add': 'Изменение баланса', 'balance_set': 'Установка баланса',
     'account_price': 'Цена товара', 'category_price': 'Цены категории',
     'account_delete': 'Удаление товара',
+    'ticket_reply': 'Ответ в обращении', 'ticket_close': 'Закрытие обращения',
 }
-TARGETS = {'user': 'Пользователь', 'account': 'Товар', 'category': 'Категория'}
+TARGETS = {'user': 'Пользователь', 'account': 'Товар', 'category': 'Категория', 'ticket': 'Обращение'}
 
 
 def audit_line(entry):

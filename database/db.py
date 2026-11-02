@@ -326,6 +326,9 @@ async def init_db ():
                         ) ENGINE=InnoDB
                     """)
 
+                    from database.support_schema import init_support_schema
+                    await init_support_schema(cur, DB_CONFIG["db"])
+
                     await cur.execute("""
                         CREATE TABLE IF NOT EXISTS stock_subscriptions (
                             user_id BIGINT NOT NULL,
@@ -582,7 +585,7 @@ async def buy_account(user_id: int, account_id: int, price: float, date_str: str
 
                 await cur.execute(f"UPDATE users SET {balance_col} = {balance_col} - %s WHERE id = %s", (price, user_id))
                 await cur.execute("UPDATE accounts SET status = 'sold' WHERE id = %s", (account_id,))
-                await cur.execute("INSERT INTO purchases (user_id, account_id, date, currency) VALUES (%s, %s, %s, %s)", (user_id, account_id, date_str, currency))
+                await cur.execute("INSERT INTO purchases (user_id, account_id, date, currency, paid_amount) VALUES (%s, %s, %s, %s, %s)", (user_id, account_id, date_str, currency, price))
                 purc_id = cur.lastrowid
             await conn.commit()
             logging.info(f"[db] Purchase completed: user={user_id}, account={account_id}, price={price} {currency}, purchase_id={purc_id}")
@@ -599,8 +602,9 @@ async def get_user_purchases (user_id :int ):
     async with _get_pool().acquire() as conn :
         async with conn .cursor (aiomysql .DictCursor )as cur :
             await cur .execute ("""
-                SELECT p.id, p.account_id, a.country, a.number, a.password, a.data, p.date, p.currency
-                FROM purchases p JOIN accounts a ON p.account_id = a.id 
+                SELECT p.id, p.account_id, a.country, a.number, a.password, a.data, p.date, p.currency, p.status, p.paid_amount, t.status AS ticket_status
+                FROM purchases p JOIN accounts a ON p.account_id = a.id
+                LEFT JOIN support_tickets t ON t.purchase_id = p.id
                 WHERE p.user_id = %s ORDER BY p.id DESC
             """,(user_id ,))
             return await cur .fetchall ()
@@ -609,16 +613,18 @@ async def get_purchase_for_user (purchase_id :int ,user_id :int ):
     async with _get_pool().acquire() as conn :
         async with conn .cursor (aiomysql .DictCursor )as cur :
             await cur .execute ("""
-                SELECT p.*, a.country, a.code, a.number, a.password, a.data, a.price 
-                FROM purchases p JOIN accounts a ON p.account_id = a.id 
+                SELECT p.*, a.country, a.code, a.number, a.password, a.data, a.price, t.status AS ticket_status
+                FROM purchases p JOIN accounts a ON p.account_id = a.id
+                LEFT JOIN support_tickets t ON t.purchase_id = p.id
                 WHERE p.id = %s AND p.user_id = %s
             """,(purchase_id ,user_id ))
             return await cur .fetchone ()
 
-async def complete_user_purchase (account_id :int ):
-    async with _get_pool().acquire() as conn :
-        async with conn .cursor ()as cur :
-            await cur .execute ("UPDATE accounts SET data = '✅ Сессия удалена (Покупка завершена)' WHERE id = %s",(account_id ,))
+async def complete_user_purchase(account_id: int):
+    from database.admin_tools import _transaction
+    async with _transaction() as cur:
+        await cur.execute("UPDATE purchases SET status = 'completed' WHERE account_id = %s", (account_id,))
+        await cur.execute("UPDATE accounts SET data = '✅ Сессия удалена (Покупка завершена)' WHERE id = %s", (account_id,))
 
 
 async def add_account (country ,code ,number ,password ,price ,data ):
@@ -790,8 +796,9 @@ async def get_user_purchases (user_id :int ):
     async with _get_pool().acquire() as conn :
         async with conn .cursor (aiomysql .DictCursor )as cur :
             await cur .execute ("""
-                SELECT p.id, p.account_id, a.country, a.number, a.password, a.data, p.date, p.currency
-                FROM purchases p JOIN accounts a ON p.account_id = a.id 
+                SELECT p.id, p.account_id, a.country, a.number, a.password, a.data, p.date, p.currency, p.status, p.paid_amount, t.status AS ticket_status
+                FROM purchases p JOIN accounts a ON p.account_id = a.id
+                LEFT JOIN support_tickets t ON t.purchase_id = p.id
                 WHERE p.user_id = %s ORDER BY p.id DESC
             """,(user_id ,))
             return await cur .fetchall ()
@@ -800,16 +807,18 @@ async def get_purchase_for_user (purchase_id :int ,user_id :int ):
     async with _get_pool().acquire() as conn :
         async with conn .cursor (aiomysql .DictCursor )as cur :
             await cur .execute ("""
-                SELECT p.*, a.country, a.code, a.number, a.password, a.data, a.price 
-                FROM purchases p JOIN accounts a ON p.account_id = a.id 
+                SELECT p.*, a.country, a.code, a.number, a.password, a.data, a.price, t.status AS ticket_status
+                FROM purchases p JOIN accounts a ON p.account_id = a.id
+                LEFT JOIN support_tickets t ON t.purchase_id = p.id
                 WHERE p.id = %s AND p.user_id = %s
             """,(purchase_id ,user_id ))
             return await cur .fetchone ()
 
-async def complete_user_purchase (account_id :int ):
-    async with _get_pool().acquire() as conn :
-        async with conn .cursor ()as cur :
-            await cur .execute ("UPDATE accounts SET data = '✅ Сессия удалена (Покупка завершена)' WHERE id = %s",(account_id ,))
+async def complete_user_purchase(account_id: int):
+    from database.admin_tools import _transaction
+    async with _transaction() as cur:
+        await cur.execute("UPDATE purchases SET status = 'completed' WHERE account_id = %s", (account_id,))
+        await cur.execute("UPDATE accounts SET data = '✅ Сессия удалена (Покупка завершена)' WHERE id = %s", (account_id,))
 
 
 async def add_account (country ,code ,number ,password ,price ,data ):
@@ -1038,7 +1047,7 @@ async def buy_account_with_referral(
         await conn.begin()
         try:
             async with conn.cursor() as cur:
-                effective_price = round(price * (1 - discount_pct / 100), 8)
+                effective_price = round(price * (1 - discount_pct / 100), 2 if currency == "RUB" else 8)
                 bonus_amount = round(price * bonus_pct / 100, 8)
 
                 await cur.execute(
@@ -1063,8 +1072,8 @@ async def buy_account_with_referral(
                 await cur.execute(f"UPDATE users SET {balance_col} = {balance_col} - %s WHERE id = %s", (effective_price, user_id))
                 await cur.execute("UPDATE accounts SET status = 'sold' WHERE id = %s", (account_id,))
                 await cur.execute(
-                    "INSERT INTO purchases (user_id, account_id, date, currency) VALUES (%s, %s, %s, %s)",
-                    (user_id, account_id, date_str, currency),
+                    "INSERT INTO purchases (user_id, account_id, date, currency, paid_amount) VALUES (%s, %s, %s, %s, %s)",
+                    (user_id, account_id, date_str, currency, effective_price),
                 )
                 purc_id = cur.lastrowid
 

@@ -1,4 +1,5 @@
 from html import escape 
+from utils.order_status import order_status
 from aiogram import Router ,F 
 from aiogram .types import CallbackQuery ,InlineKeyboardButton ,InlineKeyboardMarkup 
 
@@ -11,7 +12,9 @@ from utils .nav import edit_message_safe, answer_safe
 purchases_router =Router ()
 
 @purchases_router .callback_query (F .data =="my_purchases")
-async def my_purchases (call :CallbackQuery ):
+async def my_purchases (call :CallbackQuery, state=None ):
+    if state is not None:
+        await state.clear()
     """Список всех покупок пользователя"""
     rows =await get_user_purchases (call .from_user .id )
     if not rows :
@@ -50,6 +53,7 @@ async def my_purchases (call :CallbackQuery ):
         f"<b>{i }. {cat_name}{cat_emoji_html}</b>\n"
         f"   📱 Номер: <code>{p ['number']}</code>\n"
         f"   📅 Дата: {p ['date']}\n"
+        f"   Статус: {order_status(p)}\n"
         )
 
     text ="🛍 <b>История ваших покупок</b>\n\n"+"\n".join (lines )
@@ -63,7 +67,9 @@ async def my_purchases (call :CallbackQuery ):
 
 
 @purchases_router .callback_query (F .data .startswith ("open_purchase:"))
-async def open_purchase (call :CallbackQuery ):
+async def open_purchase (call :CallbackQuery, state=None ):
+    if state is not None:
+        await state.clear()
     """Детальный просмотр конкретной покупки"""
     purc_id =int (call .data .split (":")[1 ])
     p =await get_purchase_for_user (purc_id ,call .from_user .id )
@@ -72,17 +78,20 @@ async def open_purchase (call :CallbackQuery ):
         await answer_safe(call, "Запись не найдена.",show_alert =True )
         return 
 
-    price =float (p .get ('price',0 ))
+    paid_amount = p.get('paid_amount')
+    price = float(paid_amount) if paid_amount is not None else 0.0
     currency = p.get('currency') or 'TON'
 
     if currency.upper() == 'USDT':
         currency_suffix = "USDT <tg-emoji emoji-id=\"5406841020769936275\">☺️</tg-emoji>"
+    elif currency.upper() == 'RUB':
+        currency_suffix = "₽"
     else:
         currency_suffix = "TON <tg-emoji emoji-id=\"5406976471153545018\">☺️</tg-emoji>"
 
-    formatted_price = int(price) if price.is_integer() else price
+    formatted_price = (int(price) if price.is_integer() else price) if paid_amount is not None else "не сохранена"
 
-    is_completed =p .get ('data')=='✅ Сессия удалена (Покупка завершена)'
+    is_completed = p.get('status') == 'completed' or p.get('data') == '✅ Сессия удалена (Покупка завершена)'
 
 
     cat = await get_category(p['country'])
@@ -104,6 +113,7 @@ async def open_purchase (call :CallbackQuery ):
         f'<tg-emoji emoji-id="5408830295002593386">📤</tg-emoji> <b>Детали покупки #{p ["id"]}</b>\n'
         f"⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯\n"
         f"Категория: <b>{cat_name}</b>{cat_emoji_html}\n"
+        f"Статус: <b>{order_status(p)}</b>\n"
         f'<tg-emoji emoji-id="5407025283456835913">📱</tg-emoji> Номер: <code>{p ["number"]}</code>\n'
         f'<tg-emoji emoji-id="5350491749926058609">🔐</tg-emoji> Пароль (2FA): <code>{p .get ("password")or "Нет"}</code>\n'
         f'<tg-emoji emoji-id="5312057711091813718">💳</tg-emoji> Цена: {formatted_price} {currency_suffix}\n'
@@ -181,35 +191,3 @@ async def complete_purchase (call :CallbackQuery ):
 
 
     await open_purchase (call )
-
-@purchases_router.callback_query(F.data.startswith("purchase_help:"))
-async def purchase_help(call: CallbackQuery):
-    from config import SUPPORT_USERNAME
-    from database.db import get_setting
-    from utils.support import purchase_support_url
-
-    try:
-        purchase_id = int(call.data.split(":", 1)[1])
-    except (ValueError, IndexError):
-        await answer_safe(call, "Покупка не найдена.", show_alert=True)
-        return
-    purchase = await get_purchase_for_user(purchase_id, call.from_user.id)
-    if not purchase:
-        await answer_safe(call, "Покупка не найдена.", show_alert=True)
-        return
-    contact = await get_setting("support_username", SUPPORT_USERNAME)
-    url = purchase_support_url(contact, purchase_id)
-    if not url:
-        await answer_safe(call, "Контакт поддержки пока не настроен. Попробуйте позже.", show_alert=True)
-        return
-    await edit_message_safe(
-        call,
-        f"🛟 <b>Помощь по заказу #{purchase_id}</b>\n\n"
-        "Нажмите кнопку, опишите проблему и отправьте сообщение в поддержку. "
-        "Номер заказа уже добавлен в черновик. Не сообщайте пароли и коды входа.",
-        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="Написать в поддержку", url=url)],
-            [InlineKeyboardButton(text="Назад к заказу", callback_data=f"open_purchase:{purchase_id}")],
-        ]),
-    )
-    await answer_safe(call)

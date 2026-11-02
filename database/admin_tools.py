@@ -107,7 +107,12 @@ async def remove_account(admin_id, account_id):
         if row is None:
             return False
         # Retain existing deletion semantics, without storing sessions or passwords.
-        await cur.execute('DELETE FROM purchases WHERE account_id = %s', (account_id,))
+        try:
+            await cur.execute('DELETE FROM purchases WHERE account_id = %s', (account_id,))
+        except aiomysql.IntegrityError as exc:
+            if exc.args[0] == 1451:
+                raise ValueError('Нельзя удалить товар с обращением: история поддержки должна сохраниться.') from exc
+            raise
         await cur.execute('DELETE FROM accounts WHERE id = %s', (account_id,))
         await _record(cur, admin_id, 'account_delete', 'account', account_id, {
             'category': row['country'], 'price': str(row['price']), 'status': row['status'],
@@ -151,9 +156,10 @@ async def find_order(order_id):
         async with conn.cursor(aiomysql.DictCursor) as cur:
             await cur.execute(
                 "SELECT p.id, p.user_id, p.account_id, p.date, p.currency, u.username, "
-                "a.country, a.status, (a.data = '✅ Сессия удалена (Покупка завершена)') AS completed "
+                "a.country, p.status, p.paid_amount, t.id AS ticket_id, t.status AS ticket_status, (a.data = '✅ Сессия удалена (Покупка завершена)') AS completed "
                 "FROM purchases p LEFT JOIN users u ON u.id = p.user_id "
-                "LEFT JOIN accounts a ON a.id = p.account_id WHERE p.id = %s",
+                "LEFT JOIN accounts a ON a.id = p.account_id "
+                "LEFT JOIN support_tickets t ON t.purchase_id = p.id WHERE p.id = %s",
                 (order_id,),
             )
             return await cur.fetchone()

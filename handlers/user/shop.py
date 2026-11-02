@@ -28,7 +28,9 @@ shop_router = Router()
 
 
 @shop_router.callback_query(F.data == "buy")
-async def open_shop(call: CallbackQuery):
+async def open_shop(call: CallbackQuery, state=None):
+    if state is not None:
+        await state.clear()
     user = await get_user(call.from_user.id)
     balance = float(user.get("balance", 0.0)) if user else 0.0
 
@@ -46,7 +48,9 @@ async def open_shop(call: CallbackQuery):
 
 
 @shop_router.callback_query(F.data == "back_buy")
-async def back_buy(call: CallbackQuery):
+async def back_buy(call: CallbackQuery, state=None):
+    if state is not None:
+        await state.clear()
     user = await get_user(call.from_user.id)
     balance = float(user.get("balance", 0.0)) if user else 0.0
 
@@ -304,7 +308,8 @@ async def confirm_purchase(call: CallbackQuery):
         cat_emoji_html = " <tg-emoji emoji-id=\"5258509201306557640\">📍</tg-emoji>"
 
     text = (
-        f"<tg-emoji emoji-id='{EMOJI_CHECK}'>✅</tg-emoji> <b>Покупка оформлена!</b>\n\n"
+        f"<tg-emoji emoji-id='{EMOJI_CHECK}'>✅</tg-emoji> <b>Покупка #{purchase_id} оформлена!</b>\n"
+        "Статус: <b>Оплачен и выдан</b>\n\n"
         f"Категория: <b>{display_country}</b>{cat_emoji_html}\n"
         f"<tg-emoji emoji-id='{EMOJI_PHONE}'>📞</tg-emoji> Номер: <code>{account['number']}</code>\n"
         f"<tg-emoji emoji-id='{EMOJI_LOCK}'>🔒</tg-emoji> Пароль: <code>{account.get('password') or '-'}</code>\n"

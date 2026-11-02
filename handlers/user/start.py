@@ -13,7 +13,9 @@ start_router = Router()
 
 
 @start_router.message(CommandStart())
-async def cmd_start(message: Message, command):
+async def cmd_start(message: Message, command, state=None):
+    if state is not None:
+        await state.clear()
     args = command.args
     referrer_id = None
     if args and args.startswith("ref_"):
@@ -39,7 +41,9 @@ async def cmd_start(message: Message, command):
 
 
 @start_router.callback_query(F.data == "back_main")
-async def callback_back_main(call: CallbackQuery):
+async def callback_back_main(call: CallbackQuery, state=None):
+    if state is not None:
+        await state.clear()
     await update_user_username(call.from_user.id, call.from_user.username)
     user_name = call.from_user.first_name or "Гость"
     caption_text = c.START_TEXT.replace("{name}", user_name)
