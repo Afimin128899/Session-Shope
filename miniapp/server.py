@@ -150,6 +150,8 @@ async def order_detail(request):
     row = await db.get_purchase_for_user(order_id(request), request['user']['id'])
     if not row:
         return response({'error': 'Покупка не найдена.', 'code': 'not_found'}, 404)
+    if row.get('status') == 'refunded':
+        row['password'] = None
     return response({key: row.get(key) for key in ('id', 'number', 'password', 'paid_amount', 'currency', 'date', 'status', 'ticket_status')} |
                     {'name': row.get('country', 'Аккаунт'), 'status_label': order_status(row)})
 

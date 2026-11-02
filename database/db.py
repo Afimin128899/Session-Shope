@@ -585,7 +585,7 @@ async def buy_account(user_id: int, account_id: int, price: float, date_str: str
 
                 await cur.execute(f"UPDATE users SET {balance_col} = {balance_col} - %s WHERE id = %s", (price, user_id))
                 await cur.execute("UPDATE accounts SET status = 'sold' WHERE id = %s", (account_id,))
-                await cur.execute("INSERT INTO purchases (user_id, account_id, date, currency, paid_amount) VALUES (%s, %s, %s, %s, %s)", (user_id, account_id, date_str, currency, price))
+                await cur.execute("INSERT INTO purchases (user_id, account_id, date, currency, paid_amount, referral_bonus) VALUES (%s, %s, %s, %s, %s, 0)", (user_id, account_id, date_str, currency, price))
                 purc_id = cur.lastrowid
             await conn.commit()
             logging.info(f"[db] Purchase completed: user={user_id}, account={account_id}, price={price} {currency}, purchase_id={purc_id}")
@@ -623,8 +623,8 @@ async def get_purchase_for_user (purchase_id :int ,user_id :int ):
 async def complete_user_purchase(account_id: int):
     from database.admin_tools import _transaction
     async with _transaction() as cur:
-        await cur.execute("UPDATE purchases SET status = 'completed' WHERE account_id = %s", (account_id,))
-        await cur.execute("UPDATE accounts SET data = '✅ Сессия удалена (Покупка завершена)' WHERE id = %s", (account_id,))
+        await cur.execute("UPDATE purchases SET status = 'completed' WHERE account_id = %s AND status <> 'refunded'", (account_id,))
+        await cur.execute("UPDATE accounts SET data = '✅ Сессия удалена (Покупка завершена)' WHERE id = %s AND status <> 'refunded'", (account_id,))
 
 
 async def add_account (country ,code ,number ,password ,price ,data ):
@@ -733,9 +733,10 @@ async def get_stats ():
             s =await cur .fetchone ()
 
             await cur .execute ("""
-                SELECT COUNT(p.id) as purc, SUM(acc.price) as rev 
+                SELECT COUNT(p.id) as purc, SUM(COALESCE(p.paid_amount, acc.price)) as rev
                 FROM purchases p 
                 JOIN accounts acc ON p.account_id = acc.id
+                WHERE p.status <> 'refunded'
             """)
             p_res =await cur .fetchone ()
 
@@ -817,8 +818,8 @@ async def get_purchase_for_user (purchase_id :int ,user_id :int ):
 async def complete_user_purchase(account_id: int):
     from database.admin_tools import _transaction
     async with _transaction() as cur:
-        await cur.execute("UPDATE purchases SET status = 'completed' WHERE account_id = %s", (account_id,))
-        await cur.execute("UPDATE accounts SET data = '✅ Сессия удалена (Покупка завершена)' WHERE id = %s", (account_id,))
+        await cur.execute("UPDATE purchases SET status = 'completed' WHERE account_id = %s AND status <> 'refunded'", (account_id,))
+        await cur.execute("UPDATE accounts SET data = '✅ Сессия удалена (Покупка завершена)' WHERE id = %s AND status <> 'refunded'", (account_id,))
 
 
 async def add_account (country ,code ,number ,password ,price ,data ):
@@ -927,9 +928,10 @@ async def get_stats ():
             s =await cur .fetchone ()
 
             await cur .execute ("""
-                SELECT COUNT(p.id) as purc, SUM(acc.price) as rev 
+                SELECT COUNT(p.id) as purc, SUM(COALESCE(p.paid_amount, acc.price)) as rev
                 FROM purchases p 
                 JOIN accounts acc ON p.account_id = acc.id
+                WHERE p.status <> 'refunded'
             """)
             p_res =await cur .fetchone ()
 
@@ -1087,6 +1089,12 @@ async def buy_account_with_referral(
                         f"UPDATE users SET {balance_col} = {balance_col} + %s WHERE id = %s",
                         (bonus_amount, referrer_id),
                     )
+                    if cur.rowcount == 0:
+                        referrer_id = None
+                await cur.execute(
+                    "UPDATE purchases SET referrer_id = %s, referral_bonus = %s WHERE id = %s",
+                    (referrer_id, bonus_amount if referrer_id is not None else 0, purc_id),
+                )
             await conn.commit()
             logging.info(
                 f"[db] Referral purchase completed: user={user_id}, account={account_id}, "

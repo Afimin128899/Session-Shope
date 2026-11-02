@@ -116,6 +116,7 @@
       const order = await api('orders/' + id);
       $('#dialog-kicker').textContent = 'МОЯ ПОКУПКА';
       $('#dialog-content').innerHTML = `<h2 id="dialog-title">Заказ #${order.id}</h2><p>${esc(order.status_label)} · ${esc(order.date)}</p><div class="profile-info"><span>Номер</span><strong class="secret-value">${esc(order.number || '—')}</strong></div><div class="profile-info"><span>Пароль 2FA</span><strong class="secret-value" id="order-password">••••••</strong></div><button class="secondary-button" id="show-password">Показать пароль</button><p>Получи код входа, заверши покупку или обратись в поддержку в Telegram-боте.</p><button class="primary-button" data-bot-order="${order.id}">Продолжить в боте ↗</button>`;
+      if (order.status === 'refunded') { $('#order-password').textContent = 'Доступ закрыт'; $('#show-password').hidden = true; }
       $('#show-password').addEventListener('click', () => { $('#order-password').textContent = order.password || 'Не установлен'; $('#show-password').hidden = true; }, { once: true });
       $('#purchase-dialog').showModal();
     } catch (error) { handleError(error); }

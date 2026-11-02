@@ -135,7 +135,7 @@ class OrderMigrationTests(unittest.IsolatedAsyncioTestCase):
         cur = MagicMock(execute=AsyncMock(), fetchone=AsyncMock(return_value=None))
         await init_support_schema(cur, 'test_shop')
         sql = [c.args[0] for c in cur.execute.call_args_list]
-        self.assertEqual(sum('ALTER TABLE' in q for q in sql), 2)
+        self.assertEqual(sum('ALTER TABLE' in q for q in sql), 4)
         self.assertTrue(any('ON DELETE RESTRICT' in q for q in sql))
         self.assertTrue(any("SET p.status = 'completed'" in q for q in sql))
 

@@ -340,6 +340,10 @@ async def deliver_login_code(call: CallbackQuery):
         await answer_safe(call, "Покупка не найдена.", show_alert=True)
         return
 
+    if row.get('status') == 'refunded':
+        await answer_safe(call, "Заказ возвращён на баланс. Доступ к данным аккаунта закрыт.", show_alert=True)
+        return
+
     session_str = row.get("data") or ""
     phone_number = row.get("number") or "Unknown"
     logger.info(f"[deliver_login_code] Found purchase record. Phone: {phone_number}. Session length: {len(session_str)}")
@@ -356,6 +360,11 @@ async def deliver_login_code(call: CallbackQuery):
     logger.info(f"[deliver_login_code] Initiating Telethon connection to fetch code for {phone_number}...")
     code = await try_fetch_login_code(session_str, phone_number)
 
+    current_order = await get_purchase_for_user(purc_id, user_id)
+    if not current_order or current_order.get('status') == 'refunded':
+        await answer_safe(call, "Заказ недоступен или возвращён на баланс.", show_alert=True)
+        return
+
     if code == "SESSION_NOT_AUTHORIZED":
         logger.error(f"[deliver_login_code] FAILED. Session for {phone_number} is no longer authorized (expired or logged out).")
         await answer_safe(
@@ -364,7 +373,7 @@ async def deliver_login_code(call: CallbackQuery):
             show_alert=True,
         )
     elif code:
-        logger.info(f"[deliver_login_code] SUCCESS! Code received for {phone_number}: {code}")
+        logger.info("[deliver_login_code] Code delivered for purchase %s", purc_id)
         await edit_message_safe(
             call,
             f"<tg-emoji emoji-id='{EMOJI_CHECK}'>✅</tg-emoji> <b>Код успешно получен!</b>\n\n"

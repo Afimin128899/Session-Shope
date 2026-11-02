@@ -1,7 +1,7 @@
 import os
 from aiogram import Router, F
 from aiogram.filters import CommandStart
-from aiogram.types import CallbackQuery, Message, FSInputFile
+from aiogram.types import CallbackQuery, Message, FSInputFile, InlineKeyboardButton, InlineKeyboardMarkup
 
 from database.db import create_user_with_referrer, is_new_user, get_setting, update_user_username
 
@@ -37,6 +37,14 @@ async def cmd_start(message: Message, command, state=None):
         if value.isascii() and value.isdigit() and len(value) <= 10:
             order = await get_purchase_for_user(int(value), message.from_user.id)
             if order:
+                if order.get('status') == 'refunded':
+                    await message.answer(
+                        f"Заказ #{order['id']} возвращён на баланс.",
+                        reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
+                            InlineKeyboardButton(text="Открыть заказ", callback_data=f"open_purchase:{order['id']}"),
+                        ]]),
+                    )
+                    return
                 await message.answer(
                     f"🛍 <b>Заказ #{order['id']}</b>\n\n"
                     "Аккаунт уже в ваших покупках. Получите код входа или откройте обращение в поддержку.",

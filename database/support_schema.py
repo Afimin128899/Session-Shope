@@ -3,6 +3,8 @@ async def init_support_schema(cur, database_name):
     for name, definition in (
         ('status', "VARCHAR(24) NOT NULL DEFAULT 'issued'"),
         ('paid_amount', 'DECIMAL(18, 8) DEFAULT NULL'),
+        ('referrer_id', 'BIGINT DEFAULT NULL'),
+        ('referral_bonus', 'DECIMAL(18, 8) DEFAULT NULL'),
     ):
         await cur.execute(
             'SELECT COLUMN_NAME FROM information_schema.COLUMNS '
@@ -43,5 +45,20 @@ async def init_support_schema(cur, database_name):
             KEY support_history (ticket_id, id),
             CONSTRAINT support_message_ticket_fk FOREIGN KEY (ticket_id)
                 REFERENCES support_tickets(id) ON DELETE RESTRICT
+        ) ENGINE=InnoDB
+    """)
+    await cur.execute("""
+        CREATE TABLE IF NOT EXISTS order_refunds (
+            purchase_id INT PRIMARY KEY,
+            admin_id BIGINT NOT NULL,
+            user_id BIGINT NOT NULL,
+            amount DECIMAL(18, 8) NOT NULL,
+            currency VARCHAR(16) NOT NULL,
+            reason VARCHAR(500) NOT NULL,
+            referral_reversed DECIMAL(18, 8) NOT NULL DEFAULT 0,
+            legacy_referral TINYINT(1) NOT NULL DEFAULT 0,
+            created_at DATETIME NOT NULL,
+            CONSTRAINT refund_order_fk FOREIGN KEY (purchase_id)
+                REFERENCES purchases(id) ON DELETE RESTRICT
         ) ENGINE=InnoDB
     """)

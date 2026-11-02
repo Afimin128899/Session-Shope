@@ -77,7 +77,7 @@ def user_card(user, orders):
 def order_card(order):
     username = '@' + escape(order['username']) if order.get('username') else 'не указан'
     status = order_status(order)
-    return (
+    text = (
         f"🛍 <b>Заказ #{order['id']}</b>\n\n"
         f"Покупатель: <code>{order['user_id']}</code> ({username})\n"
         f"Товар: <code>{order['account_id']}</code>\n"
@@ -87,12 +87,21 @@ def order_card(order):
         f"Статус: <b>{status}</b>"
     )
 
+    if order.get('status') == 'refunded' and order.get('refund_reason'):
+        text += f"\nВозвращено: {order.get('refunded_amount')} {escape(str(order.get('currency') or ''))}"
+        text += f"\nПричина: {escape(order['refund_reason'])}"
+    return text
+
 
 def order_menu(order):
     keyboard = search_menu()
     if order.get('ticket_id'):
         keyboard.inline_keyboard.insert(0, [InlineKeyboardButton(
             text='Открыть обращение', callback_data=f"tk:{order['ticket_id']}:0",
+        )])
+    if order.get('status') in {'issued', 'completed'} and order.get('paid_amount') is not None:
+        keyboard.inline_keyboard.insert(0, [InlineKeyboardButton(
+            text='Вернуть на баланс', callback_data=f"adm_refund:{order['id']}",
         )])
     return keyboard
 
@@ -153,9 +162,9 @@ ACTIONS = {
     'balance_add': 'Изменение баланса', 'balance_set': 'Установка баланса',
     'account_price': 'Цена товара', 'category_price': 'Цены категории',
     'account_delete': 'Удаление товара',
-    'ticket_reply': 'Ответ в обращении', 'ticket_close': 'Закрытие обращения',
+    'ticket_reply': 'Ответ в обращении', 'ticket_close': 'Закрытие обращения', 'order_refund': 'Возврат заказа',
 }
-TARGETS = {'user': 'Пользователь', 'account': 'Товар', 'category': 'Категория', 'ticket': 'Обращение'}
+TARGETS = {'user': 'Пользователь', 'account': 'Товар', 'category': 'Категория', 'ticket': 'Обращение', 'order': 'Заказ'}
 
 
 def audit_line(entry):
@@ -168,7 +177,9 @@ def audit_line(entry):
         f"{created:%d.%m.%Y %H:%M:%S} МСК · Админ <code>{entry['admin_id']}</code>\n"
         f"{escape(target)}: <code>{escape(entry['target_id'])}</code>\n"
     )
-    if entry['action'] in {'balance_add', 'balance_set', 'account_price'}:
+    if entry['action'] == 'order_refund':
+        text += f"Возвращено: {escape(str(details['amount']))} {escape(details['currency'])}"
+    elif entry['action'] in {'balance_add', 'balance_set', 'account_price'}:
         text += f"{escape(str(details['before']))} → {escape(str(details['after']))} {escape(details.get('currency', '₽'))}"
     elif entry['action'] == 'category_price':
         text += f"Новая цена: {escape(str(details['after']))} ₽; изменено: {details['updated']}"

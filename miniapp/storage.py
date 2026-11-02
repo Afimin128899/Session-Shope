@@ -108,6 +108,10 @@ async def checkout(user_id, account_id, quoted_price):
         if referrer in balances:
             bonus = (base * bonus_pct / 100).quantize(Decimal('0.00000001'))
             await cur.execute('UPDATE users SET balance = balance + %s WHERE id = %s', (bonus, referrer))
+        await cur.execute(
+            'UPDATE purchases SET referrer_id = %s, referral_bonus = %s WHERE id = %s',
+            (referrer if referrer in balances else None, bonus if referrer in balances else 0, order_id),
+        )
         return {'id': order_id, 'paid_amount': str(actual_price), 'balance': str(Decimal(str(balances[user_id])) - actual_price)}
 
 

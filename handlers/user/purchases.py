@@ -78,6 +78,19 @@ async def open_purchase (call :CallbackQuery, state=None ):
         await answer_safe(call, "Запись не найдена.",show_alert =True )
         return 
 
+    if p.get('status') == 'refunded':
+        from database.refunds import get_refund
+        refund = await get_refund(purc_id, call.from_user.id)
+        details = (f"Возвращено: {refund['amount']} {escape(refund['currency'])}\n"
+                   f"Причина: {escape(refund['reason'])}" if refund else "Средства возвращены на баланс бота.")
+        await edit_message_safe(call, f"<b>Заказ #{purc_id} возвращён</b>\n\n{details}",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="Поддержка", callback_data=f"purchase_help:{purc_id}")],
+                [InlineKeyboardButton(text="Мои покупки", callback_data="my_purchases")],
+            ]))
+        await answer_safe(call)
+        return
+
     paid_amount = p.get('paid_amount')
     price = float(paid_amount) if paid_amount is not None else 0.0
     currency = p.get('currency') or 'TON'
@@ -180,6 +193,10 @@ async def complete_purchase (call :CallbackQuery ):
         await answer_safe(call, "Запись не найдена.",show_alert =True )
         return 
 
+
+    if p.get('status') == 'refunded':
+        await answer_safe(call, "Заказ уже возвращён на баланс.", show_alert=True)
+        return
 
     await complete_user_purchase (p ['account_id'])
 

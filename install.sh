@@ -76,7 +76,7 @@ fi
 printf '\n[1/4] Установка системных зависимостей\n'
 export DEBIAN_FRONTEND=noninteractive
 apt-get update
-packages=(python3-venv ca-certificates curl)
+packages=(python3-venv ca-certificates curl restic mariadb-client)
 if ((skip_https == 0)); then packages+=(caddy); fi
 if ((fresh)); then packages+=(mariadb-server); fi
 apt-get install -y "${packages[@]}"
@@ -104,6 +104,7 @@ curl --fail --silent --show-error --retry 25 --retry-delay 2 --retry-connrefused
 printf '\n'
 
 if ((skip_https)); then
+  "$project_dir/.venv-miniapp/bin/python" "$project_dir/deploy/setup_backups.py" --project "$project_dir"
   printf '\nГотово: Mini App работает на 127.0.0.1:8080. HTTPS-прокси пропущен по --skip-https.\n'
   exit 0
 fi
@@ -147,4 +148,6 @@ printf '\nПроверка публичного HTTPS…\n'
 if ! curl --fail --silent --show-error --retry 5 --retry-delay 3 --max-time 10 https://sbandsub.space/api/health; then
   fail 'Бот и локальный Mini App запущены, но HTTPS пока недоступен. Проверьте A-запись sbandsub.space → 31.77.59.42, AAAA и доступность портов 80/443. Логи: journalctl -u caddy -n 50 --no-pager'
 fi
+printf '\nНастройка зашифрованных резервных копий…\n'
+"$project_dir/.venv-miniapp/bin/python" "$project_dir/deploy/setup_backups.py" --project "$project_dir"
 printf '\n\nГотово: https://sbandsub.space\nОткройте Mini App кнопкой «Магазин» в Telegram-боте.\n'
