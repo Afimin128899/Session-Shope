@@ -61,10 +61,11 @@ async def main_menu(user_id: int | None = None) -> InlineKeyboardMarkup:
     if app_url:
         rows.insert(0, [InlineKeyboardButton(text="🛍 Открыть Mini App", web_app=WebAppInfo(url=app_url))])
 
+    rows.append([InlineKeyboardButton(text="История действий", callback_data="customer_activity:0")])
     rows.append([InlineKeyboardButton(text="🛟 Мои обращения", callback_data="tk_user:0")])
 
     reviews_row = [
-        InlineKeyboardButton(text=label_reviews, url=reviews_url, icon_custom_emoji_id=emoji_reviews),
+        InlineKeyboardButton(text=label_reviews, callback_data="quality_reviews:0", icon_custom_emoji_id=emoji_reviews),
     ]
     if support_val:
         reviews_row.insert(0, InlineKeyboardButton(text=label_support, url=support_url, icon_custom_emoji_id=emoji_support))

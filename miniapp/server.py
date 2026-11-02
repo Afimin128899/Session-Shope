@@ -11,7 +11,7 @@ from pathlib import Path
 from aiohttp import web
 
 import config
-from database import db, commerce
+from database import db, commerce, quality, coupons, tickets, activity
 from services import payments
 from miniapp.auth import AuthError, validate_init_data
 from miniapp import storage
@@ -78,7 +78,7 @@ async def authenticate(request, handler):
     raw = authorization[4:] if authorization.startswith('tma ') else ''
     user = validate_init_data(raw, request.app[TOKEN])
     request['user'] = user
-    if limited(request.app, user['id'], request.method == 'POST' and request.path in {'/api/purchase', '/api/cart/checkout', '/api/invoices'}):
+    if limited(request.app, user['id'], request.method == 'POST' and (request.path in {'/api/purchase', '/api/cart/checkout', '/api/invoices', '/api/promo/preview', '/api/promo/redeem', '/api/reviews'} or request.path.endswith('/warranty-claim'))):
         return response({'error': 'Слишком много запросов. Подождите минуту.', 'code': 'rate_limited'}, 429)
     settings = await storage.access_settings()
     admin = user['id'] in config.ADMIN_IDS
@@ -162,8 +162,12 @@ async def order_detail(request):
         return response({'error': 'Покупка не найдена.', 'code': 'not_found'}, 404)
     if row.get('status') == 'refunded':
         row['password'] = None
-    return response({key: row.get(key) for key in ('id', 'account_id', 'telegram_user_id', 'number', 'password', 'paid_amount', 'currency', 'date', 'status', 'ticket_status')} |
+    result = ({key: row.get(key) for key in ('id', 'account_id', 'telegram_user_id', 'number', 'password', 'paid_amount', 'currency', 'date', 'status', 'ticket_status')} |
                     {'name': row.get('country', 'Аккаунт'), 'product_id': f"SBA-{row['account_id']:06d}" if row.get('account_id') else None, 'status_label': order_status(row)})
+    result['warranty'] = quality.warranty(row)
+    result['characteristics'] = json.loads(row.get('attributes_snapshot') or '{}')
+    result['review'] = await quality.my_review(request['user']['id'],row['id'])
+    return response(result)
 
 
 async def collection(request):
@@ -213,13 +217,24 @@ async def cart_checkout(request):
         if not isinstance(item, dict):
             raise ValueError
         account_value(item)
+        if 'warranty_hours' in item and item['warranty_hours'] is not None and (type(item['warranty_hours']) is not int or not 0<=item['warranty_hours']<=8760):
+            raise ValueError
         price = item.get('price')
         if not isinstance(price, str) or len(price) > 24:
             raise ValueError
         amount = Decimal(price)
         if not amount.is_finite() or amount < 0 or amount != storage.money(amount):
             raise ValueError
-    return response(await storage.checkout_cart(request['user']['id'], items), 201)
+    promo = body.get('promo_code')
+    if promo is not None:
+        promo = coupons.code(promo)
+        total = body.get('expected_total')
+        if not isinstance(total,str) or len(total)>24 or not Decimal(total).is_finite() or Decimal(total)<0:
+            raise ValueError
+        result = await storage.checkout_cart(request['user']['id'],items,promo,Decimal(total))
+    else:
+        result = await storage.checkout_cart(request['user']['id'],items)
+    return response(result,201)
 
 
 async def payment_methods(request):
@@ -247,6 +262,55 @@ async def invoice_status(request):
     return response({key: row[key] for key in ('status', 'amount_rub', 'credited_amount')})
 
 
+async def promo_preview(request):
+    body=await json_body(request)
+    try:
+        return response(await coupons.preview(request['user']['id'],body.get('code')))
+    except ValueError as exc:
+        raise storage.CheckoutError(str(exc),'invalid_promo') from None
+
+
+async def promo_redeem(request):
+    body=await json_body(request)
+    try:
+        amount=await coupons.redeem_balance(request['user']['id'],body.get('code'))
+        return response({'credited':str(amount)})
+    except ValueError as exc:
+        raise storage.CheckoutError(str(exc),'invalid_promo') from None
+
+
+async def review_list(request):
+    return response(await quality.reviews(page_number(request)))
+
+
+async def review_save(request):
+    body=await json_body(request)
+    purchase=body.get('purchase_id')
+    if type(purchase) is not int or not 0<purchase<=2147483647: raise ValueError
+    try:
+        await quality.save_review(request['user']['id'],purchase,body.get('rating'),body.get('body'))
+    except ValueError as exc:
+        raise storage.CheckoutError(str(exc),'invalid_review') from None
+    return response({'ok':True},201)
+
+
+async def warranty_claim(request):
+    body=await json_body(request)
+    if not isinstance(body.get('body'),str): raise ValueError
+    try:
+        ticket=await tickets.create_ticket(request['user']['id'],order_id(request),body['body'],warranty=True)
+    except ValueError as exc:
+        raise storage.CheckoutError(str(exc),'invalid_warranty') from None
+    if request.app[BOT]:
+        from handlers.tickets import notify
+        await notify(request.app[BOT],config.ADMIN_IDS,ticket,'Новое гарантийное обращение.')
+    return response({'ticket_id':ticket},201)
+
+
+async def customer_activity(request):
+    return response(await activity.history(request['user']['id'],page_number(request)))
+
+
 async def health(request):
     return response({"status": "ok", "version": BOT_VERSION})
 
@@ -263,11 +327,14 @@ def create_app(*, token=None, bot=None, bot_username=''):
     app[LIMITS] = OrderedDict()
     app.add_routes([
         web.get('/', index), web.get('/api/health', health),
-        web.get('/api/me', me), web.get('/api/catalog', catalog), web.post('/api/purchase', purchase),
+        web.get('/api/activity',customer_activity), web.get('/api/me', me), web.get('/api/catalog', catalog), web.post('/api/purchase', purchase),
         web.get('/api/favorites', collection), web.post('/api/favorites', collection_update),
         web.get('/api/cart', collection), web.post('/api/cart', collection_update), web.delete('/api/cart', collection_update),
         web.post('/api/cart/checkout', cart_checkout), web.get('/api/payment-methods', payment_methods),
         web.post('/api/invoices', create_invoice), web.get('/api/invoices/{provider}/{invoice}', invoice_status),
+        web.post('/api/promo/preview',promo_preview),web.post('/api/promo/redeem',promo_redeem),
+        web.get('/api/reviews',review_list),web.post('/api/reviews',review_save),
+        web.post('/api/orders/{id}/warranty-claim',warranty_claim),
         web.get('/api/orders', orders), web.get('/api/orders/{id}', order_detail),
         web.static('/assets', STATIC, show_index=False, follow_symlinks=False),
     ])

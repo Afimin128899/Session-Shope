@@ -460,7 +460,7 @@ async def list_promos(call: CallbackQuery):
     for p in promos:
         val = float(p["value"])
         text += (
-            f"{GIFT} <code>{p['code']}</code> — <b>{val:.4f}</b> TON "
+            f"{GIFT} <code>{p['code']}</code> — <b>{val:.2f}</b> {'% скидки' if p.get('kind') == 'discount' else '₽ на баланс'} "
             f"(<code>{p['uses']}</code>/<code>{p['max_uses']}</code>)\n"
         )
         kb_list.append(

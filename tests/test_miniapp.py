@@ -53,6 +53,7 @@ class MiniAppAPITests(unittest.IsolatedAsyncioTestCase):
         self.patchers = [
             patch.object(storage, 'access_settings', AsyncMock(return_value={})),
             patch.object(db, 'create_user', AsyncMock()),
+            patch.object(server.quality, 'my_review', AsyncMock(return_value=None)),
             patch.object(db, 'get_user', AsyncMock(return_value={'balance': 500, 'balance_usdt': 0})),
         ]
         for p in self.patchers: p.start()
@@ -105,6 +106,7 @@ class MiniAppAPITests(unittest.IsolatedAsyncioTestCase):
         row = {'id': 5, 'number': 'test-number', 'password': 'test-password', 'data': 'NEVER_EXPOSE_THIS'}
         with patch.object(db, 'get_purchase_for_user', AsyncMock(return_value=row)):
             result = await self.client.get('/api/orders/5', headers=self.headers)
+            self.assertEqual(result.status,200)
             data = await result.json()
             self.assertNotIn('data', data)
             self.assertNotIn('NEVER_EXPOSE_THIS', str(data))

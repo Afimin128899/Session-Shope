@@ -67,6 +67,8 @@ async def display_ticket(call, ticket_id, before_id=0):
         f"🛟 <b>Обращение #{ticket['id']} · заказ #{ticket['purchase_id']}</b>\n"
         f"Статус: <b>{TICKET_STATUSES.get(ticket['status'], 'Неизвестен')}</b>\n\n"
     )
+    if ticket.get('warranty_claimed_at'):
+        text += '🛡 Гарантийное обращение: принято в пределах срока.\n\n'
     if messages:
         item = messages[0]
         author = {'admin': 'Поддержка', 'user': 'Покупатель', 'system': 'Система'}[item['author_role']]

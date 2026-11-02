@@ -64,6 +64,7 @@ async def import_session_file(session_path: str, metadata=None) -> Tuple[Optiona
 
         if metadata is not None:
             metadata['telegram_user_id'] = me.id
+            metadata['is_premium'] = bool(getattr(me, 'premium', False))
         phone = f"+{me.phone}"
         # Telethon поддерживает экспорт любой Session в StringSession.
         session_string = StringSession.save(client.session)
@@ -146,6 +147,7 @@ async def finalize_account (client :TelegramClient, metadata=None )->Tuple [Opti
 
         if metadata is not None:
             metadata['telegram_user_id'] = me.id
+            metadata['is_premium'] = bool(getattr(me, 'premium', False))
         phone =f"+{me .phone }"
         country =_detect_country_by_phone (phone )
         session_string =client .session .save ()

@@ -155,7 +155,9 @@ async def process_lave_amount(message: Message, state: FSMContext):
         invoice_id = str(invoice.get("id")) if invoice and invoice.get("id") else None
         pay_url = invoice.get("pay_url") if invoice else None
 
+    from services.payments import _health
     if not invoice_id or not pay_url:
+        await _health(payment_method,False)
         if payment_method == "xrocket" and isinstance(invoice, dict) and invoice.get("_xrocket_error"):
             error = invoice["_xrocket_error"]
             detail = error.get("detail") or error.get("title") or "Неизвестная ошибка API"
@@ -168,6 +170,7 @@ async def process_lave_amount(message: Message, state: FSMContext):
 
     from database.commerce import register_invoice
     await register_invoice(payment_method, invoice_id, message.from_user.id, rub_amount)
+    await _health(payment_method,True)
 
     prefix = {"lave": "lave", "xrocket": "xrocket", "crypto": "crypto"}[payment_method]
     kb = InlineKeyboardMarkup(inline_keyboard=[

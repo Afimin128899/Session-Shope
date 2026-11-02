@@ -330,6 +330,8 @@ async def init_db ():
                     await init_support_schema(cur, DB_CONFIG["db"])
                     from database.commerce_schema import init_commerce_schema
                     await init_commerce_schema(cur, DB_CONFIG["db"])
+                    from database.quality import init_schema as init_quality_schema
+                    await init_quality_schema(cur, DB_CONFIG["db"])
 
                     await cur.execute("""
                         CREATE TABLE IF NOT EXISTS stock_subscriptions (
@@ -595,6 +597,8 @@ async def buy_account(user_id: int, account_id: int, price: float, date_str: str
                 await cur.execute("UPDATE accounts SET status = 'sold' WHERE id = %s", (account_id,))
                 await cur.execute("INSERT INTO purchases (user_id, account_id, date, currency, paid_amount, referral_bonus) VALUES (%s, %s, %s, %s, %s, 0)", (user_id, account_id, date_str, currency, price))
                 purc_id = cur.lastrowid
+                from database.quality import snapshot
+                await snapshot(cur, purc_id)
                 await cur.execute("DELETE FROM shopping_cart WHERE user_id = %s AND account_id = %s", (user_id, account_id))
                 await cur.execute("DELETE FROM account_reservations WHERE account_id = %s", (account_id,))
             await conn.commit()
@@ -637,12 +641,12 @@ async def complete_user_purchase(account_id: int):
         await cur.execute("UPDATE accounts SET data = '✅ Сессия удалена (Покупка завершена)' WHERE id = %s AND status <> 'refunded'", (account_id,))
 
 
-async def add_account (country ,code ,number ,password ,price ,data, telegram_user_id=None ):
+async def add_account (country ,code ,number ,password ,price ,data, telegram_user_id=None, is_premium=None ):
     async with _get_pool().acquire() as conn :
         async with conn .cursor ()as cur :
             await cur .execute (
-            "INSERT INTO accounts (country, code, number, password, price, data, telegram_user_id) VALUES (%s, %s, %s, %s, %s, %s, %s)",
-            (country ,code ,number ,password ,price ,data, telegram_user_id )
+            "INSERT INTO accounts (country, code, number, password, price, data, telegram_user_id, warranty_hours, is_premium, attributes_checked_at) VALUES (%s, %s, %s, %s, %s, %s, %s, 24, %s, UTC_TIMESTAMP())",
+            (country ,code ,number ,password ,price ,data, telegram_user_id, is_premium )
             )
 
 async def delete_account (account_id :int ):
@@ -689,34 +693,11 @@ async def delete_promo (code :str ):
             await cur .execute ("DELETE FROM used_promos WHERE code = %s",(code ,))
 
 async def check_and_use_promo(user_id: int, code: str) -> float:
-    async with _get_pool().acquire() as conn:
-        await conn.autocommit(False)
-        await conn.begin()
-        try:
-            async with conn.cursor(aiomysql.DictCursor) as cur:
-                await cur.execute("SELECT * FROM used_promos WHERE user_id = %s AND code = %s", (user_id, code))
-                if await cur.fetchone():
-                    await conn.rollback()
-                    return 0.0
-                await cur.execute("SELECT * FROM promocodes WHERE code = %s FOR UPDATE", (code,))
-                promo = await cur.fetchone()
-                if not promo or promo['uses'] >= promo['max_uses']:
-                    await conn.rollback()
-                    return 0.0
-                await cur.execute("UPDATE promocodes SET uses = uses + 1 WHERE code = %s", (code,))
-                await cur.execute("INSERT INTO used_promos (user_id, code) VALUES (%s, %s)", (user_id, code))
-                val = float(promo['value'])
-                # Атомарно зачисляем баланс в той же транзакции
-                await cur.execute("UPDATE users SET balance = balance + %s WHERE id = %s", (val, user_id))
-            await conn.commit()
-            logging.info(f"[db] Promo '{code}' used by user {user_id}, value={val}")
-            return val
-        except Exception as e:
-            await conn.rollback()
-            logging.error(f"[db] check_and_use_promo error: {e}")
-            return 0.0
-        finally:
-            await conn.autocommit(True)
+    from database.coupons import redeem_balance
+    try:
+        return float(await redeem_balance(user_id, code))
+    except ValueError:
+        return 0.0
 
 async def update_country_price (country :str ,new_price :float ):
     async with _get_pool().acquire() as conn :
@@ -832,12 +813,12 @@ async def complete_user_purchase(account_id: int):
         await cur.execute("UPDATE accounts SET data = '✅ Сессия удалена (Покупка завершена)' WHERE id = %s AND status <> 'refunded'", (account_id,))
 
 
-async def add_account (country ,code ,number ,password ,price ,data, telegram_user_id=None ):
+async def add_account (country ,code ,number ,password ,price ,data, telegram_user_id=None, is_premium=None ):
     async with _get_pool().acquire() as conn :
         async with conn .cursor ()as cur :
             await cur .execute (
-            "INSERT INTO accounts (country, code, number, password, price, data, telegram_user_id) VALUES (%s, %s, %s, %s, %s, %s, %s)",
-            (country ,code ,number ,password ,price ,data, telegram_user_id )
+            "INSERT INTO accounts (country, code, number, password, price, data, telegram_user_id, warranty_hours, is_premium, attributes_checked_at) VALUES (%s, %s, %s, %s, %s, %s, %s, 24, %s, UTC_TIMESTAMP())",
+            (country ,code ,number ,password ,price ,data, telegram_user_id, is_premium )
             )
 
 async def delete_account (account_id :int ):
@@ -884,34 +865,11 @@ async def delete_promo (code :str ):
             await cur .execute ("DELETE FROM used_promos WHERE code = %s",(code ,))
 
 async def check_and_use_promo(user_id: int, code: str) -> float:
-    async with _get_pool().acquire() as conn:
-        await conn.autocommit(False)
-        await conn.begin()
-        try:
-            async with conn.cursor(aiomysql.DictCursor) as cur:
-                await cur.execute("SELECT * FROM used_promos WHERE user_id = %s AND code = %s", (user_id, code))
-                if await cur.fetchone():
-                    await conn.rollback()
-                    return 0.0
-                await cur.execute("SELECT * FROM promocodes WHERE code = %s FOR UPDATE", (code,))
-                promo = await cur.fetchone()
-                if not promo or promo['uses'] >= promo['max_uses']:
-                    await conn.rollback()
-                    return 0.0
-                await cur.execute("UPDATE promocodes SET uses = uses + 1 WHERE code = %s", (code,))
-                await cur.execute("INSERT INTO used_promos (user_id, code) VALUES (%s, %s)", (user_id, code))
-                val = float(promo['value'])
-                # Атомарно зачисляем баланс в той же транзакции
-                await cur.execute("UPDATE users SET balance = balance + %s WHERE id = %s", (val, user_id))
-            await conn.commit()
-            logging.info(f"[db] Promo '{code}' used by user {user_id}, value={val}")
-            return val
-        except Exception as e:
-            await conn.rollback()
-            logging.error(f"[db] check_and_use_promo error: {e}")
-            return 0.0
-        finally:
-            await conn.autocommit(True)
+    from database.coupons import redeem_balance
+    try:
+        return float(await redeem_balance(user_id, code))
+    except ValueError:
+        return 0.0
 
 async def update_country_price (country :str ,new_price :float ):
     async with _get_pool().acquire() as conn :
@@ -1094,6 +1052,8 @@ async def buy_account_with_referral(
                     (user_id, account_id, date_str, currency, effective_price),
                 )
                 purc_id = cur.lastrowid
+                from database.quality import snapshot
+                await snapshot(cur, purc_id)
                 await cur.execute("DELETE FROM shopping_cart WHERE user_id = %s AND account_id = %s", (user_id, account_id))
                 await cur.execute("DELETE FROM account_reservations WHERE account_id = %s", (account_id,))
 

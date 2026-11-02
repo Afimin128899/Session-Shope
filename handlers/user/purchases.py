@@ -86,11 +86,14 @@ async def open_purchase (call :CallbackQuery, state=None ):
         await edit_message_safe(call, f"<b>Заказ #{purc_id} возвращён</b>\n\n{details}",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="Поддержка", callback_data=f"purchase_help:{purc_id}")],
+                [InlineKeyboardButton(text="Оставить / изменить отзыв", callback_data=f"quality_review:{purc_id}")],
                 [InlineKeyboardButton(text="Мои покупки", callback_data="my_purchases")],
             ]))
         await answer_safe(call)
         return
 
+    from database.quality import warranty
+    assurance = warranty(p)
     paid_amount = p.get('paid_amount')
     price = float(paid_amount) if paid_amount is not None else 0.0
     currency = p.get('currency') or 'TON'
@@ -127,6 +130,7 @@ async def open_purchase (call :CallbackQuery, state=None ):
         f"⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯\n"
         f"Категория: <b>{cat_name}</b>{cat_emoji_html}\n"
         f"Статус: <b>{order_status(p)}</b>\n"
+        f"Гарантия: <b>{escape(assurance['label'])}</b>\n"
         f'<tg-emoji emoji-id="5407025283456835913">📱</tg-emoji> Номер: <code>{p ["number"]}</code>\n'
         f'<tg-emoji emoji-id="5350491749926058609">🔐</tg-emoji> Пароль (2FA): <code>{p .get ("password")or "Нет"}</code>\n'
         f'<tg-emoji emoji-id="5312057711091813718">💳</tg-emoji> Цена: {formatted_price} {currency_suffix}\n'
@@ -174,6 +178,14 @@ async def open_purchase (call :CallbackQuery, state=None ):
         ],
         ]
         )
+
+    kb.inline_keyboard.insert(0, [InlineKeyboardButton(text="Оставить / изменить отзыв", callback_data=f"quality_review:{purc_id}")])
+    if assurance['active']:
+        from datetime import datetime
+        from zoneinfo import ZoneInfo
+        until = datetime.fromisoformat(assurance['until']).astimezone(ZoneInfo('Europe/Moscow'))
+        text += f"\nГарантия до {until:%d.%m.%Y %H:%M} МСК.\n{escape(assurance['policy'])}"
+        kb.inline_keyboard.insert(0, [InlineKeyboardButton(text="Обратиться по гарантии", callback_data=f"quality_warranty:{purc_id}")])
 
     kb.inline_keyboard.insert(0, [InlineKeyboardButton(
         text="Есть проблема", callback_data=f"purchase_help:{purc_id}",

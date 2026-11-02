@@ -99,7 +99,12 @@ async def main():
             print('PASS: bot maintenance mode enforced by Mini App')
             from integration_market import marketplace_scenarios
             await marketplace_scenarios(session, connection, headers)
-            print('All Mini App and marketplace integration scenarios passed.', flush=True)
+            from integration_quality import quality_scenarios
+            from miniapp.server import LIMITS
+            runner.app[LIMITS].clear()
+            await quality_scenarios(session,connection,headers)
+            runner.app[LIMITS].clear()
+            print('All Mini App, marketplace and quality scenarios passed.',flush=True)
         if '--serve' in sys.argv:
             print('Isolated browser fixture listening on localhost:8085', flush=True)
             await asyncio.Event().wait()

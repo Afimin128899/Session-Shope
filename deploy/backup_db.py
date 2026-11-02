@@ -10,11 +10,12 @@ import secrets
 import subprocess
 import sys
 import tempfile
+import time
 
 from dotenv import dotenv_values
 
 TAG = 'session-shope'
-CORE_TABLES = ('users', 'accounts', 'purchases', 'settings', 'order_refunds', 'admin_audit_log', 'support_tickets', 'support_messages', 'account_reservations', 'shopping_cart', 'account_favorites', 'payment_invoices', 'daily_report_deliveries')
+CORE_TABLES = ('users', 'accounts', 'purchases', 'settings', 'order_refunds', 'admin_audit_log', 'support_tickets', 'support_messages', 'account_reservations', 'shopping_cart', 'account_favorites', 'payment_invoices', 'daily_report_deliveries', 'purchase_reviews', 'operational_incidents', 'customer_events')
 
 
 def client_options(values):
@@ -190,6 +191,18 @@ def verify(values, environment, directory):
                      f"DROP USER IF EXISTS '{user}'@'localhost';")
 
 
+def record_success(path=Path('/var/lib/session-shope/backup-success.json')):
+    path.parent.mkdir(parents=True,exist_ok=True)
+    descriptor,temporary=tempfile.mkstemp(prefix='.backup-success-',dir=path.parent)
+    try:
+        with os.fdopen(descriptor,'w') as stream:
+            json.dump({'completed_at':time.time()},stream)
+            stream.flush();os.fsync(stream.fileno())
+        os.replace(temporary,path)
+    finally:
+        if os.path.exists(temporary): os.unlink(temporary)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('action', choices=['init', 'run', 'verify', 'check'])
@@ -205,6 +218,7 @@ def main():
                 initialize(environment)
             elif args.action == 'run':
                 backup(values, environment, directory)
+                record_success()
             elif args.action == 'verify':
                 verify(values, environment, directory)
             else:

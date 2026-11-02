@@ -32,13 +32,17 @@ async def ticket_for_order(purchase_id, user_id):
             return await cur.fetchone()
 
 
-async def create_ticket(user_id, purchase_id, body):
+async def create_ticket(user_id, purchase_id, body, warranty=False):
     body = validate_body(body)
     async with _transaction() as cur:
         # Serializes concurrent submissions for a single order.
-        await cur.execute('SELECT id FROM purchases WHERE id = %s AND user_id = %s FOR UPDATE', (purchase_id, user_id))
-        if await cur.fetchone() is None:
+        fields = "id,status,warranty_until>UTC_TIMESTAMP() AS warranty_active" if warranty else 'id'
+        await cur.execute('SELECT '+fields+' FROM purchases WHERE id = %s AND user_id = %s FOR UPDATE', (purchase_id, user_id))
+        order = await cur.fetchone()
+        if order is None:
             raise ValueError('Покупка не найдена.')
+        if warranty and (not order.get('warranty_active') or order['status']=='refunded'):
+            raise ValueError('Гарантия не действует. Обычная поддержка по заказу доступна в боте.')
         await cur.execute('SELECT id FROM support_tickets WHERE purchase_id = %s FOR UPDATE', (purchase_id,))
         ticket = await cur.fetchone()
         if ticket:
@@ -51,6 +55,8 @@ async def create_ticket(user_id, purchase_id, body):
                 (purchase_id, user_id),
             )
             ticket_id = cur.lastrowid
+        if warranty:
+            await cur.execute('UPDATE support_tickets SET warranty_claimed_at=COALESCE(warranty_claimed_at,UTC_TIMESTAMP()) WHERE id=%s',(ticket_id,))
         await _message(cur, ticket_id, user_id, 'user', body)
         return ticket_id
 
@@ -59,7 +65,7 @@ async def get_ticket(ticket_id, user_id=None):
     async with _get_pool().acquire() as conn:
         async with conn.cursor(aiomysql.DictCursor) as cur:
             await cur.execute(
-                'SELECT id, purchase_id, user_id, status, created_at, updated_at FROM support_tickets '
+                'SELECT id, purchase_id, user_id, status, warranty_claimed_at, created_at, updated_at FROM support_tickets '
                 'WHERE id = %s' + (' AND user_id = %s' if user_id is not None else ''),
                 (ticket_id, user_id) if user_id is not None else (ticket_id,),
             )

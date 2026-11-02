@@ -98,6 +98,7 @@ printf '\n[3/4] Настройка systemd и запуск Mini App\n'
 service_args=(--python "$project_dir/.venv-miniapp/bin/python")
 if [[ -n "$bot_service" ]]; then service_args+=(--service "$bot_service"); fi
 python3 "$project_dir/deploy/create_service.py" "${service_args[@]}"
+"$project_dir/.venv-miniapp/bin/python" "$project_dir/deploy/setup_monitor.py" --project "$project_dir" --service "${bot_service:-session-shope.service}"
 # This endpoint contains only process status and version, no credentials.
 curl --fail --silent --show-error --retry 25 --retry-delay 2 --retry-connrefused \
   --max-time 3 http://127.0.0.1:8080/api/health

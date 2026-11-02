@@ -9,6 +9,7 @@ import config
 from database import commerce, db
 from services import cryptopay, xrocket, lavepay
 from services.exchange import convert_rub_to_usdt
+from services.operations import payment_health
 
 logger=logging.getLogger(__name__)
 PROVIDERS={'crypto':cryptopay,'xrocket':xrocket,'lave':lavepay}
@@ -51,8 +52,10 @@ async def create_deposit(user_id, username, provider, amount):
         invoice_id=invoice.get('id') if invoice else None
         url=invoice.get('pay_url') if invoice else None
     if not invoice_id or not isinstance(url,str) or urlsplit(url).scheme!='https' or not urlsplit(url).hostname or urlsplit(url).username or urlsplit(url).password or len(str(invoice_id))>128:
+        await _health(provider,False)
         raise ValueError('Платёжный сервис не вернул корректный счёт. Попробуйте позже.')
     await commerce.register_invoice(provider,str(invoice_id),user_id,amount)
+    await _health(provider,True)
     return {'provider':provider,'invoice_id':str(invoice_id),'pay_url':url,'amount':str(amount)}
 
 
@@ -82,21 +85,34 @@ async def settle_invoice(row, invoice):
     return credited
 
 
+async def _health(provider,ok):
+    try:
+        await payment_health(provider,ok)
+    except Exception:
+        logger.warning('Payment health state not saved')
+
+
 async def check_pending(bot):
     for row in await commerce.pending_invoices():
         if row['provider'] not in PROVIDERS or not await commerce.lease_invoice(row['provider'],row['invoice_id']):
             continue
         try:
             invoice=await PROVIDERS[row['provider']].get_invoice(row['invoice_id'])
-            if not isinstance(invoice,dict):
+            if not isinstance(invoice,dict) or invoice.get("_xrocket_error"):
+                await _health(row["provider"],False)
                 continue
             credited=await settle_invoice(row,invoice)
+            await _health(row["provider"],True)
             if credited:
                 try:
                     await bot.send_message(row['user_id'],f'✅ Оплата подтверждена автоматически. На баланс зачислено {credited[0]:.2f} ₽.')
                 except Exception:
                     logger.warning('Payment receipt notification not delivered')
         except Exception:
+            try:
+                await _health(row['provider'],False)
+            except Exception:
+                pass
             logger.error('Automatic invoice check failed for provider %s',row['provider'])
 
 

@@ -150,6 +150,7 @@ async def process_session_file(message: Message, state: FSMContext):
         await state.update_data(
             session_string=session_string,
             telegram_user_id=metadata.get('telegram_user_id'),
+            is_premium=metadata.get('is_premium'),
             phone=phone,
             password="-",
         )
@@ -422,6 +423,7 @@ async def finalize_imported_session(message: Message, state: FSMContext):
             price=price,
             data=session_string,
             telegram_user_id=data.get('telegram_user_id'),
+            is_premium=data.get('is_premium'),
         )
 
         await state.clear()
@@ -492,6 +494,7 @@ async def finalize_and_save_account (message :Message ,state :FSMContext ,client
         price =price ,
         data =session_string,
         telegram_user_id=metadata.get('telegram_user_id'),
+        is_premium=metadata.get('is_premium'),
         )
 
         await state .clear ()

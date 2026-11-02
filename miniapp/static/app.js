@@ -42,7 +42,7 @@
     $('#profile-usdt').textContent = num(data.balance_usdt) + ' USDT'; $('#version').textContent = 'v' + data.version;
   }
   function render() {
-    $('#catalog-grid').innerHTML = state.items.map(item => `<article class="account-card"><div class="card-head"><span class="flag" aria-hidden="true">${flags[item.category] || '✳'}</span><div class="card-head-right"><span class="stock-tag ${item.available ? '' : 'unavailable'}">${item.available ? 'В наличии' : 'Недоступен'}</span><button class="heart ${item.favorite ? 'selected' : ''}" data-favorite="${item.id}" aria-label="${item.favorite ? 'Убрать из избранного' : 'В избранное'}" aria-pressed="${item.favorite}">${item.favorite ? '♥' : '♡'}</button></div></div><h3>${esc(item.name)}</h3><div class="card-phone">${esc(item.phone)}</div><div class="ids"><div><span>ID товара</span><b>${esc(item.product_id)}</b></div><div><span>Telegram ID</span><b>${esc(item.telegram_user_id || 'Не сохранён')}</b></div></div><div class="card-bottom"><div>${Number(item.discount) > 0 ? `<span class="old-price"><s>${rub(item.original_price)}</s><span class="discount-badge">−${num(item.discount)}%</span></span>` : ''}<span class="card-price">${num(item.price)}<small>₽</small></span></div><button class="buy-button ${item.in_cart ? 'added' : ''}" data-add="${item.id}" ${!item.available ? 'disabled' : ''} aria-label="${item.in_cart ? 'Обновить резерв' : 'В корзину'} ${esc(item.name)}">${item.in_cart ? '✓' : '+'}</button></div>${item.in_cart ? `<div class="reserve" data-until="${esc(item.reserved_until || '')}"></div><button class="remove-button" data-remove="${item.id}">Убрать из корзины</button>` : ''}</article>`).join('');
+    $('#catalog-grid').innerHTML = state.items.map(item => `<article class="account-card"><div class="card-head"><span class="flag" aria-hidden="true">${flags[item.category] || '✳'}</span><div class="card-head-right"><span class="stock-tag ${item.available ? '' : 'unavailable'}">${item.available ? 'В наличии' : 'Недоступен'}</span><button class="heart ${item.favorite ? 'selected' : ''}" data-favorite="${item.id}" aria-label="${item.favorite ? 'Убрать из избранного' : 'В избранное'}" aria-pressed="${item.favorite}">${item.favorite ? '♥' : '♡'}</button></div></div><h3>${esc(item.name)}</h3><button class="feature-link" data-features="${item.id}">Характеристики · ${item.characteristics?.warranty_hours ? item.characteristics.warranty_hours + ' ч гарантии' : 'Подробнее'}</button><div class="card-phone">${esc(item.phone)}</div><div class="ids"><div><span>ID товара</span><b>${esc(item.product_id)}</b></div><div><span>Telegram ID</span><b>${esc(item.telegram_user_id || 'Не сохранён')}</b></div></div><div class="card-bottom"><div>${Number(item.discount) > 0 ? `<span class="old-price"><s>${rub(item.original_price)}</s><span class="discount-badge">−${num(item.discount)}%</span></span>` : ''}<span class="card-price">${num(item.price)}<small>₽</small></span></div><button class="buy-button ${item.in_cart ? 'added' : ''}" data-add="${item.id}" ${!item.available ? 'disabled' : ''} aria-label="${item.in_cart ? 'Обновить резерв' : 'В корзину'} ${esc(item.name)}">${item.in_cart ? '✓' : '+'}</button></div>${item.in_cart ? `<div class="reserve" data-until="${esc(item.reserved_until || '')}"></div><button class="remove-button" data-remove="${item.id}">Убрать из корзины</button>` : ''}</article>`).join('');
     $('#catalog-empty').hidden = state.items.length > 0;
     const empty = state.tab === 'cart' ? ['Корзина пока пуста', 'Добавь аккаунт — он будет зарезервирован на 5 минут.'] : state.tab === 'favorites' ? ['Сохрани то, что нравится', 'Нажми ♡ в каталоге. О снижении цены сообщим в боте.'] : ['Пока ничего не найдено', 'Попробуй изменить фильтры или загляни позже.'];
     $('#empty-title').textContent = empty[0]; $('#empty-copy').textContent = empty[1];
@@ -99,17 +99,44 @@
   function dialogError(e) { if (e.code === 'unauthorized') { reset(e.message); return; } const el = $('#dialog-error'); if (el) { el.textContent = e.message; el.hidden = false; } else error(e); }
   async function checkout() {
     if (!state.items.length || state.busy) return;
-    const items = state.items.map(i => ({ account_id: i.id, price: i.price }));
-    const total = items.reduce((n, i) => n + Math.round(Number(i.price) * 100), 0) / 100;
-    modal(`<h2 id="dialog-title">Подтвердить покупку</h2><p>${items.length} аккаунт(ов). После оплаты они появятся в покупках и Telegram-боте.</p><div class="info"><span>К оплате</span><b>${rub(total)}</b></div><div class="info"><span>Баланс</span><b>${rub(state.me.balance)}</b></div><p id="dialog-error" class="dialog-error" role="alert" hidden></p><button id="confirm-purchase" class="primary-button">Оплатить ${rub(total)} <svg class="arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 18 18 6M6 6h12v12"/></svg></button>`);
+    const items = state.items.map(i => ({ account_id: i.id, price: i.price, warranty_hours:i.characteristics?.warranty_hours ?? null }));
+    let promo = null;
+    const sum = rate => items.reduce((n,i) => n + Math.round(Math.round(Number(i.price)*100)*(10000-Math.round(Number(rate)*100))/10000),0)/100;
+    const total = sum(0);
+    modal(`<h2 id="dialog-title">Подтвердить покупку</h2><p>${items.length} аккаунт(ов). После оплаты они появятся в покупках и Telegram-боте.</p><p>${state.items.map(i=>esc(i.product_id)+': гарантия '+(i.characteristics?.warranty_hours == null ? 'не указана' : i.characteristics.warranty_hours+' ч')).join('<br>')}</p><p>Гарантия на проблемы со входом в пределах срока. Решение по обращению принимает поддержка после проверки.</p><div class="info"><span>К оплате</span><b id="quoted-total">${rub(total)}</b></div><div class="info"><span>Баланс</span><b>${rub(state.me.balance)}</b></div><label for="coupon-code">Промокод (необязательно)</label><input id="coupon-code" maxlength="64" placeholder="Например, SBAND10"><button id="preview-coupon" class="secondary-button">Проверить промокод</button><p id="coupon-result" aria-live="polite"></p><p id="dialog-error" class="dialog-error" role="alert" hidden></p><button id="confirm-purchase" class="primary-button">Оплатить ${rub(total)} <svg class="arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 18 18 6M6 6h12v12"/></svg></button>`);
+    const confirmButton = $('#confirm-purchase');
+    $('#preview-coupon').onclick = async () => {
+      if (state.busy) return;
+      confirmButton.disabled = true; $('#preview-coupon').disabled = true;
+      promo = null; $('#dialog-error').hidden = true;
+      const typed = $('#coupon-code').value;
+      try {
+        const result = await post('promo/preview',{code:typed});
+        if (!confirmButton.isConnected || $('#coupon-code').value !== typed) return;
+        if (result.kind === 'balance') {
+          $('#coupon-result').textContent = 'Этот код пополнит баланс на '+rub(result.value)+'. Активируй его в профиле, затем вернись к оплате.';
+        } else {
+          promo = result;
+          $('#coupon-result').textContent = 'Дополнительная скидка '+num(result.value)+'%. Экономия '+rub(total-sum(result.value))+'. Код будет использован только после успешной покупки.';
+        }
+      } catch (e) { if (confirmButton.isConnected) dialogError(e); }
+      finally {
+        if (confirmButton.isConnected) {
+          $('#quoted-total').textContent = rub(sum(promo?.value || 0));
+          confirmButton.textContent = 'Оплатить '+rub(sum(promo?.value || 0));
+          confirmButton.disabled = false; $('#preview-coupon').disabled = false;
+        }
+      }
+    };
+    $('#coupon-code').oninput = () => { promo = null; $('#dialog-error').hidden = true; $('#quoted-total').textContent = rub(total); confirmButton.textContent = 'Оплатить '+rub(total); $('#coupon-result').textContent = ''; };
     $('#confirm-purchase').onclick = async () => {
       if (state.busy) return; state.busy = true; $('#confirm-purchase').disabled = true;
       try {
-        const result = await post('cart/checkout', { items });
+        const result = await post('cart/checkout', { items, ...(promo ? {promo_code:promo.code,expected_total:sum(promo.value).toFixed(2)} : {}) });
         modal(`<div class="success-icon">✓</div><h2 id="dialog-title">Покупка готова!</h2><p>Заказов: ${result.order_ids.length}. Списано ${rub(result.paid_amount)}.<br>Остаток: ${rub(result.balance)}.</p><button class="primary-button" id="show-my-orders">Мои покупки <svg class="arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 18 18 6M6 6h12v12"/></svg></button>`);
         $('#show-my-orders').onclick = () => { $('#purchase-dialog').close(); switchTab('orders'); };
         tg?.HapticFeedback?.notificationOccurred('success'); await loadMe(); await loadMarket();
-      } catch (e) { dialogError(e); if ($('#confirm-purchase')) { $('#confirm-purchase').disabled = ['sold', 'price_changed', 'reservation_expired', 'cart_changed'].includes(e.code); } await loadMarket().catch(() => {}); }
+      } catch (e) { dialogError(e); if ($('#confirm-purchase')) { $('#confirm-purchase').disabled = ['sold', 'price_changed', 'reservation_expired', 'cart_changed', 'terms_changed', 'invalid_promo'].includes(e.code); } await loadMarket().catch(() => {}); }
       finally { state.busy = false; }
     };
   }
@@ -117,8 +144,68 @@
     try {
       const o = await api('orders/' + id);
       modal(`<h2 id="dialog-title">Заказ #${o.id}</h2><p>${esc(o.status_label)} · ${esc(o.date)}</p><div class="info"><span>ID товара</span><b>${esc(o.product_id || '—')}</b></div><div class="info"><span>Telegram ID</span><b>${esc(o.telegram_user_id || 'Не сохранён')}</b></div><div class="info"><span>Номер</span><b class="secret-value">${esc(o.number || '—')}</b></div><div class="info"><span>Пароль 2FA</span><b class="secret-value" id="order-password">${o.status === 'refunded' ? 'Доступ закрыт' : '••••••'}</b></div>${o.status !== 'refunded' ? '<button id="show-password" class="secondary-button">Показать пароль</button>' : ''}<p>Код входа, завершение покупки и поддержка доступны в Telegram-боте.</p><button class="primary-button" data-bot-order="${o.id}">Открыть в боте <svg class="arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 18 18 6M6 6h12v12"/></svg></button>`);
+      const warranty = o.warranty || {};
+      $('#dialog-content').insertAdjacentHTML('beforeend', `<div class="warranty-box"><b>Гарантия: ${esc(warranty.label || 'Срок не сохранён')}</b>${warranty.until ? `<p>До ${esc(new Date(warranty.until).toLocaleString('ru-RU',{timeZone:'Europe/Moscow'}))} МСК</p>` : ''}<p>${esc(warranty.policy || '')}</p>${warranty.active ? '<button id="warranty-claim" class="secondary-button">Обратиться по гарантии</button>' : ''}</div><button id="write-review" class="secondary-button">${o.review ? 'Изменить отзыв' : 'Оставить отзыв'}</button>`);
+      $('#write-review').onclick = () => reviewEditor(o);
+      if ($('#warranty-claim')) $('#warranty-claim').onclick = () => warrantyEditor(o);
       if ($('#show-password')) $('#show-password').onclick = () => { $('#order-password').textContent = o.password || 'Не установлен'; $('#show-password').hidden = true; };
     } catch (e) { error(e); }
+  }
+  function features(id) {
+    const item = state.items.find(i => i.id === id); if (!item) return;
+    const c = item.characteristics || {};
+    modal(`<h2 id="dialog-title">${esc(item.name)}</h2><p>${esc(item.product_id)} · Telegram ID ${esc(item.telegram_user_id || 'Не сохранён')}</p><div class="info"><span>Регистрация</span><b>${esc(c.registration_date || 'Не указана')}</b></div><div class="info"><span>Premium</span><b>${c.is_premium == null ? 'Не проверено' : c.is_premium ? 'Да' : 'Нет'}</b></div><div class="info"><span>2FA</span><b>${esc(c.two_fa || 'Не указано')}</b></div><div class="info"><span>Гарантия</span><b>${c.warranty_hours == null ? 'Не указана' : c.warranty_hours + ' ч'}</b></div><p>${esc(c.note)}</p><p>Характеристики на момент проверки${c.checked_at ? ': '+esc(c.checked_at)+' UTC' : ' не сохранены'}. Premium может измениться. Возраст не вычисляется по Telegram ID.</p>`);
+  }
+  function reviewEditor(order) {
+    modal(`<h2 id="dialog-title">Отзыв о покупке</h2><p>Публикуется без имени и Telegram ID. Не указывай номер, пароль или коды входа. Один отзыв на заказ, его можно изменить.</p><label for="review-rating">Оценка</label><select id="review-rating">${[5,4,3,2,1].map(r=>`<option value="${r}" ${Number(order.review?.rating) === r ? 'selected' : ''}>${r} из 5</option>`).join('')}</select><label for="review-body">Отзыв</label><textarea id="review-body" maxlength="500" rows="4">${esc(order.review?.body || '')}</textarea><p id="dialog-error" class="dialog-error" hidden></p><button id="save-review" class="primary-button">Опубликовать отзыв</button>`);
+    $('#save-review').onclick = async () => {
+      if (state.busy) return; state.busy = true; $('#save-review').disabled = true;
+      try { await post('reviews',{purchase_id:order.id,rating:Number($('#review-rating').value),body:$('#review-body').value}); $('#purchase-dialog').close(); toast('Отзыв опубликован'); }
+      catch(e) { dialogError(e); if($('#save-review')) $('#save-review').disabled = false; }
+      finally { state.busy = false; }
+    };
+  }
+  function warrantyEditor(order) {
+    modal(`<h2 id="dialog-title">Гарантийное обращение</h2><p>Опиши проблему со входом. Не отправляй пароль, код или сессию. Срок проверяется при отправке; обращение сохраняется в поддержке бота.</p><label for="claim-body">Что произошло?</label><textarea id="claim-body" maxlength="500" rows="4"></textarea><p id="dialog-error" class="dialog-error" hidden></p><button id="send-claim" class="primary-button">Отправить обращение</button>`);
+    $('#send-claim').onclick = async () => {
+      if (state.busy) return; state.busy = true; $('#send-claim').disabled = true;
+      try { const result = await post('orders/'+order.id+'/warranty-claim',{body:$('#claim-body').value}); modal(`<h2 id="dialog-title">Обращение #${result.ticket_id}</h2><p>Сохранено. Поддержка ответит в Telegram-боте.</p><button class="primary-button" data-bot-order="${order.id}">Открыть в боте</button>`); }
+      catch(e) { dialogError(e); if($('#send-claim')) $('#send-claim').disabled = false; }
+      finally { state.busy = false; }
+    };
+  }
+  async function showReviews(page = 0) {
+    try {
+      const data = await api('reviews?page='+page);
+      modal(`<h2 id="dialog-title">Отзывы покупателей</h2><p>Средняя оценка: ${data.average == null ? '—' : num(data.average)} / 5 · Отзывов: ${data.count}</p>${data.items.map(r=>`<article class="review"><b>${Number(r.rating)} / 5 · Покупатель</b><p>${esc(r.body)}</p><small>Подтверждённая покупка</small></article>`).join('') || '<p>Отзывов пока нет. Оставить свой можно в деталях покупки.</p>'}${page ? '<button id="previous-reviews" class="secondary-button">Предыдущие</button>' : ''}${data.has_more ? '<button id="next-reviews" class="secondary-button">Следующие</button>' : ''}`);
+      if($('#previous-reviews')) $('#previous-reviews').onclick = () => showReviews(page-1);
+      if($('#next-reviews')) $('#next-reviews').onclick = () => showReviews(page+1);
+    } catch(e) { error(e); }
+  }
+  function balancePromo() {
+    if(!state.ready) return;
+    modal('<h2 id="dialog-title">Промокод на баланс</h2><label for="balance-code">Промокод</label><input id="balance-code" maxlength="64"><p id="balance-preview"></p><p id="dialog-error" class="dialog-error" hidden></p><button id="check-balance-code" class="secondary-button">Проверить</button><button id="redeem-balance-code" class="primary-button" hidden>Активировать</button>');
+    let checked = null;
+    $('#balance-code').oninput = () => { checked = null; $('#redeem-balance-code').hidden = true; $('#balance-preview').textContent = ''; };
+    $('#check-balance-code').onclick = async () => {
+      const btn = $('#check-balance-code'); btn.disabled = true; checked = null; $('#redeem-balance-code').hidden = true; $('#dialog-error').hidden = true;
+      const typed = $('#balance-code').value;
+      try { const r = await post('promo/preview',{code:typed}); if (!btn.isConnected || $('#balance-code').value !== typed) return; checked = r; $('#balance-preview').textContent = r.kind === 'balance' ? 'На баланс будет зачислено '+rub(r.value) : 'Скидка '+num(r.value)+'%. Применяется в окне оплаты корзины.'; $('#redeem-balance-code').hidden = r.kind !== 'balance'; }
+      catch(e) { dialogError(e); } finally { btn.disabled = false; }
+    };
+    $('#redeem-balance-code').onclick = async () => {
+      if(!checked || state.busy) return; state.busy = true; $('#redeem-balance-code').disabled = true;
+      try { const r = await post('promo/redeem',{code:checked.code}); $('#purchase-dialog').close(); await loadMe(); toast('На баланс зачислено '+rub(r.credited)); }
+      catch(e) { dialogError(e); if($('#redeem-balance-code')) $('#redeem-balance-code').disabled = false; } finally { state.busy = false; }
+    };
+  }
+  async function showActivity(page = 0) {
+    try {
+      const data = await api('activity?page='+page);
+      modal(`<h2 id="dialog-title">История действий</h2>${data.items.map(i=>`<article class="review"><b>${esc(i.label)} · ${i.amount == null ? 'Сумма не сохранена' : num(i.amount)+' '+esc(i.currency === 'PCT' ? '%' : i.currency)}</b><p>${esc(i.reference)}<br>${i.occurred_at ? esc(new Date(i.occurred_at).toLocaleString('ru-RU',{timeZone:'Europe/Moscow'}))+' МСК' : 'Дата не сохранена'}</p></article>`).join('') || '<p>Операций пока нет.</p>'}<p>${esc(data.note)}</p>${page ? '<button id="activity-newer" class="secondary-button">Новее</button>' : ''}${data.has_more && page<1000 ? '<button id="activity-older" class="secondary-button">Ранее</button>' : ''}`);
+      if($('#activity-newer')) $('#activity-newer').onclick = () => showActivity(page-1);
+      if($('#activity-older')) $('#activity-older').onclick = () => showActivity(page+1);
+    } catch(e) { error(e); }
   }
   async function topup() {
     if (!state.ready || state.busy) return;
@@ -164,6 +251,10 @@
     if (button.dataset.tab) { switchTab(button.dataset.tab); return; }
     if (button.hasAttribute('data-bot')) openBot();
     if (button.dataset.botOrder) openBot(Number(button.dataset.botOrder));
+    if (button.dataset.features) features(Number(button.dataset.features));
+    if (button.hasAttribute('data-activity')) showActivity();
+    if (button.hasAttribute('data-reviews')) showReviews();
+    if (button.hasAttribute('data-balance-promo')) balancePromo();
     if (button.dataset.order) showOrder(Number(button.dataset.order));
     if (button.hasAttribute('data-topup')) topup();
     if (button.hasAttribute('data-category')) { state.category = button.dataset.category; loadMarket().catch(error); }
