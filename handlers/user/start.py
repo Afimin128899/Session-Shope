@@ -30,6 +30,21 @@ async def cmd_start(message: Message, command, state=None):
     await create_user_with_referrer(message.from_user.id, referrer_id if is_new else None, message.from_user.username)
     await update_user_username(message.from_user.id, message.from_user.username)
 
+    if args and args.startswith("order_"):
+        from database.db import get_purchase_for_user
+        from keyboards.user_kb import after_purchase_menu
+        value = args.removeprefix("order_")
+        if value.isascii() and value.isdigit() and len(value) <= 10:
+            order = await get_purchase_for_user(int(value), message.from_user.id)
+            if order:
+                await message.answer(
+                    f"🛍 <b>Заказ #{order['id']}</b>\n\n"
+                    "Аккаунт уже в ваших покупках. Получите код входа или откройте обращение в поддержку.",
+                    reply_markup=await after_purchase_menu(order['id']),
+                )
+                return
+        await message.answer("Покупка не найдена. Откройте раздел «Мои покупки».")
+
     user_name = message.from_user.first_name or "Гость"
     caption_text = c.START_TEXT.replace("{name}", user_name)
 

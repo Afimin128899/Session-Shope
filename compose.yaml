@@ -1,0 +1,39 @@
+services:
+  bot:
+    build: .
+    restart: unless-stopped
+    init: true
+    env_file: .env
+    environment:
+      MINIAPP_URL: https://sbandsub.space
+      MINIAPP_HOST: 0.0.0.0
+      MINIAPP_PORT: '8080'
+      BOT_LOG_PATH: /app/runtime/bot.log
+    expose:
+      - '8080'
+    volumes:
+      - bot_runtime:/app/runtime
+    command: ['python', '/app/bot.py']
+    healthcheck:
+      test: ['CMD', 'python', '-c', 'import urllib.request; urllib.request.urlopen("http://127.0.0.1:8080/api/health", timeout=3)']
+      interval: 30s
+      timeout: 5s
+      start_period: 45s
+      retries: 3
+  web:
+    image: caddy:2.10-alpine
+    restart: unless-stopped
+    depends_on:
+      bot:
+        condition: service_healthy
+    ports:
+      - '80:80'
+      - '443:443'
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+volumes:
+  bot_runtime:
+  caddy_data:
+  caddy_config:

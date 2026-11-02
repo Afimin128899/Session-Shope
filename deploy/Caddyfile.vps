@@ -1,0 +1,6 @@
+# Native systemd deployment on 31.77.59.42 (Ubuntu 24).
+sbandsub.space {
+	encode zstd gzip
+	reverse_proxy 127.0.0.1:8080
+	header Strict-Transport-Security "max-age=31536000"
+}

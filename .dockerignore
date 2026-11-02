@@ -1,0 +1,14 @@
+.git
+.env
+.env.*
+!.env.miniapp.example
+*.zip
+*.session
+*.session-*
+*.log
+**/__pycache__
+*.py[cod]
+.venv
+node_modules
+tests
+artifacts

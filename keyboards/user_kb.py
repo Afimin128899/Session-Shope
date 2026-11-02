@@ -1,4 +1,4 @@
-from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 
 from config import ADMIN_IDS, SUPPORT_USERNAME, REVIEWS_LINK
 from database.db import get_first_available_account_by_country, get_available_categories, get_button_label, get_setting
@@ -55,6 +55,11 @@ async def main_menu(user_id: int | None = None) -> InlineKeyboardMarkup:
             InlineKeyboardButton(text=label_info, callback_data="info_menu", icon_custom_emoji_id=emoji_info),
         ],
     ]
+
+    from utils.miniapp import miniapp_url
+    app_url = miniapp_url()
+    if app_url:
+        rows.insert(0, [InlineKeyboardButton(text="🛍 Открыть Mini App", web_app=WebAppInfo(url=app_url))])
 
     rows.append([InlineKeyboardButton(text="🛟 Мои обращения", callback_data="tk_user:0")])
 

@@ -1,8 +1,10 @@
 import asyncio
 import logging
+import os
 import sys
 from contextlib import suppress
 from aiogram import Bot, Dispatcher
+from aiogram.types import MenuButtonWebApp, WebAppInfo
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 from aiogram.fsm.storage.memory import MemoryStorage
@@ -49,7 +51,7 @@ def setup_logging():
     root_logger.addHandler(console_handler)
 
     # Файловый вывод
-    file_handler = logging.FileHandler("bot.log", encoding="utf-8")
+    file_handler = logging.FileHandler(os.getenv("BOT_LOG_PATH", "bot.log"), encoding="utf-8")
     file_handler.setLevel(logging.INFO)
     file_handler.setFormatter(logging.Formatter(log_format, datefmt=date_format))
     root_logger.addHandler(file_handler)
@@ -88,8 +90,17 @@ async def main():
 
     logging.info("Starting bot...")
     notification_task = None
+    web_runner = None
     try:
         await bot.delete_webhook(drop_pending_updates=True)
+        from utils.miniapp import miniapp_url
+        app_url = miniapp_url()
+        if app_url:
+            from miniapp.server import start_server
+            web_runner = await start_server(bot)
+            await bot.set_chat_menu_button(menu_button=MenuButtonWebApp(
+                text="Магазин", web_app=WebAppInfo(url=app_url),
+            ))
         notification_task = asyncio.create_task(restock_worker(bot))
         await dp.start_polling(bot, close_bot_session=False)
     finally:
@@ -97,6 +108,8 @@ async def main():
             notification_task.cancel()
             with suppress(asyncio.CancelledError):
                 await notification_task
+        if web_runner is not None:
+            await web_runner.cleanup()
         await cleanup_all_clients()
         await bot.session.close()
 
