@@ -77,6 +77,13 @@ def main():
         raise ValueError('Сначала загрузите полную версию 3.0.0 в каталог проекта.')
     if args.service and not re.fullmatch(r'[A-Za-z0-9_.@-]+\.service', args.service):
         raise ValueError('Укажите имя вида shop.service без пути.')
+    if args.python:
+        args.python = args.python.absolute()
+        if not args.python.is_file():
+            raise ValueError('Указанный Python не найден.')
+        check = subprocess.run([str(args.python), '-c', 'import aiogram, aiomysql, aiohttp, telethon, dotenv'], capture_output=True)
+        if check.returncode:
+            raise ValueError('В указанном Python нет зависимостей requirements.txt.')
     existing = args.service or discover_service(ROOT)
     name = existing or 'session-shope.service'
     if existing:
@@ -86,6 +93,12 @@ def main():
         directory.mkdir(parents=True, exist_ok=True)
         destination = directory / 'miniapp.conf'
         content = (ROOT / 'deploy' / 'miniapp-systemd.conf').read_text()
+        if args.python:
+            content += (
+                f"WorkingDirectory={str(ROOT).replace('%', '%%')}\n"
+                "ExecStart=\n"
+                f"ExecStart={unit_quote(str(args.python))} {unit_quote(str(ROOT / 'bot.py'))}\n"
+            )
     else:
         # Do not accidentally start another bot.py alongside an unmanaged process.
         running = subprocess.run(['pgrep', '-f', r'(^|/)bot\.py(\s|$)'], capture_output=True)
@@ -104,7 +117,8 @@ def main():
         destination = Path('/etc/systemd/system') / name
         username = pwd.getpwuid(ROOT.stat().st_uid).pw_name
         content = render_unit(ROOT, python, username)
-    if destination.exists() and destination.read_text() != content:
+    previous_base = (ROOT / 'deploy' / 'miniapp-systemd.conf').read_text()
+    if destination.exists() and destination.read_text() not in {content, previous_base}:
         raise ValueError(f'{destination} уже содержит другие настройки; файл оставлен без изменений.')
     destination.write_text(content)
     destination.chmod(0o644)

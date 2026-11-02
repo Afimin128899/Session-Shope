@@ -8,3 +8,7 @@ __pycache__/
 .vscode/
 *.session
 *.session-*
+
+# Local installer environment
+.venv*/
+venv/

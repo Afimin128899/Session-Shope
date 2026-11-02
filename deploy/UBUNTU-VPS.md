@@ -19,6 +19,26 @@ If the bot service name is unknown, list service names without exposing environm
 systemctl list-unit-files --type=service --no-pager | grep -Ei 'bot|shop|telegram'
 ```
 
+## One-command install (Ubuntu 24)
+
+After updating the checkout and keeping its existing `.env`:
+
+```sh
+sudo bash install.sh
+```
+
+The script installs Ubuntu packages and project requirements into `.venv-miniapp`,
+configures the existing systemd service (or creates one if none exists), waits for
+the local API, and configures Caddy for `sbandsub.space`. The domain must point to
+`31.77.59.42`, with ports 80/443 available. It preserves `.env` and unrelated Caddy
+sites, backs up modified Caddy files, validates configuration before reload, and
+restores those files if validation fails.
+
+Selectors: `sudo bash install.sh --service shop.service`, or `--skip-https` to use
+an existing reverse proxy. The installer does not pull/reset Git or modify the
+working database. It restarts the bot, whose normal startup runs existing schema
+migrations. Dependencies require working Ubuntu/Python package repositories.
+
 ## Automatic systemd setup
 
 After uploading version 3.0.0 into the existing project directory, run:
