@@ -128,7 +128,7 @@ install -m 644 "$project_dir/deploy/Caddyfile.vps" "$caddy_site"
 if ! grep -Fxq "$import_line" "$caddy_main"; then
   printf '\n%s\n' "$import_line" >> "$caddy_main"
 fi
-if ! caddy validate --config "$caddy_main"; then
+if ! python3 "$project_dir/deploy/caddy_protocols.py" --config "$caddy_main" || ! caddy validate --config "$caddy_main"; then
   if [[ -f "$backup_dir/Caddyfile" ]]; then cp -p "$backup_dir/Caddyfile" "$caddy_main"; else rm -f "$caddy_main"; fi
   if ((site_existed)); then cp -p "$backup_dir/site.caddy" "$caddy_site"; else rm -f "$caddy_site"; fi
   fail 'Конфигурация Caddy не прошла проверку, прежние файлы восстановлены.'
@@ -137,8 +137,12 @@ if command -v ufw >/dev/null 2>&1 && LC_ALL=C ufw status | grep '^Status: active
   ufw allow 80/tcp
   ufw allow 443/tcp
 fi
-systemctl enable --now caddy
-systemctl reload caddy
+systemctl enable caddy
+caddy_state="$(systemctl show caddy --property=ActiveState --value)"
+if [[ "$caddy_state" == reloading ]]; then
+  systemctl kill --kill-whom=all --signal=SIGTERM caddy
+fi
+timeout 45 systemctl restart caddy
 printf '\nПроверка публичного HTTPS…\n'
 if ! curl --fail --silent --show-error --retry 5 --retry-delay 3 --max-time 10 https://sbandsub.space/api/health; then
   fail 'Бот и локальный Mini App запущены, но HTTPS пока недоступен. Проверьте A-запись sbandsub.space → 31.77.59.42, AAAA и доступность портов 80/443. Логи: journalctl -u caddy -n 50 --no-pager'

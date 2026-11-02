@@ -112,3 +112,20 @@ Remove only `/etc/systemd/system/YOUR-BOT.service.d/miniapp.conf`, run
 `systemctl daemon-reload` and restart the existing bot unit. To remove public access,
 remove this domain's Caddy block and validate/reload Caddy, preserving other sites.
 No database rollback is required for the optional Mini App.
+
+## Recovery: UDP 443 already in use
+
+Caddy 2.6 can leave systemd in `reloading` after an unsuccessful HTTP/3 bind.
+HTTPS itself uses TCP 443. Update the checkout and run:
+
+```sh
+git pull --ff-only origin main
+sudo bash deploy/fix_https.sh
+```
+
+The recovery script disables HTTP/3 in the global options while preserving sites,
+backs up the Caddyfile and validates it before restarting. Only Caddy processes
+are signalled if its state is stuck in `reloading`; the owner of UDP 443 is not
+stopped. Unknown custom global blocks are preserved and require manual merging
+of `servers { protocols h1 h2 }`. If TCP 443 is also occupied, identify that
+separate conflict before changing the other service.
