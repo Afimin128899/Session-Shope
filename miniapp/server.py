@@ -39,8 +39,11 @@ async def security(request, handler):
         result = response({'error': str(exc), 'code': 'unauthorized'}, 401)
     except storage.CheckoutError as exc:
         result = response({'error': str(exc), 'code': exc.code}, 409)
-    except (ValueError, InvalidOperation, json.JSONDecodeError):
-        result = response({'error': 'Проверьте параметры запроса.', 'code': 'invalid_request'}, 400)
+    except (ValueError, InvalidOperation, json.JSONDecodeError) as exc:
+        if request.path.startswith('/api/admin/'):
+            result=response({'error':str(exc) or 'Проверьте поля формы.','code':'invalid_request'},400)
+        else:
+            result = response({'error': 'Проверьте параметры запроса.', 'code': 'invalid_request'}, 400)
     except web.HTTPException as exc:
         result = response({'error': 'Запрос недоступен.', 'code': 'http_error'}, exc.status)
     except Exception as exc:
@@ -49,7 +52,7 @@ async def security(request, handler):
     result.headers.update({
         'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer',
         'Cache-Control': 'no-store',
-        'Content-Security-Policy': "default-src 'self'; script-src 'self' https://telegram.org; style-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors https://web.telegram.org https://*.telegram.org",
+        'Content-Security-Policy': "default-src 'self'; script-src 'self' https://telegram.org; style-src 'self'; img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors https://web.telegram.org https://*.telegram.org",
     })
     return result
 
@@ -78,6 +81,9 @@ async def authenticate(request, handler):
     raw = authorization[4:] if authorization.startswith('tma ') else ''
     user = validate_init_data(raw, request.app[TOKEN])
     request['user'] = user
+    if request.path.startswith('/api/admin/') or request.path=='/api/admin':
+        if user['id'] not in config.ADMIN_IDS:
+            return response({'error':'Доступ только администратору.','code':'forbidden'},403)
     if limited(request.app, user['id'], request.method == 'POST' and (request.path in {'/api/purchase', '/api/cart/checkout', '/api/invoices', '/api/promo/preview', '/api/promo/redeem', '/api/reviews'} or request.path.endswith('/warranty-claim'))):
         return response({'error': 'Слишком много запросов. Подождите минуту.', 'code': 'rate_limited'}, 429)
     settings = await storage.access_settings()
@@ -113,7 +119,7 @@ def order_id(request):
 async def me(request):
     user = await db.get_user(request['user']['id'])
     return response({'user': request['user'], 'balance': str(user['balance']), 'balance_usdt': str(user['balance_usdt']),
-                     'bot_username': request.app[BOT_USERNAME], 'version': BOT_VERSION})
+                     'bot_username': request.app[BOT_USERNAME], 'version': BOT_VERSION, 'is_admin': request['user']['id'] in config.ADMIN_IDS})
 
 
 async def catalog(request):
@@ -353,6 +359,8 @@ def create_app(*, token=None, bot=None, bot_username=''):
         web.get('/api/orders', orders), web.get('/api/orders/{id}', order_detail),
         web.static('/assets', STATIC, show_index=False, follow_symlinks=False),
     ])
+    from miniapp.admin_api import register
+    register(app,response,page_number)
     return app
 
 

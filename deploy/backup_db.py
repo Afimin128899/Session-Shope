@@ -15,7 +15,7 @@ import time
 from dotenv import dotenv_values
 
 TAG = 'session-shope'
-CORE_TABLES = ('users', 'accounts', 'purchases', 'settings', 'order_refunds', 'admin_audit_log', 'support_tickets', 'support_messages', 'account_reservations', 'shopping_cart', 'account_favorites', 'payment_invoices', 'daily_report_deliveries', 'purchase_reviews', 'operational_incidents', 'customer_events', 'replacement_orders', 'refund_approvals', 'stock_alerts')
+CORE_TABLES = ('users', 'accounts', 'purchases', 'settings', 'order_refunds', 'admin_audit_log', 'support_tickets', 'support_messages', 'account_reservations', 'shopping_cart', 'account_favorites', 'payment_invoices', 'daily_report_deliveries', 'purchase_reviews', 'operational_incidents', 'customer_events', 'replacement_orders', 'refund_approvals', 'stock_alerts', 'import_batches', 'import_items', 'inventory_identities')
 
 
 def client_options(values):

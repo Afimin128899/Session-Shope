@@ -1,5 +1,6 @@
 from __future__ import annotations 
 
+import asyncio
 import logging 
 from typing import Optional ,Tuple ,Dict 
 from telethon import TelegramClient 
@@ -43,6 +44,8 @@ async def import_session_file(session_path: str, metadata=None) -> Tuple[Optiona
         if not TELEGRAM_API_ID or not TELEGRAM_API_HASH:
             return None, None, "API_ID/HASH не найдены в конфиге"
 
+        from services.session_validation import validate_session_file
+        validate_session_file(session_path)
         client = TelegramClient(
             session_path,
             int(TELEGRAM_API_ID),
@@ -78,7 +81,7 @@ async def import_session_file(session_path: str, metadata=None) -> Tuple[Optiona
     finally:
         if client:
             try:
-                await client.disconnect()
+                await asyncio.wait_for(client.disconnect(), timeout=5)
             except Exception:
                 logger.exception("Ошибка отключения импортируемой сессии")
 

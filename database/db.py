@@ -641,13 +641,13 @@ async def complete_user_purchase(account_id: int):
         await cur.execute("UPDATE accounts SET data = '✅ Сессия удалена (Покупка завершена)' WHERE id = %s AND status <> 'refunded'", (account_id,))
 
 
-async def add_account (country ,code ,number ,password ,price ,data, telegram_user_id=None, is_premium=None ):
-    async with _get_pool().acquire() as conn :
-        async with conn .cursor ()as cur :
-            await cur .execute (
-            "INSERT INTO accounts (country, code, number, password, price, data, telegram_user_id, warranty_hours, is_premium, attributes_checked_at) VALUES (%s, %s, %s, %s, %s, %s, %s, 24, %s, UTC_TIMESTAMP())",
-            (country ,code ,number ,password ,price ,data, telegram_user_id, is_premium )
-            )
+async def add_account(country, code, number, password, price, data, telegram_user_id=None, is_premium=None):
+    from database.admin_tools import _transaction
+    from database.imports import claim, bind
+    async with _transaction() as cur:
+        keys = await claim(cur, number, telegram_user_id, data)
+        await cur.execute("INSERT INTO accounts(country,code,number,password,price,data,telegram_user_id,warranty_hours,is_premium,attributes_checked_at) VALUES(%s,%s,%s,%s,%s,%s,%s,24,%s,UTC_TIMESTAMP())", (country,code,number,password,price,data,telegram_user_id,is_premium))
+        await bind(cur, keys, cur.lastrowid)
 
 async def delete_account (account_id :int ):
     async with _get_pool().acquire() as conn :
@@ -813,13 +813,13 @@ async def complete_user_purchase(account_id: int):
         await cur.execute("UPDATE accounts SET data = '✅ Сессия удалена (Покупка завершена)' WHERE id = %s AND status <> 'refunded'", (account_id,))
 
 
-async def add_account (country ,code ,number ,password ,price ,data, telegram_user_id=None, is_premium=None ):
-    async with _get_pool().acquire() as conn :
-        async with conn .cursor ()as cur :
-            await cur .execute (
-            "INSERT INTO accounts (country, code, number, password, price, data, telegram_user_id, warranty_hours, is_premium, attributes_checked_at) VALUES (%s, %s, %s, %s, %s, %s, %s, 24, %s, UTC_TIMESTAMP())",
-            (country ,code ,number ,password ,price ,data, telegram_user_id, is_premium )
-            )
+async def add_account(country, code, number, password, price, data, telegram_user_id=None, is_premium=None):
+    from database.admin_tools import _transaction
+    from database.imports import claim, bind
+    async with _transaction() as cur:
+        keys = await claim(cur, number, telegram_user_id, data)
+        await cur.execute("INSERT INTO accounts(country,code,number,password,price,data,telegram_user_id,warranty_hours,is_premium,attributes_checked_at) VALUES(%s,%s,%s,%s,%s,%s,%s,24,%s,UTC_TIMESTAMP())", (country,code,number,password,price,data,telegram_user_id,is_premium))
+        await bind(cur, keys, cur.lastrowid)
 
 async def delete_account (account_id :int ):
     async with _get_pool().acquire() as conn :

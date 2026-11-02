@@ -31,7 +31,7 @@ async def rules():
         async with conn.cursor(aiomysql.DictCursor) as cur:
             await cur.execute("SELECT `key`,`value` FROM settings WHERE `key` IN ('wholesale_min_total','wholesale_pct','low_stock_limit')")
             values={r['key']:r['value'] for r in await cur.fetchall()}
-    return {'minimum':str(Decimal(values.get('wholesale_min_total','500'))),'percent':str(Decimal(values.get('wholesale_pct','15'))),'low_stock':int(values.get('low_stock_limit','3'))}
+    return {'minimum':str(Decimal(values.get('wholesale_min_total','500'))),'percent':str(Decimal(values.get('wholesale_pct','15'))),'low_stock':int(Decimal(values.get('low_stock_limit','3')))}
 
 
 async def bulk_edit(admin,ids,field,value):
@@ -110,6 +110,7 @@ async def stock_notifications(bot,admins):
 async def request_refund(admin,purchase,reason):
     from database.refunds import refund_order
     pending=False
+    new_request=False
     async with _transaction() as cur:
         await cur.execute('SELECT id,paid_amount,currency,status FROM purchases WHERE id=%s FOR UPDATE',(purchase,))
         order=await cur.fetchone()
@@ -127,7 +128,8 @@ async def request_refund(admin,purchase,reason):
             else:
                 await cur.execute('INSERT INTO refund_approvals(purchase_id,requester,reason,amount,currency,created_at) VALUES(%s,%s,%s,%s,%s,UTC_TIMESTAMP())',(purchase,admin,reason,order['paid_amount'],order['currency']))
                 pending=True
-    if pending: return {'pending':True,'id':purchase,'amount':str(order['paid_amount']),'currency':order['currency']}
+                new_request=True
+    if pending: return {'pending':True,'id':purchase,'amount':str(order['paid_amount']),'currency':order['currency'],'new_request':new_request}
     return await refund_order(admin,purchase,reason)
 
 

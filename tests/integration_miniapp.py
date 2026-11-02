@@ -106,6 +106,11 @@ async def main():
             runner.app[LIMITS].clear()
             from integration_expansion import expansion_scenarios
             await expansion_scenarios(connection)
+            if '--admin' in sys.argv:
+                from integration_admin import admin_scenarios
+                runner.app[LIMITS].clear()
+                await admin_scenarios(session,connection,headers)
+                runner.app[LIMITS].clear()
             print('All Mini App, marketplace, quality and expansion scenarios passed.',flush=True)
         if '--serve' in sys.argv:
             print('Isolated browser fixture listening on localhost:8085', flush=True)

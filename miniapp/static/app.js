@@ -12,7 +12,7 @@
   function toast(text) { $('#toast').textContent = text; $('#toast').hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => { $('#toast').hidden = true; }, 4500); }
   function notice(text = '') { $('#notice').textContent = text; $('#notice').hidden = !text; }
   function reset(text) {
-    state.ready = false; state.me = null; state.items = []; state.orders = []; state.invoice = null; state.revision++;
+    window.SBAND_USER=null; document.dispatchEvent(new Event('sband-logout')); state.ready = false; state.me = null; state.items = []; state.orders = []; state.invoice = null; state.revision++;
     $('#header-balance').textContent = '— ₽'; $('#profile-balance').textContent = '— ₽'; $('#catalog-grid').replaceChildren(); $('#orders-list').replaceChildren();
     document.querySelectorAll('.page').forEach(el => { el.hidden = true; }); $('#login-panel').hidden = false;
     $('#purchase-dialog').close(); $('#dialog-content').replaceChildren(); $('#sync-state').textContent = 'Нужен вход'; notice(text);
@@ -34,7 +34,7 @@
     if (tg?.openTelegramLink) tg.openTelegramLink(url); else window.open(url, '_blank', 'noopener,noreferrer');
   }
   async function loadMe() {
-    const data = await api('me'); state.me = data;
+    const data = await api('me'); state.me = data; window.SBAND_USER=data; document.dispatchEvent(new CustomEvent('sband-identity',{detail:data}));
     const initial = (data.user.first_name || 'S').slice(0, 1).toUpperCase();
     $('#avatar').textContent = initial; $('#profile-avatar').textContent = initial;
     $('#profile-name').textContent = data.user.first_name || 'Покупатель'; $('#profile-username').textContent = data.user.username ? '@' + data.user.username : 'Покупатель Sband ACCS';
@@ -42,7 +42,7 @@
     $('#profile-usdt').textContent = num(data.balance_usdt) + ' USDT'; $('#version').textContent = 'v' + data.version;
   }
   function render() {
-    $('#catalog-grid').innerHTML = state.items.map(item => `<article class="account-card"><div class="card-head"><span class="flag" aria-hidden="true">${flags[item.category] || '✳'}</span><div class="card-head-right"><span class="stock-tag ${item.available ? '' : 'unavailable'}">${item.available ? 'В наличии' : 'Недоступен'}</span><button class="heart ${item.favorite ? 'selected' : ''}" data-favorite="${item.id}" aria-label="${item.favorite ? 'Убрать из избранного' : 'В избранное'}" aria-pressed="${item.favorite}">${item.favorite ? '♥' : '♡'}</button></div></div><h3>${esc(item.name)}</h3><button class="feature-link" data-features="${item.id}">Характеристики · ${item.characteristics?.warranty_hours ? item.characteristics.warranty_hours + ' ч гарантии' : 'Подробнее'}</button><div class="card-phone">${esc(item.phone)}</div><div class="ids"><div><span>ID товара</span><b>${esc(item.product_id)}</b></div><div><span>Telegram ID</span><b>${esc(item.telegram_user_id || 'Не сохранён')}</b></div></div><div class="card-bottom"><div>${Number(item.discount) > 0 ? `<span class="old-price"><s>${rub(item.original_price)}</s><span class="discount-badge">−${num(item.discount)}%</span></span>` : ''}<span class="card-price">${num(item.price)}<small>₽</small></span></div><button class="buy-button ${item.in_cart ? 'added' : ''}" data-add="${item.id}" ${!item.available ? 'disabled' : ''} aria-label="${item.in_cart ? 'Обновить резерв' : 'В корзину'} ${esc(item.name)}">${item.in_cart ? '✓' : '+'}</button></div>${item.in_cart ? `<div class="reserve" data-until="${esc(item.reserved_until || '')}"></div><button class="remove-button" data-remove="${item.id}">Убрать из корзины</button>` : ''}</article>`).join('');
+    $('#catalog-grid').innerHTML = state.items.map(item => `<article class="account-card"><div class="card-head"><span class="flag" aria-hidden="true">${flags[item.category] || '✳'}</span><div class="card-head-right">${item.characteristics?.is_premium ? '<span class="premium-badge">Premium</span>' : ''}<button class="heart ${item.favorite ? 'selected' : ''}" data-favorite="${item.id}" aria-label="${item.favorite ? 'Убрать из избранного' : 'В избранное'}" aria-pressed="${item.favorite}">${item.favorite ? '♥' : '♡'}</button></div></div><h3>${esc(item.name)}</h3><span class="stock-tag ${item.available ? '' : 'unavailable'}">${item.available ? 'В наличии' : 'Недоступен'}</span><button class="feature-link" data-features="${item.id}">Характеристики ${item.characteristics?.warranty_hours ? '· '+item.characteristics.warranty_hours+' ч гарантии' : '↗'}</button><div class="card-phone">${esc(item.phone)}</div><div class="ids"><div><span>Товар</span><b>${esc(item.product_id)}</b></div><div><span>Telegram ID</span><b>${esc(item.telegram_user_id || 'Не сохранён')}</b></div></div><div class="card-bottom"><div>${Number(item.discount)>0 ? `<span class="old-price"><s>${rub(item.original_price)}</s><span class="discount-badge">−${num(item.discount)}%</span></span>` : ''}<span class="card-price">${num(item.price)}<small>₽</small></span></div><button class="buy-button ${item.in_cart ? 'added' : ''}" data-add="${item.id}" ${!item.available ? 'disabled' : ''} aria-label="${item.in_cart ? 'Обновить резерв' : 'В корзину'} ${esc(item.name)}">${item.in_cart ? '✓' : '+'}</button></div>${item.in_cart ? `<div class="reserve" data-until="${esc(item.reserved_until || '')}"></div><button class="remove-button" data-remove="${item.id}">Убрать из корзины</button>` : ''}</article>`).join('');
     $('#catalog-empty').hidden = state.items.length > 0;
     const empty = state.tab === 'cart' ? ['Корзина пока пуста', 'Добавь аккаунт — он будет зарезервирован на 5 минут.'] : state.tab === 'favorites' ? ['Сохрани то, что нравится', 'Нажми ♡ в каталоге. О снижении цены сообщим в боте.'] : ['Пока ничего не найдено', 'Попробуй изменить фильтры или загляни позже.'];
     $('#empty-title').textContent = empty[0]; $('#empty-copy').textContent = empty[1];
@@ -244,7 +244,7 @@
     else if (data.status === 'expired') { state.invoice = null; if ($('#invoice-state')) $('#invoice-state').textContent = 'Срок счёта истёк. Создай новый счёт.'; }
   }
   async function synchronize() {
-    if (!state.ready || state.busy || state.refreshing || document.hidden) return;
+    if (!state.ready || state.busy || state.refreshing || document.hidden || document.body.classList.contains('admin-mode')) return;
     state.refreshing = true;
     try { await Promise.all([loadMe(), state.tab === 'orders' ? loadOrders() : loadMarket(), checkInvoice()]); $('#sync-state').textContent = '● Обновлено сейчас'; }
     catch(e) { $('#sync-state').textContent='Нет обновления'; if(e.code==='unauthorized') reset(e.message); }
@@ -254,6 +254,8 @@
     try { tg?.ready(); tg?.expand(); tg?.setHeaderColor('#101510'); tg?.setBackgroundColor('#101510'); await loadMe(); const info=await api('shop-info');state.wholesale=info.wholesale;state.support=info; state.ready = true; $('#login-panel').hidden = true; notice(); showPage(); await loadMarket(); $('#sync-state').textContent = '● Обновлено сейчас'; const start=tg?.initDataUnsafe?.start_param || new URLSearchParams(location.search).get('tgWebAppStartParam') || (new URLSearchParams(location.search).get('product') ? 'product_'+new URLSearchParams(location.search).get('product') : ''); if(/^product_[0-9]{1,10}$/.test(start)) await features(Number(start.slice(8))); }
     catch (e) { reset(e.message); }
   }
+  document.addEventListener('sband-shop',()=>{if(state.ready) { showPage(); synchronize(); }});
+  document.addEventListener('sband-auth-error',()=>reset('Открой приложение заново через Telegram.'));
   document.addEventListener('click', async event => {
     const button = event.target.closest('button'); if (!button || button.disabled) return;
     if (button.dataset.tab) { switchTab(button.dataset.tab); return; }

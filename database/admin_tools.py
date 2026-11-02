@@ -45,12 +45,20 @@ def _decimal(value, places, maximum):
         raise ValueError('Введите корректное число.') from exc
 
 
-async def change_balance(admin_id, user_id, amount, currency, mode):
+async def change_balance(admin_id, user_id, amount, currency, mode, request_key=None):
     if currency not in {'RUB', 'USDT'} or mode not in {'add', 'set'}:
         raise ValueError('Некорректная операция с балансом.')
     amount = _decimal(amount, '0.00000001', '9999999999.99999999')
     column = 'balance_usdt' if currency == 'USDT' else 'balance'
     async with _transaction() as cur:
+        if request_key:
+            import re
+            if not re.fullmatch(r'[0-9a-f]{32}',request_key): raise ValueError('Некорректный номер операции.')
+            try:
+                await cur.execute('INSERT INTO admin_web_actions VALUES(%s,%s,UTC_TIMESTAMP())',(request_key,admin_id))
+            except aiomysql.IntegrityError as exc:
+                if exc.args[0]==1062: raise ValueError('Эта операция уже выполнена. Обновите баланс.') from None
+                raise
         await cur.execute(f'SELECT {column} AS balance FROM users WHERE id = %s FOR UPDATE', (user_id,))
         user = await cur.fetchone()
         if not user:
