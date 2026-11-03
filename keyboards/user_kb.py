@@ -41,20 +41,9 @@ async def main_menu(user_id: int | None = None) -> InlineKeyboardMarkup:
         reviews_url = f"https://t.me/{reviews_val.lstrip('@')}"
 
     rows = [
-        [
-            InlineKeyboardButton(text=label_balance, callback_data="balance", icon_custom_emoji_id=emoji_balance),
-            InlineKeyboardButton(text=label_buy, callback_data="buy", icon_custom_emoji_id=emoji_buy),
-        ],
-        [
-            InlineKeyboardButton(text=label_purchases, callback_data="my_purchases", icon_custom_emoji_id=emoji_purchases),
-        ],
-        [
-            InlineKeyboardButton(text=label_profile, callback_data="my_profile", icon_custom_emoji_id=emoji_profile),
-        ],
-        [
-            InlineKeyboardButton(text=label_promo, callback_data="promo", icon_custom_emoji_id=emoji_promo),
-            InlineKeyboardButton(text=label_info, callback_data="info_menu", icon_custom_emoji_id=emoji_info),
-        ],
+        [InlineKeyboardButton(text=label_buy, callback_data="buy", icon_custom_emoji_id=emoji_buy)],
+        [InlineKeyboardButton(text=label_profile, callback_data="my_profile", icon_custom_emoji_id=emoji_profile)],
+        [InlineKeyboardButton(text=label_info, callback_data="info_menu", icon_custom_emoji_id=emoji_info)],
     ]
 
     from utils.miniapp import miniapp_url
@@ -62,7 +51,6 @@ async def main_menu(user_id: int | None = None) -> InlineKeyboardMarkup:
     if app_url:
         rows.insert(0, [InlineKeyboardButton(text="🛍 Открыть Mini App", web_app=WebAppInfo(url=app_url))])
 
-    rows.append([InlineKeyboardButton(text="Мои обращения", callback_data="tk_user:0", icon_custom_emoji_id=icon_for("support"))])
 
     reviews_row = [
         InlineKeyboardButton(text=label_reviews, callback_data="quality_reviews:0", icon_custom_emoji_id=emoji_reviews),
@@ -83,6 +71,21 @@ async def main_menu(user_id: int | None = None) -> InlineKeyboardMarkup:
             InlineKeyboardButton(text=label_admin, callback_data="admin_panel_button", icon_custom_emoji_id=emoji_admin),
         ])
 
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+async def profile_menu():
+    specs=[('btn_purchases','Мои покупки','my_purchases','orders'),
+           ('btn_balance','Баланс и пополнить','balance','money'),
+           ('btn_promo','Ввести промокод','promo','reviews'),
+           ('btn_referral_system','Реферальная система','referral_info','users')]
+    rows=[]
+    for key,label,callback,role in specs:
+        text,emoji=await _btn_text(key,label,icon_for(role))
+        rows.append([InlineKeyboardButton(text=text,callback_data=callback,icon_custom_emoji_id=emoji)])
+    rows.insert(1,[InlineKeyboardButton(text='Мои обращения',callback_data='tk_user:0',icon_custom_emoji_id=icon_for('support'))])
+    rows.append([InlineKeyboardButton(text='Бонусы · Колесо удачи',callback_data='wheel',icon_custom_emoji_id=icon_for('reviews'))])
+    rows.append([InlineKeyboardButton(text='В главное меню',callback_data='back_main',icon_custom_emoji_id=icon_for('back'))])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
@@ -254,3 +257,7 @@ def balance_menu() -> InlineKeyboardMarkup:
             ],
         ]
     )
+
+
+def back_to_profile():
+    return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text='Мой профиль',callback_data='my_profile',icon_custom_emoji_id=icon_for('back'))]])

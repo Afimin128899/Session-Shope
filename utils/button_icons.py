@@ -90,6 +90,8 @@ def role_for(button):
     if data.startswith(('btn_edit:', 'btn_cat:', 'buy_acc:', 'addacc_cat:',
                         'editcat_pick:', 'cat_detail:', 'price_', 'buy_')):
         return None
+    if data in {'wheel','wheel_claim'} or data.startswith('purchase_promo:'):
+        return 'reviews'
     if data.startswith('tk_photo:'):
         return 'file'
     if data.startswith(('spam_check:', 'spam_show:')) or data == 'spam_all':

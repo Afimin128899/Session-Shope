@@ -3,7 +3,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
 
 from database.db import get_user, get_referral_count, get_referral_settings
-from keyboards.user_kb import _btn_text
+from keyboards.user_kb import _btn_text, profile_menu
 from utils.nav import edit_message_safe, answer_safe
 from utils import constants as c
 from utils.emoji_map import EMOJI_COIN, EMOJI_HAND, EMOJI_STAR, EMOJI_USER_ALT
@@ -27,13 +27,7 @@ async def my_profile(call: CallbackQuery, state: FSMContext):
         f"┗ <tg-emoji emoji-id='{EMOJI_HAND}'>✋</tg-emoji> <b>Рефералов:</b> <code>{ref_count}</code>"
     )
 
-    label_ref, emoji_ref = await _btn_text("btn_referral_system", "Реферальная система", EMOJI_HAND)
-    label_back, emoji_back = await _btn_text("btn_back_profile", "« Назад", c.BTN_ICON_BACK_SMILE)
-
-    kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text=label_ref, callback_data="referral_info", icon_custom_emoji_id=emoji_ref)],
-        [InlineKeyboardButton(text=label_back, callback_data="back_main", icon_custom_emoji_id=emoji_back)],
-    ])
+    kb = await profile_menu()
 
     await edit_message_safe(call, text, reply_markup=kb)
     await answer_safe(call)

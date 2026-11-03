@@ -74,6 +74,6 @@ async def edit_balance(call: CallbackQuery, currency: str = 'USDT') -> None:
     text = f'<b>Мой кошелёк</b>\n\nБаланс: <b>{balance:.2f} ₽</b>\n\nПополнение подтверждается автоматически платёжным сервисом.'
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text='Пополнить баланс', callback_data='topup_balance', icon_custom_emoji_id=EMOJI_WALLET)],
-        [InlineKeyboardButton(text='Назад', callback_data='main_menu', icon_custom_emoji_id=EMOJI_BACK)],
+        [InlineKeyboardButton(text='Мой профиль', callback_data='my_profile', icon_custom_emoji_id=EMOJI_BACK)],
     ])
     await edit_message_safe(call, text, reply_markup=kb)

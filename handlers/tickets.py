@@ -264,7 +264,7 @@ async def show_inbox(call, state):
     if admin:
         rows.append(button('Закрытые' if mode == 'active' else 'Активные',
                            'tk_admin:closed:0' if mode == 'active' else 'tk_admin:active:0'))
-    rows.append(button('В админ-панель' if admin else 'В главное меню', 'admin_home' if admin else 'back_main'))
+    rows.append(button('В админ-панель' if admin else 'Мой профиль', 'admin_home' if admin else 'my_profile'))
     title = 'Обращения покупателей' if admin else 'Мои обращения'
     await edit_message_safe(call, f'🛟 <b>{title}</b>\n\n' + ('Выберите обращение.' if entries else 'Обращений пока нет.'),
                             reply_markup=InlineKeyboardMarkup(inline_keyboard=rows))

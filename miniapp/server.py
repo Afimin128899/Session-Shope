@@ -84,7 +84,7 @@ async def authenticate(request, handler):
     if request.path.startswith('/api/admin/') or request.path=='/api/admin':
         if user['id'] not in config.ADMIN_IDS:
             return response({'error':'Доступ только администратору.','code':'forbidden'},403)
-    if limited(request.app, user['id'], request.method == 'POST' and (request.path in {'/api/purchase', '/api/cart/checkout', '/api/invoices', '/api/promo/preview', '/api/promo/redeem', '/api/reviews'} or request.path.endswith('/warranty-claim'))):
+    if limited(request.app, user['id'], request.method == 'POST' and (request.path in {'/api/purchase', '/api/cart/checkout', '/api/invoices', '/api/promo/preview', '/api/promo/redeem', '/api/reviews','/api/rewards/claim'} or request.path.endswith('/warranty-claim'))):
         return response({'error': 'Слишком много запросов. Подождите минуту.', 'code': 'rate_limited'}, 429)
     settings = await storage.access_settings()
     admin = user['id'] in config.ADMIN_IDS
@@ -345,6 +345,17 @@ async def product(request):
     return response(item)
 
 
+async def reward_status(request):
+    from database.rewards import status
+    return response(await status(request['user']['id']))
+
+
+async def reward_claim(request):
+    from database.rewards import claim
+    try: return response(await claim(request['user']['id']))
+    except ValueError as exc: raise storage.CheckoutError(str(exc),'reward_unavailable') from None
+
+
 async def health(request):
     return response({"status": "ok", "version": BOT_VERSION})
 
@@ -361,6 +372,7 @@ def create_app(*, token=None, bot=None, bot_username=''):
     app[LIMITS] = OrderedDict()
     app.add_routes([
         web.get('/', index), web.get('/api/health', health),
+        web.get('/api/rewards',reward_status),web.post('/api/rewards/claim',reward_claim),
         web.get('/api/shop-info',shop_info),web.get('/api/products/{id}',product),web.get('/api/me', me), web.get('/api/catalog', catalog), web.post('/api/purchase', purchase),
         web.get('/api/favorites', collection), web.post('/api/favorites', collection_update),
         web.get('/api/cart', collection), web.post('/api/cart', collection_update), web.delete('/api/cart', collection_update),

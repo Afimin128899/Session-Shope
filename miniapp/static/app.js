@@ -217,6 +217,18 @@
       catch(e) { dialogError(e); if($('#redeem-balance-code')) $('#redeem-balance-code').disabled = false; } finally { state.busy = false; }
     };
   }
+  async function wheel() {
+    if(!state.ready || state.busy) return;
+    try {
+      const d=await api('rewards');
+      modal(`<h2 id="dialog-title">Колесо удачи</h2><p>Случайный бонус от 1 до 10 ₽ на баланс. Шанс каждой целой суммы — 10%.</p><p>Пополнения в сумме от 50 ₽ за последние 72 часа. Получение раз в 3 дня. Промокоды, подарки и возвращённые Stars не учитываются.</p><p>Подходящие пополнения: ${rub(d.paid)}.</p>${d.next_at ? `<p>Следующий интервал: ${esc(new Date(d.next_at).toLocaleString('ru-RU',{timeZone:'Europe/Moscow'}))} МСК</p>` : ''}<p id="dialog-error" hidden></p><button id="claim-wheel" class="primary-button" ${d.eligible?'':'disabled'}>Крутить колесо</button>`);
+      $('#claim-wheel').onclick=async()=>{
+        if(state.busy) return;state.busy=true;$('#claim-wheel').disabled=true;
+        try {const r=await post('rewards/claim',{});modal(`<h2 id="dialog-title">Ваш бонус: ${rub(r.amount)}</h2><p>Уже зачислен на баланс. Следующее получение — через 3 дня при выполнении условия пополнения.</p>`);await loadMe();}
+        catch(e){dialogError(e);}finally{state.busy=false;}
+      };
+    }catch(e){error(e);}
+  }
   async function topup() {
     const dialogRevision = ++state.dialogRevision;
     if (!state.ready || state.busy) return;
@@ -336,6 +348,7 @@
     if (button.hasAttribute('data-knowledge')) knowledge();
     if (button.hasAttribute('data-reviews')) showReviews();
     if (button.hasAttribute('data-balance-promo')) balancePromo();
+    if (button.hasAttribute('data-wheel')) wheel();
     if (button.dataset.order) showOrder(Number(button.dataset.order));
     if (button.hasAttribute('data-topup')) topup();
     if (button.hasAttribute('data-category')) { state.category = button.dataset.category; loadMarket().catch(error); }

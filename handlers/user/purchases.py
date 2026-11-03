@@ -39,7 +39,7 @@ async def my_purchases(call: CallbackQuery, state: FSMContext):
         lines.append(f"<b>#{order['id']} · {escape(label)}</b>\n{escape(order_status(order))} · {escape(str(order['date'])[:32])}")
         rows.append(button(f"#{order['id']} · {label}", f"open_purchase:{order['id']}", 'orders'))
     rows += pagination(page, total, bot_store.PAGE_SIZE, 'orders_page')
-    rows.append(button('В главное меню', 'back_main', 'back'))
+    rows.append(button('Мой профиль', 'my_profile', 'back'))
     text = '<b>Мои покупки</b>\n\n' + ('\n\n'.join(lines) if lines else 'Покупок пока нет. Выберите аккаунт в каталоге.')
     if not orders:
         rows.insert(0, button('Открыть каталог', 'buy', 'catalog'))

@@ -7,10 +7,12 @@ import time
 
 from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import State, StatesGroup
+from aiogram.types import Message
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
 
 from config import ADMIN_IDS
-from database import bot_store
+from database import bot_store, coupons
 from database import spam_checks
 from database.db import get_category, get_purchase_for_user
 from keyboards.pagination import pagination
@@ -85,17 +87,23 @@ async def select_product(call: CallbackQuery):
     await answer_safe(call)
 
 
-async def show_product(call, state, account_id):
+async def show_product(call, state, account_id, promo_code=None):
     item = await bot_store.product(call.from_user.id, account_id)
     if not item:
         await answer_safe(call, 'Аккаунт уже куплен, скрыт или зарезервирован. Обновите каталог.', show_alert=True)
         return
+    promo = await coupons.preview(call.from_user.id,promo_code) if promo_code else None
+    if promo and promo['kind'] != 'discount':
+        raise ValueError('Балансовый промокод активируется в профиле.')
+    from decimal import Decimal
+    from miniapp.storage import money
+    pay_price = money(item['price']*(1-Decimal(str(promo['value']))/100)) if promo else item['price']
     token = secrets.token_urlsafe(6)
     spam = spam_checks.public(item)
     await state.clear()
     await state.update_data(purchase_quote={
         'id': account_id, 'price': str(item['price']), 'warranty_hours': item['warranty_hours'],
-        'spam_status': spam['status'],
+        'spam_status': spam['status'], 'promo_code':promo['code'] if promo else None, 'pay_price':str(pay_price),
         'token': token, 'expires': time.time() + 600,
     })
     hours = 'Не указана' if item['warranty_hours'] is None else f"{item['warranty_hours']} ч"
@@ -106,12 +114,16 @@ async def show_product(call, state, account_id):
         f"Гарантия: {hours}\nРегистрация: {escape(str(item['registration_date'] or 'Не указана'))}\n"
         f"Premium: {'Не проверено' if item['is_premium'] is None else 'Да' if item['is_premium'] else 'Нет'}\n"
         f"Спамблок: {escape(spam_checks.description(item))}\n"
-        f"Номер: <code>{escape(mask_phone(item['number']))}</code>\nК оплате: <b>{item['price']:.2f} ₽</b>\n\n"
+        f"Номер: <code>{escape(mask_phone(item['number']))}</code>\nК оплате: <b>{pay_price:.2f} ₽</b>\n\n"
         'После оплаты номер и данные входа появятся в покупках. После входа смените пароль и привяжите свою почту. '
-        'Оптовая скидка и промокод на скидку применяются при оплате корзины в Mini App.'
+        'Оптовая скидка применяется при оплате корзины в Mini App.'
     )
-    rows = [button('Обновить проверку', f'buy_acc:{account_id}', 'refresh') if spam['running'] else button(f"Купить за {item['price']:.2f} ₽", f'confirm_buy_acc:{account_id}:{token}', 'confirm'),
+    rows = [button('Обновить проверку', f'buy_acc:{account_id}', 'refresh') if spam['running'] else button(f"Купить за {pay_price:.2f} ₽", f'confirm_buy_acc:{account_id}:{token}', 'confirm'),
             button('Назад к категории', f"buy_{item['country']}", 'back')]
+    rows.insert(1,button('Изменить промокод' if promo else 'Ввести промокод',f'purchase_promo:{account_id}','reviews'))
+    if promo:
+        text += f"\n\nПромокод {escape(promo['code'])}: скидка {promo['value']}%."
+        rows.insert(2,button('Убрать промокод',f'buy_acc:{account_id}','cancel'))
     await edit_message_safe(call, text, reply_markup=InlineKeyboardMarkup(inline_keyboard=rows))
     await answer_safe(call)
 
@@ -153,6 +165,8 @@ async def confirm_purchase(call: CallbackQuery, state: FSMContext):
         try:
             from decimal import Decimal
             terms = {'spam_status':quote['spam_status']} if 'spam_status' in quote else {}
+            if quote.get('promo_code'):
+                terms.update(promo_code=quote['promo_code'],expected_total=Decimal(quote['pay_price']))
             result = await checkout(call.from_user.id, account_id, Decimal(quote['price']), warranty_hours=quote['warranty_hours'], **terms)
         except CheckoutError as exc:
             await answer_safe(call, str(exc), show_alert=True)
@@ -215,3 +229,43 @@ async def deliver_login_code(call: CallbackQuery):
                 reply_markup=await after_purchase_menu(purchase_id))
         else:
             await answer_safe(call, 'Код пока не пришёл. Введите номер в Telegram и повторите через 10 секунд.', show_alert=True)
+
+
+class PurchasePromo(StatesGroup):
+    waiting = State()
+
+
+@shop_router.callback_query(F.data.startswith('purchase_promo:'))
+async def ask_purchase_promo(call, state):
+    try:
+        account_id=positive_id(call.data.split(':')[1])
+    except (ValueError,IndexError):
+        await answer_safe(call,'Некорректный товар.',show_alert=True);return
+    await state.clear()
+    await state.update_data(promo_account_id=account_id)
+    await state.set_state(PurchasePromo.waiting)
+    await edit_message_safe(call,'Введите промокод. Итоговая сумма появится до подтверждения покупки.',reply_markup=InlineKeyboardMarkup(inline_keyboard=[button('Отмена',f'buy_acc:{account_id}','cancel')]))
+    await answer_safe(call)
+
+
+@shop_router.message(PurchasePromo.waiting,F.text & ~F.text.startswith('/'))
+async def enter_purchase_promo(message: Message, state: FSMContext):
+    account_id=(await state.get_data()).get('promo_account_id')
+    if not account_id:
+        await state.clear();await message.answer('Откройте товар заново.');return
+    async with single_action(message.from_user.id,'purchase_promo') as acquired:
+        if not acquired: return
+        try:
+            promo=await coupons.preview(message.from_user.id,message.text)
+            if promo['kind']=='balance':
+                amount=await coupons.redeem_balance(message.from_user.id,promo['code'])
+                await message.answer(f'Промокод активирован. На баланс зачислено {amount:.2f} ₽.')
+                promo=None
+            from types import SimpleNamespace
+            screen=await message.answer('Проверяем условия покупки…')
+            async def acknowledge(*args,**kwargs):
+                return None
+            call=SimpleNamespace(message=screen,from_user=message.from_user,answer=acknowledge)
+            await show_product(call,state,account_id,promo['code'] if promo else None)
+        except ValueError as exc:
+            await message.answer(str(exc)+' Введите другой код или /cancel.')

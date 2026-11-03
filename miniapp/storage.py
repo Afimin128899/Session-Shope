@@ -116,7 +116,7 @@ async def access_settings():
 _UNSET = object()
 
 
-async def checkout(user_id, account_id, quoted_price, *, warranty_hours=_UNSET, spam_status=_UNSET):
+async def checkout(user_id, account_id, quoted_price, *, warranty_hours=_UNSET, spam_status=_UNSET, promo_code=None, expected_total=None):
     async with _transaction() as cur:
         await cur.execute(
             "SELECT a.id, a.price, a.country, a.warranty_hours, a.spam_status, a.spam_lease_until>UTC_TIMESTAMP() AS spam_running FROM accounts a JOIN categories c ON c.slug = a.country "
@@ -142,12 +142,25 @@ async def checkout(user_id, account_id, quoted_price, *, warranty_hours=_UNSET, 
             raise CheckoutError('Некорректная цена товара.', 'unavailable')
         if actual_price != quoted_price:
             raise CheckoutError('Цена изменилась. Обновите каталог и подтвердите покупку заново.', 'price_changed')
+        promo = None
+        if promo_code:
+            try:
+                promo = await coupons.validate(cur,user_id,promo_code,lock=True)
+            except ValueError as exc:
+                raise CheckoutError(str(exc),'invalid_promo') from None
+            if promo['kind'] != 'discount':
+                raise CheckoutError('Этот промокод пополняет баланс. Активируйте его в профиле.','invalid_promo')
+            actual_price = money(actual_price*(1-Decimal(str(promo['value']))/100))
+            if expected_total is None or actual_price != Decimal(str(expected_total)):
+                raise CheckoutError('Скидка изменилась. Подтвердите новую сумму.','price_changed')
         # Stable lock ordering includes the referrer to avoid reciprocal-referral deadlocks.
         users = sorted({user_id, referrer} - {None})
         await cur.execute('SELECT id, balance FROM users WHERE id IN (' + ','.join(['%s'] * len(users)) + ') ORDER BY id FOR UPDATE', tuple(users))
         balances = {row['id']: row['balance'] for row in await cur.fetchall()}
         if user_id not in balances or Decimal(str(balances[user_id])) < actual_price:
             raise CheckoutError('Недостаточно средств. Пополните баланс в боте.', 'insufficient_balance')
+        if promo:
+            await coupons.consume(cur,user_id,promo)
         await cur.execute('UPDATE users SET balance = balance - %s WHERE id = %s', (actual_price, user_id))
         await cur.execute("UPDATE accounts SET status = 'sold' WHERE id = %s", (account_id,))
         await cur.execute(

@@ -43,3 +43,6 @@ async def init_commerce_schema(cur, database_name):
 
     from database.stars import init_schema as stars_schema
     await stars_schema(cur, database_name)
+
+    from database.rewards import init_schema as rewards_schema
+    await rewards_schema(cur)
