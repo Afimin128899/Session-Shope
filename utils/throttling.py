@@ -1,37 +1,32 @@
+"""Bounded per-user throttling with a monotonic clock."""
 import time
-from typing import Any, Awaitable, Callable, Dict
+from collections import OrderedDict
+
 from aiogram import BaseMiddleware
-from aiogram.types import TelegramObject, Message, CallbackQuery
+from aiogram.types import CallbackQuery
+
 
 class ThrottlingMiddleware(BaseMiddleware):
-    def __init__(self, limit: float = 0.4):
-        self.limit = limit
-        self.last_request: Dict[int, float] = {}
+    def __init__(self, limit=0.4, max_entries=10000):
         super().__init__()
+        self.limit = limit
+        self.max_entries = max(1, max_entries)
+        self.last_request = OrderedDict()
 
-    async def __call__(
-        self,
-        handler: Callable[[TelegramObject, Dict[str, Any]], Awaitable[Any]],
-        event: TelegramObject,
-        data: Dict[str, Any]
-    ) -> Any:
-        user_id = None
-        if isinstance(event, Message) and event.from_user:
-            user_id = event.from_user.id
-        elif isinstance(event, CallbackQuery) and event.from_user:
-            user_id = event.from_user.id
-
-        if user_id:
-            now = time.time()
-            last_time = self.last_request.get(user_id, 0)
-            if now - last_time < self.limit:
-                # User is flooding/spamming!
+    async def __call__(self, handler, event, data):
+        user = getattr(event, 'from_user', None)
+        if user:
+            now = time.monotonic()
+            while self.last_request and now - next(iter(self.last_request.values())) > max(60, self.limit * 2):
+                self.last_request.popitem(last=False)
+            last = self.last_request.get(user.id)
+            if last is not None and now - last < self.limit:
                 if isinstance(event, CallbackQuery):
-                    try:
-                        await event.answer("⚠️ Пожалуйста, не спамьте кнопками!", show_alert=True)
-                    except Exception:
-                        pass
-                return  # Block request from reaching handlers
-            self.last_request[user_id] = now
-
+                    from utils.nav import answer_safe
+                    await answer_safe(event, 'Подождите секунду перед следующим нажатием.')
+                return
+            self.last_request[user.id] = now
+            self.last_request.move_to_end(user.id)
+            while len(self.last_request) > self.max_entries:
+                self.last_request.popitem(last=False)
         return await handler(event, data)

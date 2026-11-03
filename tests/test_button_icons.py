@@ -105,6 +105,8 @@ class ButtonIconsTests(unittest.IsolatedAsyncioTestCase):
             ('Обратиться по гарантии', 'quality_warranty:3', 'warranty', 'Обратиться по гарантии'),
             ('Получить код', 'get_code:3', 'code', 'Получить код'),
             ('Подтвердить возврат', 'adm_refund_confirm:3', 'confirm', 'Подтвердить возврат'),
+            ('Подтвердить отправку', 'bc_send:nonce', 'confirm', 'Подтвердить отправку'),
+            ('Остановить рассылку', 'bc_stop:nonce', 'cancel', 'Остановить рассылку'),
             ('🔔 Уведомить о поступлении', 'stock_menu', 'notifications', 'Уведомить о поступлении'),
             ('🔎 Поиск', 'adm_search', 'search', 'Поиск'),
             ('📋 Журнал действий', 'adm_audit', 'audit', 'Журнал действий'),

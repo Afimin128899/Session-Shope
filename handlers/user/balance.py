@@ -1,259 +1,133 @@
+"""Telegram payments use the same invoice registry and settlement as Mini App."""
 import logging
-import math
-import uuid
+from html import escape
 
-from aiogram import Router, F
-from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
+from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
+from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 
-from config import LAVE_PAY_API_KEY, XROCKET_API_KEY, CRYPTO_PAY_TOKEN
-from database.db import credit_paid_deposit
+from services import payments
 from keyboards.user_kb import balance_menu
-from services.exchange import convert_rub_to_usdt
-from services.lavepay import create_invoice, get_invoice, is_paid
-from services.xrocket import create_invoice as xrocket_create_invoice, get_invoice as xrocket_get_invoice, is_paid as xrocket_is_paid
-from services.cryptopay import create_invoice as crypto_create_invoice, get_invoice as crypto_get_invoice, is_paid as crypto_is_paid
-from utils.nav import edit_balance, edit_message_safe, edit_main, answer_safe
-from utils.emoji_map import EMOJI_BACK
+from utils.actions import single_action
+from utils.button_icons import icon_for
+from utils.nav import answer_safe, edit_balance, edit_main, edit_message_safe
 
 balance_router = Router()
+logger = logging.getLogger(__name__)
 
 
 class LaveDepositState(StatesGroup):
     waiting_amount = State()
 
 
-@balance_router.callback_query(F.data == "balance")
+def button(text, data, role='back'):
+    return [InlineKeyboardButton(text=text, callback_data=data, icon_custom_emoji_id=icon_for(role))]
+
+
+@balance_router.callback_query(F.data.in_({'balance', 'toggle_currency'}))
 async def show_balance(call: CallbackQuery, state: FSMContext):
     await state.clear()
     await edit_balance(call)
     await answer_safe(call)
 
 
-@balance_router.callback_query(F.data == "toggle_currency")
-async def toggle_currency(call: CallbackQuery, state: FSMContext):
-    await edit_balance(call)
-    await answer_safe(call)
+toggle_currency = show_balance
 
 
-@balance_router.callback_query(F.data == "main_menu")
-async def back_to_main(call: CallbackQuery):
+@balance_router.callback_query(F.data == 'main_menu')
+async def back_to_main(call: CallbackQuery, state: FSMContext):
+    await state.clear()
     await edit_main(call)
     await answer_safe(call)
 
 
-@balance_router.callback_query(F.data == "topup_balance")
+@balance_router.callback_query(F.data == 'topup_balance')
 async def topup_balance_menu(call: CallbackQuery, state: FSMContext):
     await state.clear()
-    kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="💳 USDT $ (Lave Pay)", callback_data="deposit_lave")],
-        [InlineKeyboardButton(text="🚀 USDT $ (xRocket Pay)", callback_data="deposit_xrocket")],
-        [InlineKeyboardButton(text="💎 USDT $ (Crypto Pay)", callback_data="deposit_crypto")],
-        [InlineKeyboardButton(text="Назад", callback_data="balance", icon_custom_emoji_id=EMOJI_BACK)],
-    ])
-    text = (
-        "💳 <b>Пополнение баланса</b>\n\n"
-        "Выберите способ оплаты. Сумма пополнения указывается в <b>рублях ₽</b>."
-    )
-    await edit_message_safe(call, text, reply_markup=kb)
+    methods = [method for method in payments.methods() if method['enabled']]
+    rows = [button(method['name'] + ' · USDT', 'deposit_' + method['id'], 'money') for method in methods]
+    rows.append(button('Назад к балансу', 'balance'))
+    text = '<b>Пополнение баланса</b>\n\nСумма задаётся в рублях. Выберите способ оплаты.' if methods else '<b>Пополнение баланса</b>\n\nСервисы оплаты пока не настроены. Обратитесь в поддержку.'
+    await edit_message_safe(call, text, reply_markup=InlineKeyboardMarkup(inline_keyboard=rows))
     await answer_safe(call)
 
 
-async def _start_deposit(call: CallbackQuery, state: FSMContext, method: str, title: str):
-    configured = {
-        "lave": LAVE_PAY_API_KEY,
-        "xrocket": XROCKET_API_KEY,
-        "crypto": CRYPTO_PAY_TOKEN,
-    }[method]
+async def _start_deposit(call, state, method):
+    configured = next((m for m in payments.methods() if m['id'] == method and m['enabled']), None)
     if not configured:
-        await answer_safe(call, f"❌ {title} ещё не настроен администратором.", show_alert=True)
+        await answer_safe(call, 'Этот способ оплаты пока не настроен.', show_alert=True)
         return
-
+    await state.clear()
     await state.set_state(LaveDepositState.waiting_amount)
     await state.update_data(payment_method=method)
-    kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="Назад", callback_data="topup_balance", icon_custom_emoji_id=EMOJI_BACK)]
-    ])
-    text = (
-        f"💳 <b>Пополнение через {title}</b>\n\n"
-        "Введите сумму пополнения в рублях:\n"
-        "<i>Например:</i> <code>500</code> <i>или</i> <code>1000</code>"
-    )
-    await edit_message_safe(call, text, reply_markup=kb)
+    await edit_message_safe(call,
+        f"<b>Пополнение через {configured['name']}</b>\n\nВведите сумму от 10 до 1 000 000 ₽. Например: <code>500</code> или <code>1000,50</code>.\n\nОтмена: /cancel",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[button('Назад', 'topup_balance')]))
     await answer_safe(call)
 
 
-@balance_router.callback_query(F.data == "deposit_lave")
-async def deposit_lave_entry(call: CallbackQuery, state: FSMContext):
-    await _start_deposit(call, state, "lave", "USDT $ (Lave Pay)")
-
-
-@balance_router.callback_query(F.data == "deposit_xrocket")
-async def deposit_xrocket_entry(call: CallbackQuery, state: FSMContext):
-    await _start_deposit(call, state, "xrocket", "USDT $ (xRocket Pay)")
-
-
-@balance_router.callback_query(F.data == "deposit_crypto")
-async def deposit_crypto_entry(call: CallbackQuery, state: FSMContext):
-    await _start_deposit(call, state, "crypto", "USDT $ (Crypto Pay)")
+@balance_router.callback_query(F.data.in_({'deposit_lave', 'deposit_xrocket', 'deposit_crypto'}))
+async def deposit_entry(call: CallbackQuery, state: FSMContext):
+    await _start_deposit(call, state, call.data.removeprefix('deposit_'))
 
 
 @balance_router.message(LaveDepositState.waiting_amount, F.text)
 async def process_lave_amount(message: Message, state: FSMContext):
     try:
-        rub_amount = round(float(message.text.strip().replace(",", ".")), 2)
-    except ValueError:
-        await message.answer("❌ Введите сумму числом, например: <code>500</code>.")
+        amount = payments.parse_amount(message.text)
+    except ValueError as exc:
+        await message.answer(str(exc))
         return
+    async with single_action(message.from_user.id, 'create_invoice') as acquired:
+        if not acquired:
+            await message.answer('Счёт уже создаётся. Подождите.')
+            return
+        data = await state.get_data()
+        method = data.get('payment_method')
+        try:
+            result = await payments.create_deposit(message.from_user.id, message.from_user.username, method, amount)
+        except ValueError as exc:
+            await message.answer(str(exc))
+            return
+        except Exception:
+            logger.error('Invoice creation failed')
+            await message.answer('Не удалось создать счёт. Попробуйте позже. Если счёт уже появился в платёжном сервисе, обратитесь в поддержку.')
+            return
+        rows = [[InlineKeyboardButton(text='Оплатить', url=result['pay_url'], icon_custom_emoji_id=icon_for('money'))],
+                button('Проверить оплату', f"{method}_check:{result['invoice_id']}", 'refresh'),
+                button('Вернуться к балансу', 'balance')]
+        await state.clear()
+        await message.answer(
+            f"<b>Счёт создан</b>\n\nСумма: <b>{amount:.2f} ₽</b>\nНомер: <code>{escape(result['invoice_id'])}</code>\n\n"
+            'Баланс пополнится автоматически после подтверждения сервисом. Кнопка проверки доступна как запасной вариант.',
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=rows))
 
-    if not math.isfinite(rub_amount) or rub_amount <= 0:
-        await message.answer("❌ Сумма должна быть больше нуля.")
-        return
-    if rub_amount < 10:
-        await message.answer("❌ Минимальная сумма пополнения — 10 ₽.")
-        return
-    if rub_amount > 1_000_000:
-        await message.answer("❌ Максимальная сумма пополнения — 1 000 000 ₽.")
-        return
 
-    data = await state.get_data()
-    payment_method = data.get("payment_method", "lave")
-    payload = f"rub_topup:{message.from_user.id}:{rub_amount:.2f}"
-    invoice_id = None
-    pay_url = None
-    order_id = f"topup-{message.from_user.id}-{uuid.uuid4().hex}"
-
-    if payment_method == "xrocket":
-        amount_usdt = await convert_rub_to_usdt(rub_amount)
-        invoice = await xrocket_create_invoice(
-            amount_usdt=amount_usdt,
-            description=f"Пополнение баланса на {rub_amount:.2f} ₽",
-            client_invoice_id=order_id,
-            payload=payload,
-            telegram_id=message.from_user.id,
-            telegram_username=message.from_user.username,
-        )
-        invoice_id = str(invoice.get("id")) if invoice and invoice.get("id") else None
-        pay_url = (invoice.get("links") or {}).get("telegramBotLink") if invoice else None
-    elif payment_method == "crypto":
-        invoice = await crypto_create_invoice(
-            amount_rub=rub_amount,
-            description=f"Пополнение баланса на {rub_amount:.2f} ₽",
-            payload=payload,
-        )
-        invoice_id = str(invoice.get("invoice_id")) if invoice and invoice.get("invoice_id") else None
-        pay_url = invoice.get("bot_invoice_url") if invoice else None
-    else:
-        amount_usd = await convert_rub_to_usdt(rub_amount)
-        invoice = await create_invoice(
-            amount_usd=amount_usd,
-            description=f"Пополнение баланса на {rub_amount:.2f} ₽",
-            order_id=order_id,
-            payload=payload,
-        )
-        invoice_id = str(invoice.get("id")) if invoice and invoice.get("id") else None
-        pay_url = invoice.get("pay_url") if invoice else None
-
-    from services.payments import _health
-    if not invoice_id or not pay_url:
-        await _health(payment_method,False)
-        if payment_method == "xrocket" and isinstance(invoice, dict) and invoice.get("_xrocket_error"):
-            error = invoice["_xrocket_error"]
-            detail = error.get("detail") or error.get("title") or "Неизвестная ошибка API"
-            await message.answer(f"❌ xRocket Pay: <code>{detail}</code>")
-        elif payment_method == "xrocket":
-            await message.answer("❌ xRocket Pay не вернул ссылку на оплату. Проверьте Pay API Token и настройки приложения xRocket.")
+@balance_router.callback_query(F.data.startswith('lave_check:') | F.data.startswith('xrocket_check:') | F.data.startswith('crypto_check:'))
+async def check_payment(call: CallbackQuery):
+    provider, invoice_id = call.data.split(':', 1)
+    provider = provider.removesuffix('_check')
+    async with single_action(call.from_user.id, 'check_invoice') as acquired:
+        if not acquired:
+            await answer_safe(call, 'Платёж уже проверяется. Подождите.')
+            return
+        try:
+            result = await payments.check_invoice(call.from_user.id, provider, invoice_id)
+        except ValueError as exc:
+            await answer_safe(call, str(exc), show_alert=True)
+            return
+        if result['credited']:
+            amount, bonus = result['credited']
+            text = f'<b>Оплата получена!</b>\n\nНа баланс зачислено: <b>{amount:.2f} ₽</b>.'
+            if bonus:
+                text += f'\nБонус первого пополнения: {bonus:.2f} ₽.'
+            await edit_message_safe(call, text, reply_markup=balance_menu())
+            await answer_safe(call, 'Баланс пополнен!')
         else:
-            await message.answer("❌ Не удалось создать счёт. Проверьте настройки платёжного сервиса и попробуйте позже.")
-        return
-
-    from database.commerce import register_invoice
-    await register_invoice(payment_method, invoice_id, message.from_user.id, rub_amount)
-    await _health(payment_method,True)
-
-    prefix = {"lave": "lave", "xrocket": "xrocket", "crypto": "crypto"}[payment_method]
-    kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="💳 Оплатить", url=pay_url)],
-        [InlineKeyboardButton(text="🔄 Проверить оплату", callback_data=f"{prefix}_check:{invoice_id}")],
-        [InlineKeyboardButton(text="Назад", callback_data="topup_balance", icon_custom_emoji_id=EMOJI_BACK)],
-    ])
-
-    await message.answer(
-        f"💳 <b>Счёт {('USDT $ (Lave Pay)' if payment_method == 'lave' else 'USDT $ (xRocket Pay)' if payment_method == 'xrocket' else 'USDT $ (Crypto Pay)')} создан</b>\n\n"
-        f"К оплате: <b>{rub_amount:.2f} ₽</b>\n\n"
-        "Нажмите «Оплатить», завершите оплату, баланс пополнится автоматически. Кнопка проверки доступна как запасной вариант.",
-        reply_markup=kb,
-    )
-    await state.clear()
+            text = {'credited': 'Этот платёж уже зачислен. Откройте баланс.',
+                    'expired': 'Срок счёта истёк. Создайте новый счёт.'}.get(result['status'], 'Оплата ещё не подтверждена. Проверка продолжится автоматически.')
+            await answer_safe(call, text, show_alert=True)
 
 
-async def _credit_paid(call: CallbackQuery, invoice_id: str, invoice: dict, provider: str):
-    if provider == "xrocket":
-        callback = invoice.get("callback") or {}
-        callback_payload = callback.get("payload") or {}
-        payload = callback_payload.get("orderId", "") if isinstance(callback_payload, dict) else str(callback_payload)
-    else:
-        payload = str(invoice.get("payload", ""))
-
-    prefix = f"rub_topup:{call.from_user.id}:"
-    if not payload.startswith(prefix):
-        await answer_safe(call, "❌ Этот счёт не принадлежит вашему аккаунту.", show_alert=True)
-        return
-
-    if not (xrocket_is_paid(invoice) if provider == "xrocket" else crypto_is_paid(invoice) if provider == "crypto" else is_paid(invoice)):
-        await answer_safe(call, "⌛️ Оплата ещё не подтверждена.", show_alert=True)
-        return
-
-    try:
-        result = await credit_paid_deposit(
-            call.from_user.id, payload.split(":", 2)[2], provider, invoice_id,
-        )
-    except Exception:
-        logging.exception("Failed to credit %s payment %s", provider, invoice_id)
-        await answer_safe(call, "❌ Не удалось зачислить платёж. Попробуйте проверить оплату ещё раз.", show_alert=True)
-        return
-
-    if result is None:
-        await answer_safe(call, "ℹ️ Этот платёж уже был зачислен.", show_alert=True)
-        return
-    credited_amount, bonus_amount = result
-
-    await edit_message_safe(
-        call,
-        "✅ <b>Оплата получена!</b>\n\n"
-        f"На баланс зачислено: <b>{credited_amount:.2f} ₽</b>"
-        + (f"\n🎁 Бонус за первое пополнение: <b>+{bonus_amount:.2f} ₽</b>." if bonus_amount > 0 else ""),
-        reply_markup=balance_menu(),
-    )
-    await answer_safe(call, "Баланс пополнен!", show_alert=True)
-
-
-@balance_router.callback_query(F.data.startswith("lave_check:"))
-async def check_lave_payment(call: CallbackQuery):
-    invoice_id = call.data.split(":", 1)[1]
-    invoice = await get_invoice(invoice_id)
-    if not invoice:
-        await answer_safe(call, "❌ Счёт не найден.", show_alert=True)
-        return
-    await _credit_paid(call, invoice_id, invoice, "lave")
-
-
-@balance_router.callback_query(F.data.startswith("xrocket_check:"))
-async def check_xrocket_payment(call: CallbackQuery):
-    invoice_id = call.data.split(":", 1)[1]
-    invoice = await xrocket_get_invoice(invoice_id)
-    if not invoice:
-        await answer_safe(call, "❌ Счёт xRocket не найден.", show_alert=True)
-        return
-    await _credit_paid(call, invoice_id, invoice, "xrocket")
-
-
-@balance_router.callback_query(F.data.startswith("crypto_check:"))
-async def check_crypto_payment(call: CallbackQuery):
-    invoice_id = call.data.split(":", 1)[1]
-    invoice = await crypto_get_invoice(invoice_id)
-    if not invoice:
-        await answer_safe(call, "❌ Счёт Crypto Pay не найден.", show_alert=True)
-        return
-    await _credit_paid(call, invoice_id, invoice, "crypto")
+check_lave_payment = check_xrocket_payment = check_crypto_payment = check_payment

@@ -38,7 +38,7 @@ async def pricing(cur, user_id):
     return ref['referrer_id'], discount, bonus
 
 
-async def catalog(user_id, category='', query='', sort='new', page=0, *, min_price=None, max_price=None, favorites=False, cart=False, premium=None, min_age=None):
+async def catalog(user_id, category='', query='', sort='new', page=0, *, min_price=None, max_price=None, favorites=False, cart=False, premium=None, min_age=None, account_id=None):
     async with _get_pool().acquire() as conn:
         async with conn.cursor(aiomysql.DictCursor) as cur:
             _, discount, _ = await pricing(cur, user_id)
@@ -50,6 +50,8 @@ async def catalog(user_id, category='', query='', sort='new', page=0, *, min_pri
             )
             categories = list(await cur.fetchall())
             conditions, params = [], [user_id, user_id]
+            if account_id is not None:
+                conditions.append('a.id=%s'); params.append(account_id)
             if cart:
                 conditions.append('t.user_id IS NOT NULL')
             elif favorites:
@@ -111,15 +113,20 @@ async def access_settings():
             return {row['key']: row['value'] for row in await cur.fetchall()}
 
 
-async def checkout(user_id, account_id, quoted_price):
+_UNSET = object()
+
+
+async def checkout(user_id, account_id, quoted_price, *, warranty_hours=_UNSET):
     async with _transaction() as cur:
         await cur.execute(
-            "SELECT a.id, a.price, a.country FROM accounts a JOIN categories c ON c.slug = a.country "
+            "SELECT a.id, a.price, a.country, a.warranty_hours FROM accounts a JOIN categories c ON c.slug = a.country "
             "WHERE a.id = %s AND a.status = 'available' AND c.is_active = 1 FOR UPDATE", (account_id,),
         )
         account = await cur.fetchone()
         if account is None:
             raise CheckoutError('Этот аккаунт уже куплен. Обновите каталог.', 'sold')
+        if warranty_hours is not _UNSET and account['warranty_hours'] != warranty_hours:
+            raise CheckoutError('Условия гарантии изменились. Подтвердите покупку заново.', 'terms_changed')
         await cur.execute('SELECT user_id FROM account_reservations WHERE account_id=%s AND expires_at>UTC_TIMESTAMP() FOR UPDATE', (account_id,))
         reservation = await cur.fetchone()
         if reservation and reservation['user_id'] != user_id:

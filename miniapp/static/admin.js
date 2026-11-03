@@ -9,14 +9,12 @@
  const badge=v=>`<span class="admin-badge ${['ready','available','committed'].includes(v)?'good':['error','failed','duplicate','refunded'].includes(v)?'warn':''}">${esc(statusLabel[v]||v)}</span>`;
  function notice(text=''){$('#admin-notice').textContent=text;$('#admin-notice').hidden=!text;}
  async function request(path,options={}) {
-  const raw=window.Telegram?.WebApp?.initData;
-  if(!raw) throw Error('Откройте приложение через Telegram.');
-  const response=await fetch('/api/admin/'+path,{...options,headers:{Authorization:'tma '+raw,...(options.body&&!options.zip?{'Content-Type':'application/json'}:{}),...(options.zip?{'Content-Type':'application/zip'}:{})},cache:'no-store',signal:AbortSignal.timeout(options.zip?60000:20000)});
-  if(response.status===401) document.dispatchEvent(new Event('sband-auth-error'));
-  if(response.status===403){setEnabled(false);close();}
-  const data=await response.json();
-  if(!response.ok) throw Error(data.error||'Не удалось выполнить запрос.');
-  return data;
+  try { return await window.SbandRequest('admin/'+path,options); }
+  catch(e) {
+   if(e.code==='unauthorized') document.dispatchEvent(new Event('sband-auth-error'));
+   if(e.code==='forbidden'){setEnabled(false);close();}
+   throw e;
+  }
  }
  const post=(path,body={},method='POST')=>request(path,{method,body:JSON.stringify(body)});
  function setEnabled(enabled){A.enabled=!!enabled;document.querySelectorAll('[data-open-admin]').forEach(e=>{e.hidden=!A.enabled;});if(!A.enabled&&document.body.classList.contains('admin-mode')) close();}

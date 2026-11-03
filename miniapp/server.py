@@ -326,7 +326,7 @@ async def shop_info(request):
 
 
 async def product(request):
-    result=await storage.catalog(request['user']['id'],query=str(order_id(request)))
+    result=await storage.catalog(request['user']['id'],account_id=order_id(request))
     item=next((i for i in result['items'] if i['id']==order_id(request)),None)
     if not item: return response({'error':'Товар недоступен.'},404)
     return response(item)

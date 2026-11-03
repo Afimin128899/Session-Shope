@@ -2,6 +2,7 @@ import asyncio
 import logging
 import os
 import sys
+from logging.handlers import RotatingFileHandler
 from contextlib import suppress
 from aiogram import Bot, Dispatcher
 from aiogram.types import MenuButtonWebApp, WebAppInfo
@@ -13,6 +14,7 @@ from config import BOT_TOKEN
 from database.db import init_db
 
 from handlers.user.start import start_router
+from handlers.navigation import commands_router, fallback_router
 from handlers.user.balance import balance_router
 from handlers.user.shop import shop_router
 from handlers.user.purchases import purchases_router
@@ -54,7 +56,7 @@ def setup_logging():
     root_logger.addHandler(console_handler)
 
     # Файловый вывод
-    file_handler = logging.FileHandler(os.getenv("BOT_LOG_PATH", "bot.log"), encoding="utf-8")
+    file_handler = RotatingFileHandler(os.getenv("BOT_LOG_PATH", "bot.log"), maxBytes=5*1024*1024, backupCount=3, encoding="utf-8")
     file_handler.setLevel(logging.INFO)
     file_handler.setFormatter(logging.Formatter(log_format, datefmt=date_format))
     root_logger.addHandler(file_handler)
@@ -65,12 +67,9 @@ async def main():
 
     try:
         await init_db()
-    except Exception:
-        logging.exception(
-            "Database initialization failed; polling will not start. "
-            "Check DB settings and server IP allowlisting."
-        )
-        return
+    except Exception as exc:
+        logging.error('Database initialization failed [%s]; check DB settings and server IP allowlisting.', type(exc).__name__)
+        raise SystemExit(1) from None
 
     bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
     from utils.button_icons import MissingButtonIcons
@@ -88,9 +87,9 @@ async def main():
     dp.callback_query.outer_middleware(MaintenanceMiddleware())
 
     dp.include_routers(
-        start_router, balance_router, shop_router, purchases_router, promo_router, profile_router,
+        commands_router, start_router, balance_router, shop_router, purchases_router, promo_router, profile_router,
         admin_router, manage_router, broadcast_router, add_account_router, button_editor_router,
-        cat_router, restock_router, admin_tools_router, ticket_router, refund_router, quality_router, expansion_router,
+        cat_router, restock_router, admin_tools_router, ticket_router, refund_router, quality_router, expansion_router, fallback_router,
     )
 
     logging.info("Starting bot...")
@@ -115,13 +114,21 @@ async def main():
     finally:
         for task in notification_tasks:
             task.cancel()
-        for task in notification_tasks:
-            with suppress(asyncio.CancelledError):
-                await task
-        if web_runner is not None:
-            await web_runner.cleanup()
-        await cleanup_all_clients()
-        await bot.session.close()
+        await asyncio.gather(*notification_tasks, return_exceptions=True)
+        try:
+            if web_runner is not None:
+                await web_runner.cleanup()
+        finally:
+            with suppress(Exception):
+                await asyncio.wait_for(cleanup_all_clients(), timeout=10)
+            await bot.session.close()
+            from database import db
+            if db.pool is not None:
+                db.pool.close()
+                try:
+                    await asyncio.wait_for(db.pool.wait_closed(), timeout=5)
+                except TimeoutError:
+                    db.pool.terminate()
 
 
 if __name__ == "__main__":

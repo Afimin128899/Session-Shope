@@ -40,7 +40,15 @@ class MaintenanceMiddleware(BaseMiddleware):
         except Exception:
             is_admin = False
 
-        if is_admin or not await is_maintenance():
+        maintenance = False if is_admin else await is_maintenance()
+        if isinstance(event, CallbackQuery) and event.data == 'check_maintenance' and not maintenance:
+            from utils.nav import edit_main, answer_safe
+            if data.get('state'):
+                await data['state'].clear()
+            await edit_main(event)
+            await answer_safe(event, 'Бот снова доступен!')
+            return None
+        if not maintenance:
             return await handler(event, data)
 
         if isinstance(event, Message):
@@ -50,8 +58,7 @@ class MaintenanceMiddleware(BaseMiddleware):
         if isinstance(event, CallbackQuery):
             if event.data == "check_maintenance":
                 await event.answer(
-                    "🟢 Бот снова доступен!" if not await is_maintenance()
-                    else "🔧 Технические работы ещё продолжаются.",
+                    "🔧 Технические работы ещё продолжаются.",
                     show_alert=True,
                 )
             else:

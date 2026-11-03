@@ -100,8 +100,10 @@ def role_for(button):
         return 'warranty'
     if data.startswith(('quality_review:', 'quality_reviews:')):
         return 'reviews'
-    if data.startswith(('adm_refund_confirm:', 'refund_approve:', 'expand_confirm:')):
+    if data.startswith(('adm_refund_confirm:', 'refund_approve:', 'expand_confirm:', 'complete_confirm:', 'bc_send:')):
         return 'confirm'
+    if data.startswith('bc_stop:'):
+        return 'cancel'
     if data.startswith('adm_refund:'):
         return 'money'
     if data.startswith(('adm_order:', 'open_purchase:')) or data == 'my_purchases':
@@ -131,7 +133,7 @@ def role_for(button):
         return 'add'
     if data.startswith(('cat_delete:', 'admin_del_promo_confirm:')):
         return 'delete'
-    if data.startswith('cat_toggle:') or data == 'admin_sub_toggle':
+    if data.startswith('cat_toggle:') or data in {'admin_sub_toggle', 'check_maintenance'}:
         return 'refresh'
     if data in {'main_menu', 'back_main', 'admin_home', 'admin_panel_button'}:
         return 'home'

@@ -1,4 +1,5 @@
 from aiogram import Router, F
+from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
 
 from database.db import get_user, get_referral_count, get_referral_settings
@@ -11,7 +12,8 @@ profile_router = Router()
 
 
 @profile_router.callback_query(F.data == "my_profile")
-async def my_profile(call: CallbackQuery):
+async def my_profile(call: CallbackQuery, state: FSMContext):
+    await state.clear()
     user = await get_user(call.from_user.id)
     balance = float(user.get("balance", 0.0)) if user else 0.0
     ref_count = await get_referral_count(call.from_user.id)
@@ -46,7 +48,7 @@ async def referral_info(call: CallbackQuery):
 
     text = (
         f"<tg-emoji emoji-id='{EMOJI_STAR}'>⭐️</tg-emoji> <b>Реферальная система</b>\n\n"
-        f"<b>Ваша скидка:</b> {settings['discount_pct']:.0f}%\n"
+        f"<b>Скидка приглашённым:</b> {settings['discount_pct']:.0f}%\n"
         f"<b>Бонус рефереру:</b> {settings['bonus_pct']:.0f}%\n"
         f"<b>Количество рефералов:</b> {count}\n\n"
         f"<b>Ваша реферальная ссылка:</b>\n"

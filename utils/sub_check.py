@@ -1,4 +1,5 @@
 import logging
+from html import escape
 from aiogram import Bot
 from aiogram.types import CallbackQuery, Message, InlineKeyboardButton, InlineKeyboardMarkup
 
@@ -22,9 +23,11 @@ async def is_user_subscribed(bot: Bot, user_id: int) -> bool:
         member = await bot.get_chat_member(chat_id=channel_id, user_id=user_id)
         if member.status in ["creator", "administrator", "member"]:
             return True
+        if member.status == 'restricted' and getattr(member, 'is_member', False):
+            return True
         return False
     except Exception as e:
-        logging.warning(f"[sub_check] Could not check subscription for user {user_id} in {channel_id}: {e}")
+        logging.warning('Subscription check unavailable: %s', type(e).__name__)
         # Если возникла ошибка API или бот не админ, не блокируем пользователя при технических сбоях
         return True
 
@@ -42,7 +45,7 @@ async def send_sub_prompt(event: CallbackQuery | Message, bot: Bot):
         f"<tg-emoji emoji-id='{EMOJI_MEGA}'>📢</tg-emoji> <b>Обязательная подписка</b>\n\n"
         f"Для доступа к боту необходимо подписаться на наш официальный канал!\n\n"
         f"<blockquote>"
-        f"<tg-emoji emoji-id='{EMOJI_PIN}'>📍</tg-emoji> <b>Ссылка на наш канал:</b>\n{url}"
+        f"<tg-emoji emoji-id='{EMOJI_PIN}'>📍</tg-emoji> <b>Ссылка на наш канал:</b>\n{escape(url)}"
         f"</blockquote>\n\n"
         f"<i>После подписки нажмите кнопку <b>«<tg-emoji emoji-id='{EMOJI_CHECK}'>✅</tg-emoji> Я подписался»</b> ниже 👇</i>"
     )

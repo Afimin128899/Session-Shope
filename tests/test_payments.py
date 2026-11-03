@@ -94,20 +94,15 @@ class PaymentTransactionTests(unittest.IsolatedAsyncioTestCase):
 
 
 class PaymentHandlerTests(unittest.IsolatedAsyncioTestCase):
-    async def test_paid_invoice_ownership_and_duplicate_handling(self):
-        call = SimpleNamespace(from_user=SimpleNamespace(id=42))
-        with patch.object(balance, 'credit_paid_deposit', new_callable=AsyncMock) as credit, \
-             patch.object(balance, 'answer_safe', new_callable=AsyncMock) as answer, \
-             patch.object(balance, 'edit_message_safe', new_callable=AsyncMock) as edit:
-            await balance._credit_paid(call, '123', {'payload': 'rub_topup:99:100', 'status': 'paid'}, 'crypto')
-            credit.assert_not_awaited()
-            await balance._credit_paid(call, '123', {'payload': 'rub_topup:42:100', 'status': 'active'}, 'crypto')
-            credit.assert_not_awaited()
-            credit.return_value = None
-            await balance._credit_paid(call, '123', {'payload': 'rub_topup:42:100', 'status': 'paid'}, 'crypto')
-            credit.assert_awaited_once_with(42, '100', 'crypto', '123')
+    async def test_manual_payment_check_uses_signed_owner_and_shared_service(self):
+        call = SimpleNamespace(data='crypto_check:123', from_user=SimpleNamespace(id=42))
+        with patch.object(balance.payments, 'check_invoice', AsyncMock(return_value={'status':'credited','credited':None})) as check, \
+             patch.object(balance, 'answer_safe', AsyncMock()) as answer, \
+             patch.object(balance, 'edit_message_safe', AsyncMock()) as edit:
+            await balance.check_payment(call)
+            check.assert_awaited_once_with(42, 'crypto', '123')
             edit.assert_not_awaited()
-            self.assertIn('уже был зачислен', answer.call_args.args[1])
+            self.assertIn('уже зачислен', answer.call_args.args[1])
 
     async def test_nan_input_never_creates_invoice(self):
         message = SimpleNamespace(text='nan', answer=AsyncMock())
@@ -116,17 +111,14 @@ class PaymentHandlerTests(unittest.IsolatedAsyncioTestCase):
         state.get_data.assert_not_awaited()
         message.answer.assert_awaited_once()
 
-    async def test_non_referral_purchase_uses_ruble_balance(self):
-        account = {'id': 8, 'country': 'test', 'price': 100, 'status': 'available'}
+    async def test_legacy_confirmation_opens_fresh_quote_without_debit(self):
         call = SimpleNamespace(data='confirm_buy_acc:8', from_user=SimpleNamespace(id=42))
-        with patch.object(shop, 'get_account', AsyncMock(return_value=account)), \
-             patch.object(shop, 'get_category', AsyncMock(return_value=None)), \
-             patch.object(shop, 'get_user', AsyncMock(return_value={'balance': 100, 'balance_usdt': 0})), \
-             patch.object(shop, 'get_referrer', AsyncMock(return_value=None)), \
-             patch.object(shop, 'buy_account', AsyncMock(return_value=None)) as buy, \
-             patch.object(shop, 'answer_safe', AsyncMock()):
-            await shop.confirm_purchase(call)
-            self.assertEqual(buy.call_args.kwargs['currency'], 'RUB')
+        state = SimpleNamespace(get_data=AsyncMock(return_value={}))
+        with patch.object(shop, 'show_product', AsyncMock()) as preview, \
+             patch.object(shop, 'checkout', AsyncMock()) as buy:
+            await shop.confirm_purchase(call, state)
+            preview.assert_awaited_once_with(call, state, 8)
+            buy.assert_not_awaited()
 
 
 if __name__ == '__main__':

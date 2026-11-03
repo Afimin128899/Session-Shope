@@ -32,7 +32,7 @@ def _extract_code(text: str) -> Optional[str]:
         return None
     codes = re.findall(r'\b\d{5,6}\b', text)
     if codes:
-        logger.info(f"[_extract_code] Извлечен код: {codes[0]} из текста: {text[:60]}...")
+        logger.info("[_extract_code] Код обнаружен; значение не записывается в журнал")
         return codes[0]
     return None
 
@@ -55,10 +55,7 @@ async def wait_for_code_from_777000(
             logger.info("[wait_for_code] Инициализируем StringSession...")
             client = create_client(session_str=session_str)
         except Exception as e:
-            logger.exception(
-                f"[wait_for_code] КРИТИЧЕСКАЯ ОШИБКА: Не удалось инициализировать StringSession! "
-                f"Длина сессии: {len(session_str)}. Детали: {e}"
-            )
+            logger.warning('Telegram session operation failed: %s', type(e).__name__)
             return None
         
         logger.info("[wait_for_code] Подключаемся к сессии Telegram...")
@@ -101,10 +98,10 @@ async def wait_for_code_from_777000(
                 msg_date = msg_date.replace(tzinfo=timezone.utc)
 
             if check_after and msg_date and msg_date <= check_after:
-                logger.info(f"[wait_for_code] Пропускаем СТАРЫЙ код: {code} от {msg_date} (до {check_after})")
+                logger.info("[wait_for_code] Старое сообщение пропущено")
                 continue
 
-            logger.info(f"[wait_for_code] Найден подходящий код в истории: {code} от {msg_date}")
+            logger.info("[wait_for_code] Найден подходящий код в истории")
             found_code = code
             break  # берём самый свежий подходящий
 
@@ -133,11 +130,11 @@ async def wait_for_code_from_777000(
                 if msg.id <= last_seen_msg_id:
                     continue
                 last_seen_msg_id = max(last_seen_msg_id, msg.id)
-                logger.info(f"[wait_for_code] Получено новое сообщение: {msg.text[:100]}")
+                logger.info("[wait_for_code] Получено новое сервисное сообщение")
                 
                 code = _extract_code(msg.text)
                 if code:
-                    logger.info(f"[wait_for_code] УСПЕХ! Найден новый код: {code}")
+                    logger.info("[wait_for_code] Найден новый код")
                     return code
             
             await asyncio.sleep(interval)
@@ -146,16 +143,16 @@ async def wait_for_code_from_777000(
         return None
         
     except Exception as e:
-        logger.exception(f"[wait_for_code] Ошибка при чтении кода: {e}")
+        logger.warning('Telegram session operation failed: %s', type(e).__name__)
         return None
     finally:
         if client:
             try:
                 logger.info("[wait_for_code] Отключаем сессию Telethon...")
-                await client.disconnect()
+                await asyncio.wait_for(client.disconnect(), timeout=5)
                 logger.info("[wait_for_code] Сессия успешно отключена.")
             except Exception as e:
-                logger.error(f"[wait_for_code] Ошибка при отключении сессии: {e}")
+                logger.warning('Telegram session operation failed: %s', type(e).__name__)
 
 
 
@@ -204,19 +201,19 @@ async def get_last_valid_code(
         
         if valid_codes:
             valid_codes.sort(key=lambda x: x['timestamp'], reverse=True)
-            logger.info(f"[get_last_valid_code] Найден последний валидный код: {valid_codes[0]['code']}")
+            logger.info("[get_last_valid_code] Найден последний валидный код")
             return valid_codes[0]['code']
         
         logger.info("[get_last_valid_code] Валидных кодов за последнее время не найдено.")
         return None
         
     except Exception as e:
-        logger.exception(f"[get_last_valid_code] Ошибка: {e}")
+        logger.warning('Telegram session operation failed: %s', type(e).__name__)
         return None
     finally:
         if client:
             try:
-                await client.disconnect()
+                await asyncio.wait_for(client.disconnect(), timeout=5)
             except Exception:
                 pass
 
@@ -263,7 +260,7 @@ async def confirm_action_with_code(
                 if msg.text:
                     code = _extract_code(msg.text)
                     if code:
-                        logger.info(f"[confirm_action] Код получен: {code}")
+                        logger.info("[confirm_action] Код получен")
                         return True, code, msg.id
             
             await asyncio.sleep(interval)
@@ -272,12 +269,12 @@ async def confirm_action_with_code(
         return False, None, last_msg_id
         
     except Exception as e:
-        logger.exception(f"[confirm_action] Ошибка: {e}")
+        logger.warning('Telegram session operation failed: %s', type(e).__name__)
         return False, None, 0
     finally:
         if client:
             try:
-                await client.disconnect()
+                await asyncio.wait_for(client.disconnect(), timeout=5)
             except Exception:
                 pass
 
@@ -308,12 +305,12 @@ async def get_777000_dialog_info(session_str: str) -> Optional[dict]:
         }
         
     except Exception as e:
-        logger.exception(f"[get_777000_dialog_info] Ошибка: {e}")
+        logger.warning('Telegram session operation failed: %s', type(e).__name__)
         return None
     finally:
         if client:
             try:
-                await client.disconnect()
+                await asyncio.wait_for(client.disconnect(), timeout=5)
             except Exception:
                 pass
 
@@ -374,17 +371,17 @@ async def poll_for_code(
                         if parse_after:
                             parse_after_utc = parse_after if parse_after.tzinfo else parse_after.replace(tzinfo=timezone.utc)
                             if msg_date_utc <= parse_after_utc:
-                                logger.info(f"[poll_for_code] Найден старый код {code} (дата {msg_date_utc} <= {parse_after_utc}), пропускаем.")
+                                logger.info("[poll_for_code] Старое сообщение пропущено")
                                 continue
                         
                         # Код валиден, если получен за последние 15 минут (900 секунд)
                         if age_seconds < 900:
-                            logger.info(f"[poll_for_code] УСПЕХ! Найден свежий код в истории: {code} (возраст: {age_seconds:.1f}s, дата: {msg_date_utc})")
+                            logger.info("[poll_for_code] Найден свежий код в истории")
                             return code
                         else:
-                            logger.info(f"[poll_for_code] Найден старый код {code} в истории (возраст: {age_seconds:.1f}s, дата: {msg_date_utc}), пропускаем.")
+                            logger.info("[poll_for_code] Старое сообщение пропущено")
                     else:
-                        logger.info(f"[poll_for_code] УСПЕХ! Найден код в истории без даты: {code}")
+                        logger.info("[poll_for_code] Найден код в истории")
                         return code
 
         # Запоминаем ID самого свежего сообщения перед переходом к ожиданиям
@@ -402,7 +399,7 @@ async def poll_for_code(
                 if msg.text:
                     code = _extract_code(msg.text)
                     if code:
-                        logger.info(f"[poll_for_code] УСПЕХ! Получен новый код из входящего сообщения: {code}")
+                        logger.info("[poll_for_code] Получен новый код")
                         return code
             
             await asyncio.sleep(interval)
@@ -411,16 +408,16 @@ async def poll_for_code(
         return None
         
     except Exception as e:
-        logger.exception(f"[poll_for_code] Ошибка в процессе получения кода: {e}")
+        logger.warning('Telegram session operation failed: %s', type(e).__name__)
         return None
     finally:
         if client:
             try:
                 logger.info("[poll_for_code] Отключение сессии Telethon...")
-                await client.disconnect()
+                await asyncio.wait_for(client.disconnect(), timeout=5)
                 logger.info("[poll_for_code] Сессия успешно отключена.")
             except Exception as e:
-                logger.error(f"[poll_for_code] Ошибка при отключении сессии: {e}")
+                logger.warning('Telegram session operation failed: %s', type(e).__name__)
 
 
 async def poll_for_new_code(
@@ -431,11 +428,11 @@ async def poll_for_new_code(
     max_wait: float = 30.0
 ) -> Optional[str]:
     """Обёртка для poll_for_code с настройками для нового кода."""
-    logger.info(f"[poll_for_new_code] Вызов обертки. phone={phone}, max_wait={max_wait}s")
+    logger.info("[poll_for_new_code] Ожидание нового кода")
     return await poll_for_code(str(session_str), phone, after_time=after_time, interval=interval, max_wait=max_wait)
 
 
 async def try_fetch_login_code(session_str: str, phone: str = None) -> Optional[str]:
     """Быстрая проверка кода без долгого ожидания."""
-    logger.info(f"[try_fetch_login_code] Вызов быстрой проверки. phone={phone}")
+    logger.info("[try_fetch_login_code] Быстрая проверка кода")
     return await poll_for_code(str(session_str), phone, interval=2.0, max_wait=10.0)

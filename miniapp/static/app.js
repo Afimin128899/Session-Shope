@@ -2,7 +2,7 @@
 (() => {
   const $ = s => document.querySelector(s);
   const tg = window.Telegram?.WebApp;
-  const state = { tab: 'catalog', wholesale:{minimum:'500',percent:'15'}, ready: false, me: null, items: [], page: 0, category: '', orderPage: 0, orders: [], busy: false, revision: 0, invoice: null, refreshing: false };
+  const state = { tab: 'catalog', wholesale:{minimum:'500',percent:'15'}, ready: false, me: null, items: [], page: 0, category: '', orderPage: 0, orders: [], busy: false, revision: 0, invoice: null, refreshing: false, dialogRevision: 0 };
   const labels = { catalog: 'Каталог', favorites: 'Избранное', cart: 'Корзина', orders: 'Покупки', profile: 'Профиль' };
   const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const num = v => new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 2 }).format(Number(v || 0));
@@ -17,14 +17,7 @@
     document.querySelectorAll('.page').forEach(el => { el.hidden = true; }); $('#login-panel').hidden = false;
     $('#purchase-dialog').close(); $('#dialog-content').replaceChildren(); $('#sync-state').textContent = 'Нужен вход'; notice(text);
   }
-  async function api(path, options = {}) {
-    const raw = tg?.initData;
-    if (!raw) { const e = new Error('Открой приложение через меню Telegram-бота.'); e.code = 'unauthorized'; throw e; }
-    const res = await fetch('/api/' + path, { ...options, headers: { Authorization: 'tma ' + raw, ...(options.body ? { 'Content-Type': 'application/json' } : {}) }, cache: 'no-store', signal: AbortSignal.timeout(15000) });
-    const data = await res.json();
-    if (!res.ok) { const e = new Error(data.error || 'Не удалось выполнить запрос.'); e.code = data.code; throw e; }
-    return data;
-  }
+  const api = (path, options = {}) => window.SbandRequest(path, options);
   const post = (path, body, method = 'POST') => api(path, { method, body: JSON.stringify(body) });
   function error(e) { if (e.code === 'unauthorized') reset(e.message); else notice(e.message || 'Проверь соединение и попробуй ещё раз.'); }
   function openBot(id) {
@@ -96,7 +89,7 @@
     try { if (tab === 'orders') await loadOrders(); else if (tab !== 'profile') await loadMarket(); } catch (e) { error(e); }
     window.scrollTo({ top: 0, behavior: 'instant' });
   }
-  function modal(html) { $('#dialog-content').innerHTML = html; if (!$('#purchase-dialog').open) $('#purchase-dialog').showModal(); }
+  function modal(html) { state.dialogRevision++; $('#dialog-content').innerHTML = html; if (!$('#purchase-dialog').open) $('#purchase-dialog').showModal(); }
   function dialogError(e) { if (e.code === 'unauthorized') { reset(e.message); return; } const el = $('#dialog-error'); if (el) { el.textContent = e.message; el.hidden = false; } else error(e); }
   async function checkout() {
     if (!state.items.length || state.busy) return;
@@ -144,8 +137,10 @@
     };
   }
   async function showOrder(id) {
+    const dialogRevision = ++state.dialogRevision;
     try {
       const o = await api('orders/' + id);
+      if (dialogRevision !== state.dialogRevision) return;
       modal(`<h2 id="dialog-title">Заказ #${o.id}</h2><p>${esc(o.status_label)} · ${esc(o.date)}</p><div class="info"><span>ID товара</span><b>${esc(o.product_id || '—')}</b></div><div class="info"><span>Telegram ID</span><b>${esc(o.telegram_user_id || 'Не сохранён')}</b></div><div class="info"><span>Номер</span><b class="secret-value">${esc(o.number || '—')}</b></div><div class="info"><span>Пароль 2FA</span><b class="secret-value" id="order-password">${o.status === 'refunded' ? 'Доступ закрыт' : '••••••'}</b></div>${o.status !== 'refunded' ? '<button id="show-password" class="secondary-button">Показать пароль</button>' : ''}<p>Код входа, завершение покупки и поддержка доступны в Telegram-боте.</p><button class="primary-button" data-bot-order="${o.id}">Открыть в боте <svg class="arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 18 18 6M6 6h12v12"/></svg></button>`);
       const warranty = o.warranty || {};
       $('#dialog-content').insertAdjacentHTML('beforeend', `<div class="warranty-box"><b>Гарантия: ${esc(warranty.label || 'Срок не сохранён')}</b>${warranty.until ? `<p>До ${esc(new Date(warranty.until).toLocaleString('ru-RU',{timeZone:'Europe/Moscow'}))} МСК</p>` : ''}<p>${esc(warranty.policy || '')}</p>${warranty.active ? '<button id="warranty-claim" class="secondary-button">Обратиться по гарантии</button>' : ''}</div><button id="write-review" class="secondary-button">${o.review ? 'Изменить отзыв' : 'Оставить отзыв'}</button>`);
@@ -155,8 +150,10 @@
     } catch (e) { error(e); }
   }
   async function features(id) {
+    const dialogRevision = ++state.dialogRevision;
     try {
       const item=await api('products/'+id),c=item.characteristics || {};
+      if (dialogRevision !== state.dialogRevision) return;
       modal(`<div class="product-cover">${flags[item.category] || '✳'}<span>TELEGRAM ACCOUNT</span></div><h2 id="dialog-title">${esc(item.name)}</h2><p>${esc(item.product_id)} · Telegram ID ${esc(item.telegram_user_id || 'Не сохранён')}</p><div class="info"><span>Регистрация</span><b>${esc(c.registration_date || 'Не указана')}</b></div><div class="info"><span>Premium</span><b>${c.is_premium == null ? 'Не проверено' : c.is_premium ? 'Да' : 'Нет'}</b></div><div class="info"><span>2FA</span><b>${esc(c.two_fa || 'Не указано')}</b></div><div class="info"><span>Гарантия</span><b>${c.warranty_hours == null ? 'Не указана' : c.warranty_hours+' ч'}</b></div><p>${esc(c.note)}</p><p>После оплаты данные появятся в покупках. Код входа выдаёт бот. После входа смените пароль и привяжите свою почту. Premium указан на момент проверки и может измениться.</p><button id="product-add" class="primary-button">В корзину · ${rub(item.price)}</button><button id="share-product" class="secondary-button">Поделиться товаром</button>`);
       $('#product-add').onclick=async()=>{try{await post('cart',{account_id:id});$('#purchase-dialog').close();toast('Добавлено в корзину');await loadMarket();}catch(e){error(e);}};
       $('#share-product').onclick=()=>{
@@ -191,8 +188,10 @@
     };
   }
   async function showReviews(page = 0) {
+    const dialogRevision = ++state.dialogRevision;
     try {
       const data = await api('reviews?page='+page);
+      if (dialogRevision !== state.dialogRevision) return;
       modal(`<h2 id="dialog-title">Отзывы покупателей</h2><p>Средняя оценка: ${data.average == null ? '—' : num(data.average)} / 5 · Отзывов: ${data.count}</p>${data.items.map(r=>`<article class="review"><b>${Number(r.rating)} / 5 · Покупатель</b><p>${esc(r.body)}</p><small>Подтверждённая покупка</small></article>`).join('') || '<p>Отзывов пока нет. Оставить свой можно в деталях покупки.</p>'}${page ? '<button id="previous-reviews" class="secondary-button">Предыдущие</button>' : ''}${data.has_more ? '<button id="next-reviews" class="secondary-button">Следующие</button>' : ''}`);
       if($('#previous-reviews')) $('#previous-reviews').onclick = () => showReviews(page-1);
       if($('#next-reviews')) $('#next-reviews').onclick = () => showReviews(page+1);
@@ -216,10 +215,12 @@
     };
   }
   async function topup() {
+    const dialogRevision = ++state.dialogRevision;
     if (!state.ready || state.busy) return;
     if (state.invoice) { showInvoice(); return; }
     try {
       const data = await api('payment-methods'), methods = data.items.filter(m => m.enabled);
+      if (dialogRevision !== state.dialogRevision) return;
       if (!methods.length) { modal('<h2 id="dialog-title">Пополнение баланса</h2><p>Платёжные сервисы пока не настроены. Обратись к администратору через Telegram-бота.</p><button class="primary-button" data-bot>Открыть бота <svg class="arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 18 18 6M6 6h12v12"/></svg></button>'); return; }
       modal(`<h2 id="dialog-title">Пополнить баланс</h2><p>Оплата подтвердится автоматически, обычно в течение минуты после подтверждения сервисом.</p><label for="topup-amount">Сумма, ₽</label><input id="topup-amount" type="number" inputmode="decimal" min="10" max="1000000" step="0.01" value="500"><label for="topup-method">Способ оплаты</label><select id="topup-method">${methods.map(m => `<option value="${esc(m.id)}">${esc(m.name)}</option>`).join('')}</select><p id="dialog-error" class="dialog-error" role="alert" hidden></p><button class="primary-button" id="create-invoice">Создать счёт <svg class="arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 18 18 6M6 6h12v12"/></svg></button>`);
       $('#create-invoice').onclick = async () => {
@@ -246,12 +247,12 @@
   async function synchronize() {
     if (!state.ready || state.busy || state.refreshing || document.hidden || document.body.classList.contains('admin-mode')) return;
     state.refreshing = true;
-    try { await Promise.all([loadMe(), state.tab === 'orders' ? loadOrders() : loadMarket(), checkInvoice()]); $('#sync-state').textContent = '● Обновлено сейчас'; }
+    try { await Promise.all([loadMe(), state.tab === 'orders' ? (state.orderPage === 0 ? loadOrders() : null) : (state.page === 0 ? loadMarket() : null), checkInvoice()]); $('#sync-state').textContent = (state.tab === 'orders' ? state.orderPage : state.page) > 0 ? '● Баланс обновлён' : '● Обновлено сейчас'; }
     catch(e) { $('#sync-state').textContent='Нет обновления'; if(e.code==='unauthorized') reset(e.message); }
     finally { state.refreshing=false; }
   }
   async function initialize() {
-    try { tg?.ready(); tg?.expand(); tg?.setHeaderColor('#101510'); tg?.setBackgroundColor('#101510'); await loadMe(); const info=await api('shop-info');state.wholesale=info.wholesale;state.support=info; state.ready = true; $('#login-panel').hidden = true; notice(); showPage(); await loadMarket(); $('#sync-state').textContent = '● Обновлено сейчас'; const start=tg?.initDataUnsafe?.start_param || new URLSearchParams(location.search).get('tgWebAppStartParam') || (new URLSearchParams(location.search).get('product') ? 'product_'+new URLSearchParams(location.search).get('product') : ''); if(/^product_[0-9]{1,10}$/.test(start)) await features(Number(start.slice(8))); }
+    try { tg?.ready(); tg?.expand(); tg?.setHeaderColor('#101114'); tg?.setBackgroundColor('#101114'); await loadMe(); const info=await api('shop-info');state.wholesale=info.wholesale;state.support=info; state.ready = true; $('#login-panel').hidden = true; notice(); showPage(); await loadMarket(); $('#sync-state').textContent = '● Обновлено сейчас'; const start=tg?.initDataUnsafe?.start_param || new URLSearchParams(location.search).get('tgWebAppStartParam') || (new URLSearchParams(location.search).get('product') ? 'product_'+new URLSearchParams(location.search).get('product') : ''); if(/^product_[0-9]{1,10}$/.test(start)) await features(Number(start.slice(8))); }
     catch (e) { reset(e.message); }
   }
   document.addEventListener('sband-shop',()=>{if(state.ready) { showPage(); synchronize(); }});
@@ -282,7 +283,7 @@
   $('#checkout-cart').onclick = checkout;
   $('#close-dialog').onclick = () => { if (!state.busy) $('#purchase-dialog').close(); };
   $('#purchase-dialog').addEventListener('cancel', e => { if (state.busy) e.preventDefault(); });
-  $('#purchase-dialog').addEventListener('close', () => $('#dialog-content').replaceChildren());
+  $('#purchase-dialog').addEventListener('close', () => { if (!$('#purchase-dialog').open) { state.dialogRevision++; $('#dialog-content').replaceChildren(); } });
   for (const id of ['search', 'min-price', 'max-price']) $('#' + id).addEventListener('input', () => { clearTimeout(searchTimer); searchTimer = setTimeout(() => { if (state.ready) loadMarket().catch(error); }, 300); });
   $('#sort').onchange = () => loadMarket().catch(error);
   for(const id of ['premium-filter','age-filter']) $('#'+id).onchange=()=>loadMarket().catch(error);

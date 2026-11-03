@@ -1,4 +1,5 @@
 import os
+from html import escape
 from aiogram import Router, F
 from aiogram.filters import CommandStart
 from aiogram.types import CallbackQuery, Message, FSInputFile, InlineKeyboardButton, InlineKeyboardMarkup
@@ -62,7 +63,7 @@ async def cmd_start(message: Message, command, state=None):
                 return
         await message.answer("Покупка не найдена. Откройте раздел «Мои покупки».")
 
-    user_name = message.from_user.first_name or "Гость"
+    user_name = escape(message.from_user.first_name or "Гость")
     caption_text = c.START_TEXT.replace("{name}", user_name)
 
     if os.path.isfile("assets/welcome.png"):
@@ -77,7 +78,7 @@ async def callback_back_main(call: CallbackQuery, state=None):
     if state is not None:
         await state.clear()
     await update_user_username(call.from_user.id, call.from_user.username)
-    user_name = call.from_user.first_name or "Гость"
+    user_name = escape(call.from_user.first_name or "Гость")
     caption_text = c.START_TEXT.replace("{name}", user_name)
     await edit_message_safe(call, caption_text, reply_markup=await main_menu(call.from_user.id))
     await answer_safe(call)

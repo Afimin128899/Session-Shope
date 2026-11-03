@@ -1,398 +1,212 @@
-from datetime import datetime
-from zoneinfo import ZoneInfo
-from aiogram import Router, F
+"""Paged Telegram storefront with server-held quotes and shared checkout."""
+import asyncio
+from html import escape
+import logging
+import secrets
+import time
+
+from aiogram import F, Router
+from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
 
-from database.db import (
-    buy_account,
-    get_first_available_account_by_country,
-    get_purchase_for_user,
-    get_user,
-    get_accounts_by_country,
-    get_referrer,
-    get_referral_settings,
-    buy_account_with_referral,
-    get_category,
-    get_account,
-)
-from keyboards.user_kb import (
-    after_purchase_menu,
-    confirm_buy_menu,
-    shop_menu,
-)
-from utils import constants as c
-from utils.nav import edit_message_safe, answer_safe
-from utils.emoji_map import EMOJI_CHECK, EMOJI_PHONE, EMOJI_LOCK
-
+from config import ADMIN_IDS
+from database import bot_store
+from database.db import get_category, get_purchase_for_user
+from keyboards.pagination import pagination
+from keyboards.user_kb import after_purchase_menu
+from miniapp.storage import CheckoutError, checkout, mask_phone
+from utils.actions import single_action
+from utils.button_icons import icon_for
+from utils.nav import answer_safe, edit_message_safe
+from utils.validation import page_index, positive_id
 
 shop_router = Router()
+logger = logging.getLogger(__name__)
 
 
-@shop_router.callback_query(F.data == "buy")
-async def open_shop(call: CallbackQuery, state=None):
-    if state is not None:
-        await state.clear()
-    user = await get_user(call.from_user.id)
-    balance = float(user.get("balance", 0.0)) if user else 0.0
-
-    kb, has_any = await shop_menu()
-    if not has_any:
-        text = "Нет аккаунтов в наличии"
-    else:
-        text = (
-            f"Покупка Telegram аккаунта <tg-emoji emoji-id=\"5258134813302332906\">📦</tg-emoji>\n\n"
-            f"<tg-emoji emoji-id=\"5406841020769936275\">💵</tg-emoji> <b>Баланс:</b> <code>{balance:.2f} ₽</code>\n\n"
-            f"<tg-emoji emoji-id=\"5258509201306557640\">📍</tg-emoji> Выберите категорию аккаунта:"
-        )
-    await edit_message_safe(call, text, reply_markup=kb)
-    await answer_safe(call)
+def button(text, data, role=None):
+    return [InlineKeyboardButton(text=text, callback_data=data, icon_custom_emoji_id=icon_for(role))]
 
 
-@shop_router.callback_query(F.data == "back_buy")
-async def back_buy(call: CallbackQuery, state=None):
-    if state is not None:
-        await state.clear()
-    user = await get_user(call.from_user.id)
-    balance = float(user.get("balance", 0.0)) if user else 0.0
-
-    kb, has_any = await shop_menu()
-    if not has_any:
-        text = "Нет аккаунтов в наличии"
-    else:
-        text = (
-            f"Покупка Telegram аккаунта <tg-emoji emoji-id=\"5258134813302332906\">📦</tg-emoji>\n\n"
-            f"<tg-emoji emoji-id=\"5406841020769936275\">💵</tg-emoji> <b>Баланс:</b> <code>{balance:.2f} ₽</code>\n\n"
-            f"<tg-emoji emoji-id=\"5258509201306557640\">📍</tg-emoji> Выберите категорию аккаунта:"
-        )
-    await edit_message_safe(call, text, reply_markup=kb)
-    await answer_safe(call)
-
-
-def mask_phone(phone: str) -> str:
-    """Маскирует телефонный номер до покупки.
-    Пример: +77172727266266 -> +771***6266
-    """
-    if not phone:
-        return ""
-    clean = str(phone).strip()
-    if len(clean) <= 6:
-        return clean
-    if clean.startswith("+"):
-        prefix = clean[:4]
-        suffix = clean[-4:]
-        return f"{prefix}***{suffix}"
-    else:
-        prefix = clean[:3]
-        suffix = clean[-4:]
-        return f"{prefix}***{suffix}"
-
-
-@shop_router.callback_query(F.data.startswith("buy_") & ~F.data.startswith("buy_curr:") & ~F.data.startswith("buy_acc:"))
-async def select_product(call: CallbackQuery):
-    sku = call.data[4:]  # убираем "buy_"
-    if not sku:
-        await answer_safe(call, "Товар не найден.", show_alert=True)
+@shop_router.callback_query(F.data.in_({'buy', 'back_buy'}) | F.data.startswith('shop_page:'))
+async def open_shop(call: CallbackQuery, state: FSMContext):
+    await state.clear()
+    try:
+        page = page_index(call.data.split(':')[1]) if ':' in call.data else 0
+    except ValueError as exc:
+        await answer_safe(call, str(exc), show_alert=True)
         return
-
-    cat = await get_category(sku)
-    if not cat:
-        await answer_safe(call, "Категория не найдена.", show_alert=True)
-        return
-
-    display_country = cat.get("name") or sku
-
-    accounts_list = await get_accounts_by_country(sku)
-    if not accounts_list:
-        await answer_safe(call, "Нет аккаунтов в наличии.", show_alert=True)
-        return
-
-    referrer_id = await get_referrer(call.from_user.id)
-    if referrer_id:
-        settings = await get_referral_settings()
-    else:
-        settings = None
-
-    cat_emoji = cat.get("emoji")
-    if cat_emoji and cat_emoji.isdigit():
-        cat_emoji_html = f" <tg-emoji emoji-id=\"{cat_emoji}\">☺️</tg-emoji>"
-    elif cat_emoji:
-        cat_emoji_html = f" {cat_emoji}"
-    else:
-        cat_emoji_html = " <tg-emoji emoji-id=\"5258509201306557640\">📍</tg-emoji>"
-
-    text = (
-        f"Покупка Telegram аккаунта <tg-emoji emoji-id=\"5258134813302332906\">📦</tg-emoji>\n\n"
-        f"Категория: <b>{display_country}</b>{cat_emoji_html}\n"
-        f"<tg-emoji emoji-id=\"5258134813302332906\">📦</tg-emoji> В наличии: <b>{len(accounts_list)}</b> шт.\n\n"
-        f"Выберите необходимый номер из списка ниже 👇"
-    )
-
+    categories, total, page = await bot_store.categories(call.from_user.id, page)
     rows = []
-    for acc in accounts_list:
-        acc_price = float(acc["price"])
-        if referrer_id and settings:
-            acc_display_price = round(acc_price * (1 - settings["discount_pct"] / 100), 2)
+    for cat in categories:
+        emoji = cat.get('emoji') or ''
+        label = f"{cat['name'][:35]} · от {cat['min_price']:.2f} ₽ · {cat['count']} шт."
+        rows.append([InlineKeyboardButton(
+            text=label if emoji.isdigit() else f'{emoji} {label}'.strip(),
+            callback_data=f"buy_{cat['slug']}", icon_custom_emoji_id=emoji if emoji.isdigit() else None,
+        )])
+    rows += pagination(page, total, bot_store.PAGE_SIZE, 'shop_page')
+    rows.append(button('Уведомить о поступлении', 'stock_menu', 'notifications'))
+    rows.append(button('В главное меню', 'back_main', 'back'))
+    text = '<b>Каталог аккаунтов</b>\n\nВыберите категорию. Цены учитывают вашу реферальную скидку.'
+    if not categories:
+        text = '<b>Каталог аккаунтов</b>\n\nСейчас свободных аккаунтов нет. Можно подписаться на поступление.'
+    await edit_message_safe(call, text, reply_markup=InlineKeyboardMarkup(inline_keyboard=rows))
+    await answer_safe(call)
+
+
+# Compatibility for code importing the old entry point.
+back_buy = open_shop
+
+
+@shop_router.callback_query((F.data.startswith('buy_') & ~F.data.startswith('buy_acc:') & ~F.data.startswith('buy_curr:')) | F.data.startswith('items_page:'))
+async def select_product(call: CallbackQuery):
+    try:
+        if call.data.startswith('items_page:'):
+            _, sku, raw_page = call.data.split(':')
+            page = page_index(raw_page)
         else:
-            acc_display_price = acc_price
-
-        price_str = f"{acc_display_price:.2f} ₽"
-        btn_text = f"{mask_phone(acc['number'])} — {price_str}"
-        rows.append([
-            InlineKeyboardButton(
-                text=btn_text,
-                callback_data=f"buy_acc:{acc['id']}"
-            )
-        ])
-
-    rows.append([
-        InlineKeyboardButton(
-            text="Назад",
-            callback_data="back_buy",
-        )
-    ])
-
-    kb = InlineKeyboardMarkup(inline_keyboard=rows)
-    await edit_message_safe(call, text, reply_markup=kb)
+            sku, page = call.data[4:], 0
+        if not sku or len(sku) > 40:
+            raise ValueError('Категория недоступна.')
+        cat = await get_category(sku)
+        if not cat or not cat['is_active']:
+            raise ValueError('Категория больше недоступна. Обновите каталог.')
+    except ValueError as exc:
+        await answer_safe(call, str(exc), show_alert=True)
+        return
+    accounts, total, page = await bot_store.products(call.from_user.id, sku, page)
+    rows = [button(f"SBA-{a['id']:06d} · {mask_phone(a['number'])} · {a['price']:.2f} ₽", f"buy_acc:{a['id']}") for a in accounts]
+    rows += pagination(page, total, bot_store.PAGE_SIZE, f'items_page:{sku}')
+    rows += [button('Все категории', 'back_buy', 'back')]
+    text = f"<b>{escape(cat['name'])}</b>\n\nСвободно: {total} шт.\nВыберите аккаунт, чтобы проверить цену и гарантию."
+    await edit_message_safe(call, text, reply_markup=InlineKeyboardMarkup(inline_keyboard=rows))
     await answer_safe(call)
 
 
-@shop_router.callback_query(F.data.startswith("buy_acc:"))
-async def select_specific_account(call: CallbackQuery):
-    acc_id = int(call.data.split(":")[1])
-    account = await get_account(acc_id)
-    if not account or account.get("status") != "available":
-        await answer_safe(call, "К сожалению, этот аккаунт уже недоступен.", show_alert=True)
+async def show_product(call, state, account_id):
+    item = await bot_store.product(call.from_user.id, account_id)
+    if not item:
+        await answer_safe(call, 'Аккаунт уже куплен, скрыт или зарезервирован. Обновите каталог.', show_alert=True)
         return
-
-    sku = account["country"]
-    cat = await get_category(sku)
-    display_country = cat.get("name") if cat else sku
-
-    price = float(account["price"])
-    referrer_id = await get_referrer(call.from_user.id)
-    if referrer_id:
-        settings = await get_referral_settings()
-        display_price = round(price * (1 - settings["discount_pct"] / 100), 2)
-    else:
-        display_price = price
-
-    price_str = f"{display_price:.2f} ₽"
-
-    cat_emoji = cat.get("emoji") if cat else None
-    if cat_emoji and cat_emoji.isdigit():
-        cat_emoji_html = f" <tg-emoji emoji-id=\"{cat_emoji}\">☺️</tg-emoji>"
-    elif cat_emoji:
-        cat_emoji_html = f" {cat_emoji}"
-    else:
-        cat_emoji_html = " <tg-emoji emoji-id=\"5258509201306557640\">📍</tg-emoji>"
-
+    token = secrets.token_urlsafe(6)
+    await state.clear()
+    await state.update_data(purchase_quote={
+        'id': account_id, 'price': str(item['price']), 'warranty_hours': item['warranty_hours'],
+        'token': token, 'expires': time.time() + 600,
+    })
+    hours = 'Не указана' if item['warranty_hours'] is None else f"{item['warranty_hours']} ч"
     text = (
-        "<b>Подтверждение покупки:</b>\n\n"
-        f"Категория: <b>{display_country}</b>{cat_emoji_html}\n"
-        f"Товар: <code>SBA-{account['id']:06d}</code>\n"
-        f"Telegram ID: <code>{account.get('telegram_user_id') or 'Не сохранён'}</code>\n"
-        f"Гарантия: {str(account['warranty_hours']) + ' ч' if account.get('warranty_hours') is not None else 'Не указана'}\n"
-        f"Регистрация: {account.get('registration_date') or 'Не указана'}\n"
-        f"Premium: {'Не проверено' if account.get('is_premium') is None else 'Да' if account['is_premium'] else 'Нет'}\n"
-        f"📱 Номер: <code>{mask_phone(account['number'])}</code>\n"
-        f"<tg-emoji emoji-id=\"5406841020769936275\">💵</tg-emoji> Цена: <b>{price_str}</b>\n\n"
-        "<blockquote>"
-        f"<tg-emoji emoji-id=\"5258474669769497337\">❗️</tg-emoji> <b>Важно:</b> после покупки вам будет выдан номер, после ввода придет код.\n\n"
-        f"<tg-emoji emoji-id=\"5258474669769497337\">❗️</tg-emoji> Если есть сессия — удалить через 24ч.\n\n"
-        f"<tg-emoji emoji-id=\"5258474669769497337\">❗️</tg-emoji> Поставьте облачный пароль и почту."
-        "</blockquote>"
+        '<b>Подтверждение покупки</b>\n\n'
+        f"Категория: <b>{escape(item['name'])}</b>\nТовар: <code>SBA-{account_id:06d}</code>\n"
+        f"Telegram ID: <code>{item['telegram_user_id'] or 'Не сохранён'}</code>\n"
+        f"Гарантия: {hours}\nРегистрация: {escape(str(item['registration_date'] or 'Не указана'))}\n"
+        f"Premium: {'Не проверено' if item['is_premium'] is None else 'Да' if item['is_premium'] else 'Нет'}\n"
+        f"Номер: <code>{escape(mask_phone(item['number']))}</code>\nК оплате: <b>{item['price']:.2f} ₽</b>\n\n"
+        'После оплаты номер и данные входа появятся в покупках. После входа смените пароль и привяжите свою почту. '
+        'Оптовая скидка и промокод на скидку применяются при оплате корзины в Mini App.'
     )
-
-    kb = InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                InlineKeyboardButton(
-                    text=f"Купить за {price_str}",
-                    callback_data=f"confirm_buy_acc:{acc_id}",
-                    icon_custom_emoji_id="5406841020769936275",
-                )
-            ],
-            [
-                InlineKeyboardButton(
-                    text="Назад",
-                    callback_data=f"buy_{sku}",
-                )
-            ]
-        ]
-    )
-
-    await edit_message_safe(call, text, reply_markup=kb)
+    rows = [button(f"Купить за {item['price']:.2f} ₽", f'confirm_buy_acc:{account_id}:{token}', 'confirm'),
+            button('Назад к категории', f"buy_{item['country']}", 'back')]
+    await edit_message_safe(call, text, reply_markup=InlineKeyboardMarkup(inline_keyboard=rows))
     await answer_safe(call)
 
 
-@shop_router.callback_query(F.data.startswith("confirm_buy:") | F.data.startswith("confirm_buy_acc:"))
-async def confirm_purchase(call: CallbackQuery):
-    if call.data.startswith("confirm_buy_acc:"):
-        acc_id = int(call.data.split(":")[1])
-        account = await get_account(acc_id)
-        if not account or account.get("status") != "available":
-            await answer_safe(call, "❌ Извините, этот аккаунт уже куплен.", show_alert=True)
-            return
-        sku = account["country"]
-    else:
-        parts = call.data.split(":")
-        sku = parts[1]
-        account = await get_first_available_account_by_country(sku)
-        if not account:
-            await answer_safe(call, "Нет аккаунтов в наличии.", show_alert=True)
-            return
-
-    cat = await get_category(sku)
-    display_country = cat.get("name") if cat else sku
-
-    user = await get_user(call.from_user.id)
-    price_rub = float(account["price"])
-
-    referrer_id = await get_referrer(call.from_user.id)
-    if referrer_id:
-        settings = await get_referral_settings()
-        effective_price_rub = round(price_rub * (1 - settings["discount_pct"] / 100), 2)
-    else:
-        settings = None
-        effective_price_rub = price_rub
-
-    user_balance = float(user.get("balance", 0.0)) if user else 0.0
-
-    if user_balance < effective_price_rub:
-        price_fmt = f"{effective_price_rub:.2f} ₽"
-        await answer_safe(call, f"❌ Недостаточно средств на рублёвом балансе. Требуется {price_fmt}.", show_alert=True)
+@shop_router.callback_query(F.data.startswith('buy_acc:'))
+async def select_specific_account(call: CallbackQuery, state: FSMContext):
+    try:
+        account_id = positive_id(call.data.split(':')[1])
+    except (ValueError, IndexError):
+        await answer_safe(call, 'Некорректный товар. Откройте каталог заново.', show_alert=True)
         return
+    await show_product(call, state, account_id)
 
-    date_str = datetime.now(ZoneInfo('Europe/Moscow')).strftime("%Y-%m-%d %H:%M:%S")
 
-    if referrer_id and settings:
-        purchase_id = await buy_account_with_referral(
-            call.from_user.id, account["id"], price_rub, date_str,
-            settings["discount_pct"], settings["bonus_pct"],
-            referrer_id=referrer_id, currency="RUB"
-        )
-    else:
-        purchase_id = await buy_account(
-            call.from_user.id, account["id"], price_rub, date_str, currency="RUB"
-        )
-
-    if not purchase_id:
-        await answer_safe(call, "Ошибка транзакции. Попробуйте снова.", show_alert=True)
+@shop_router.callback_query(F.data.startswith('confirm_buy:') | F.data.startswith('confirm_buy_acc:'))
+async def confirm_purchase(call: CallbackQuery, state: FSMContext):
+    # Old messages never silently purchase a newly priced or different account.
+    parts = call.data.split(':')
+    if parts[0] == 'confirm_buy':
+        rows, _, _ = await bot_store.products(call.from_user.id, parts[1] if len(parts) > 1 else '')
+        if rows:
+            await show_product(call, state, rows[0]['id'])
+        else:
+            await answer_safe(call, 'Обновите каталог: аккаунт недоступен.', show_alert=True)
         return
-
-    # Отправка уведомления администраторам о покупке
-    from config import ADMIN_IDS
-    import logging
-
-    buyer_info = f"@{call.from_user.username}" if call.from_user.username else f"<a href='tg://user?id={call.from_user.id}'>{call.from_user.first_name}</a>"
-    price_str = f"{effective_price_rub:.2f} ₽"
-
-    admin_text = (
-        f'<tg-emoji emoji-id="5224268678345794470">🛍</tg-emoji> <b>Уведомление о продаже аккаунта!</b>\n\n'
-        f'<tg-emoji emoji-id="5341569745642595696">💻</tg-emoji> <b>Номер:</b> <code>{account["number"]}</code>\n'
-        f'<tg-emoji emoji-id="5778661935927004845">📍</tg-emoji> <b>Категория:</b> <b>{display_country}</b>\n'
-        f'<tg-emoji emoji-id="5987880246865565644">💰</tg-emoji> <b>Цена:</b> <code>{price_str}</code>\n'
-        f'<tg-emoji emoji-id="5886412370347036129">👤</tg-emoji> <b>Покупатель:</b> {buyer_info} (ID: <code>{call.from_user.id}</code>)'
-    )
-
-    for admin_id in ADMIN_IDS:
+    try:
+        account_id = positive_id(parts[1])
+    except (ValueError, IndexError):
+        await answer_safe(call, 'Некорректный товар.', show_alert=True)
+        return
+    async with single_action(call.from_user.id, 'purchase') as acquired:
+        if not acquired:
+            await answer_safe(call, 'Покупка уже обрабатывается. Подождите.', show_alert=True)
+            return
+        quote = (await state.get_data()).get('purchase_quote') or {}
+        if len(parts) != 3 or quote.get('id') != account_id or quote.get('token') != parts[2] or quote.get('expires', 0) <= time.time():
+            await show_product(call, state, account_id)
+            return
         try:
-            await call.bot.send_message(chat_id=admin_id, text=admin_text)
-        except Exception as admin_err:
-            logging.error(f"[shop] Не удалось отправить уведомление админу {admin_id}: {admin_err}")
-
-    remaining_balance = user_balance - effective_price_rub
-    display_spent = f"{effective_price_rub:.2f} ₽"
-    display_balance = f"<tg-emoji emoji-id='5406841020769936275'>☺️</tg-emoji> Баланс: <b>{remaining_balance:.2f} ₽</b>"
-
-    cat_emoji = cat.get("emoji") if cat else None
-    if cat_emoji and cat_emoji.isdigit():
-        cat_emoji_html = f" <tg-emoji emoji-id=\"{cat_emoji}\">☺️</tg-emoji>"
-    elif cat_emoji:
-        cat_emoji_html = f" {cat_emoji}"
-    else:
-        cat_emoji_html = " <tg-emoji emoji-id=\"5258509201306557640\">📍</tg-emoji>"
-
-    text = (
-        f"<tg-emoji emoji-id='{EMOJI_CHECK}'>✅</tg-emoji> <b>Покупка #{purchase_id} оформлена!</b>\n"
-        "Статус: <b>Оплачен и выдан</b>\n\n"
-        f"Категория: <b>{display_country}</b>{cat_emoji_html}\n"
-        f"<tg-emoji emoji-id='{EMOJI_PHONE}'>📞</tg-emoji> Номер: <code>{account['number']}</code>\n"
-        f"<tg-emoji emoji-id='{EMOJI_LOCK}'>🔒</tg-emoji> Пароль: <code>{account.get('password') or '-'}</code>\n"
-        f"{c.MSG_EMOJI_MONEY} Списано: <b>{display_spent}</b>\n"
-        f"{display_balance}\n\n"
-        f"<i>Нажмите кнопку ниже для получения кода входа.</i>"
-    )
-
-    await edit_message_safe(call, text, reply_markup=await after_purchase_menu(purchase_id))
-    await answer_safe(call, "Успешно!", show_alert=False)
+            from decimal import Decimal
+            result = await checkout(call.from_user.id, account_id, Decimal(quote['price']), warranty_hours=quote['warranty_hours'])
+        except CheckoutError as exc:
+            await answer_safe(call, str(exc), show_alert=True)
+            if exc.code in {'price_changed', 'terms_changed'}:
+                await show_product(call, state, account_id)
+            return
+        await state.update_data(purchase_quote=None)
+        order = await get_purchase_for_user(result['id'], call.from_user.id)
+        if not order or order['status'] == 'refunded':
+            await answer_safe(call, 'Откройте «Мои покупки», чтобы проверить статус заказа.', show_alert=True)
+            return
+        text = (
+            f"✅ <b>Покупка #{result['id']} оформлена!</b>\n\n"
+            f"Номер: <code>{escape(order['number'])}</code>\n"
+            f"Пароль 2FA: <code>{escape(order.get('password') or 'Не установлен')}</code>\n"
+            f"Списано: <b>{result['paid_amount']} ₽</b>\nБаланс после покупки: <b>{result['balance']} ₽</b>\n\n"
+            'Введите номер в Telegram и запросите код кнопкой ниже.'
+        )
+        await edit_message_safe(call, text, reply_markup=await after_purchase_menu(result['id']))
+        await answer_safe(call, 'Покупка оформлена!')
+        for admin_id in set(ADMIN_IDS):
+            try:
+                await call.bot.send_message(admin_id, f"🛍 Заказ #{result['id']} · покупатель {call.from_user.id} · {result['paid_amount']} ₽")
+            except Exception:
+                logger.warning('Sale notification delivery failed')
 
 
-@shop_router.callback_query(F.data.startswith("get_code:"))
+@shop_router.callback_query(F.data.startswith('get_code:'))
 async def deliver_login_code(call: CallbackQuery):
-    import logging
-    logger = logging.getLogger("handlers.user.shop")
-
-    purc_id = int(call.data.split(":")[1])
-    user_id = call.from_user.id
-    username = call.from_user.username or "Unknown"
-
-    logger.info(f"[deliver_login_code] User {user_id} (@{username}) requested verification code for purchase ID: {purc_id}")
-
-    row = await get_purchase_for_user(purc_id, user_id)
-
-    if not row:
-        logger.warning(f"[deliver_login_code] Purchase ID {purc_id} not found or not owned by user {user_id}")
-        await answer_safe(call, "Покупка не найдена.", show_alert=True)
+    try:
+        purchase_id = positive_id(call.data.split(':')[1])
+    except (ValueError, IndexError):
+        await answer_safe(call, 'Некорректный заказ.', show_alert=True)
         return
-
-    if row.get('status') == 'refunded':
-        await answer_safe(call, "Заказ возвращён на баланс. Доступ к данным аккаунта закрыт.", show_alert=True)
-        return
-
-    session_str = row.get("data") or ""
-    phone_number = row.get("number") or "Unknown"
-    logger.info(f"[deliver_login_code] Found purchase record. Phone: {phone_number}. Session length: {len(session_str)}")
-
-    if session_str == '✅ Сессия удалена (Покупка завершена)':
-        logger.warning(f"[deliver_login_code] Session for purchase ID {purc_id} has already been deleted.")
-        await answer_safe(call, "Сессия удалена. Посмотрите код в архиве покупок.", show_alert=True)
-        return
-
-    await answer_safe(call, "🔄 Запрашиваем код...", show_alert=False)
-
-    from services.telethon_code import try_fetch_login_code
-
-    logger.info(f"[deliver_login_code] Initiating Telethon connection to fetch code for {phone_number}...")
-    code = await try_fetch_login_code(session_str, phone_number)
-
-    current_order = await get_purchase_for_user(purc_id, user_id)
-    if not current_order or current_order.get('status') == 'refunded':
-        await answer_safe(call, "Заказ недоступен или возвращён на баланс.", show_alert=True)
-        return
-
-    if code == "SESSION_NOT_AUTHORIZED":
-        logger.error(f"[deliver_login_code] FAILED. Session for {phone_number} is no longer authorized (expired or logged out).")
-        await answer_safe(
-            call,
-            "❌ Сессия аккаунта неактивна или устарела (аккаунт вышел из сети).\nОбратитесь в поддержку за заменой.",
-            show_alert=True,
-        )
-    elif code:
-        logger.info("[deliver_login_code] Code delivered for purchase %s", purc_id)
-        await edit_message_safe(
-            call,
-            f"<tg-emoji emoji-id='{EMOJI_CHECK}'>✅</tg-emoji> <b>Код успешно получен!</b>\n\n"
-            f"<tg-emoji emoji-id='{EMOJI_PHONE}'>📞</tg-emoji> Номер: <code>{phone_number}</code>\n"
-            f"<tg-emoji emoji-id='{EMOJI_LOCK}'>🔒</tg-emoji> Код входа: <code>{code}</code>\n"
-            f"<tg-emoji emoji-id='{EMOJI_LOCK}'>🔒</tg-emoji> Пароль (2FA): <code>{row.get('password') or '-'}</code>\n\n"
-            f"<i>⚠️ Введите код. Если Telegram запросит 2FA — используйте пароль выше.</i>",
-            reply_markup=await after_purchase_menu(purc_id),
-        )
-    else:
-        logger.warning(f"[deliver_login_code] FAILED. Code did not arrive for {phone_number} within wait limit.")
-        await answer_safe(
-            call,
-            "⏳ Код пока не пришел.\n\nУбедитесь, что вы ввели номер в приложении. Повторите через 10 сек.",
-            show_alert=True,
-        )
+    async with single_action(call.from_user.id, f'code:{purchase_id}') as acquired:
+        if not acquired:
+            await answer_safe(call, 'Код уже запрашивается. Подождите.', show_alert=True)
+            return
+        order = await get_purchase_for_user(purchase_id, call.from_user.id)
+        if not order or order['status'] != 'issued' or not order.get('data') or order['data'] == bot_store.DELETED_SESSION:
+            await answer_safe(call, 'Заказ недоступен для получения кода. Откройте «Мои покупки».', show_alert=True)
+            return
+        await answer_safe(call, 'Запрашиваем код…')
+        from services.telethon_code import try_fetch_login_code
+        try:
+            code = await asyncio.wait_for(try_fetch_login_code(order['data'], order['number']), timeout=30)
+        except TimeoutError:
+            code = None
+        current = await get_purchase_for_user(purchase_id, call.from_user.id)
+        if not current or current['status'] != 'issued' or current.get('data') != order['data']:
+            await answer_safe(call, 'Состояние заказа изменилось. Откройте покупку заново.', show_alert=True)
+            return
+        if code == 'SESSION_NOT_AUTHORIZED':
+            await answer_safe(call, 'Сессия неактивна. Откройте обращение по заказу в поддержку.', show_alert=True)
+        elif code:
+            await edit_message_safe(call,
+                f"<b>Код входа · заказ #{purchase_id}</b>\n\nНомер: <code>{escape(current['number'])}</code>\n"
+                f"Код: <code>{escape(code)}</code>\nПароль 2FA: <code>{escape(current.get('password') or 'Не установлен')}</code>\n\n"
+                'Не передавайте код другим людям. После входа смените пароль и привяжите почту.',
+                reply_markup=await after_purchase_menu(purchase_id))
+        else:
+            await answer_safe(call, 'Код пока не пришёл. Введите номер в Telegram и повторите через 10 секунд.', show_alert=True)
