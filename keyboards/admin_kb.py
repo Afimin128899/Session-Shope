@@ -37,6 +37,7 @@ def get_admin_panel() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [InlineKeyboardButton(text="Инструменты магазина", callback_data="expand_tools")],
+            [InlineKeyboardButton(text="Проверить спамблок всех аккаунтов", callback_data="spam_all")],
             [InlineKeyboardButton(text="🎟 Создать промокод скидки", callback_data="quality_discount")],
             [InlineKeyboardButton(text="📊 Отчёт за вчера", callback_data="market_report")],
             [InlineKeyboardButton(text="🛟 Обращения покупателей", callback_data="tk_admin:active:0")],
@@ -351,6 +352,7 @@ def accounts_list_menu(accounts: list, page: int = 0) -> InlineKeyboardMarkup:
 def account_detail_menu(account_id: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
+            [InlineKeyboardButton(text="Проверить спамблок", callback_data=f"spam_check:{account_id}")],
             [InlineKeyboardButton(text="Характеристики и гарантия", callback_data=f"quality_features:{account_id}")],
             [
                 InlineKeyboardButton(

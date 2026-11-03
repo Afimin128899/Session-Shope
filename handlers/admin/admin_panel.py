@@ -553,6 +553,8 @@ async def show_account_detail(call: CallbackQuery):
         f"{CHART} Статус: {status_text}\n"
     )
 
+    from database.spam_checks import description as spam_description
+    text += "\nСпамблок: " + spam_description(account) + "\n"
     await edit_message_safe(call, text, reply_markup=account_detail_menu(acc_id))
     await answer_safe(call)
 

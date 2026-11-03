@@ -28,6 +28,7 @@ from services.restock import restock_worker
 
 from handlers.admin.admin_panel import admin_router
 from handlers.admin.tools import admin_tools_router
+from handlers.admin.spam_checks import spam_router
 from handlers.admin.refunds import refund_router
 from handlers.admin.manage import manage_router
 from handlers.admin.broadcast import broadcast_router
@@ -89,7 +90,7 @@ async def main():
     dp.include_routers(
         commands_router, start_router, balance_router, shop_router, purchases_router, promo_router, profile_router,
         admin_router, manage_router, broadcast_router, add_account_router, button_editor_router,
-        cat_router, restock_router, admin_tools_router, ticket_router, refund_router, quality_router, expansion_router, fallback_router,
+        cat_router, restock_router, admin_tools_router, spam_router, ticket_router, refund_router, quality_router, expansion_router, fallback_router,
     )
 
     logging.info("Starting bot...")
@@ -109,7 +110,8 @@ async def main():
             ))
         from services.payments import payment_worker
         from services.market_notifications import market_worker
-        notification_tasks = [asyncio.create_task(worker(bot)) for worker in (restock_worker, payment_worker, market_worker)]
+        from services.spam_check import spam_worker
+        notification_tasks = [asyncio.create_task(worker(bot)) for worker in (restock_worker, payment_worker, market_worker, spam_worker)]
         await dp.start_polling(bot, close_bot_session=False)
     finally:
         for task in notification_tasks:

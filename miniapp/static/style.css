@@ -10,3 +10,7 @@
 @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important}}
 
 .nav-icon{width:20px;height:20px;display:block;stroke:currentColor;stroke-width:1.5;fill:none;stroke-linecap:round;stroke-linejoin:round}.hero-mark .arrow{width:28px;height:28px}.side-nav .admin-entry{border-radius:9px}.admin-mode .side-nav [data-tab]{background:none;color:var(--muted)}.admin-mode .side-nav .admin-entry{background:#2c293b;color:#e1dbf3}
+
+.spam-line{font-size:11px;line-height:1.5;color:var(--muted);margin:6px 0 12px;overflow-wrap:anywhere}
+
+.spam-limited{color:var(--danger)}

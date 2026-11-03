@@ -571,7 +571,7 @@ async def buy_account(user_id: int, account_id: int, price: float, date_str: str
             async with conn.cursor() as cur:
                 # Блокируем аккаунт и проверяем статус
                 await cur.execute(
-                    "SELECT id, status FROM accounts WHERE id = %s AND status = 'available' FOR UPDATE",
+                    "SELECT id, status FROM accounts WHERE id = %s AND status = 'available' AND (spam_lease_until IS NULL OR spam_lease_until<=UTC_TIMESTAMP()) FOR UPDATE",
                     (account_id,)
                 )
                 acc_row = await cur.fetchone()
@@ -1021,7 +1021,7 @@ async def buy_account_with_referral(
                 bonus_amount = round(price * bonus_pct / 100, 8)
 
                 await cur.execute(
-                    "SELECT id, status FROM accounts WHERE id = %s AND status = 'available' FOR UPDATE",
+                    "SELECT id, status FROM accounts WHERE id = %s AND status = 'available' AND (spam_lease_until IS NULL OR spam_lease_until<=UTC_TIMESTAMP()) FOR UPDATE",
                     (account_id,)
                 )
                 acc_row = await cur.fetchone()

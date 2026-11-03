@@ -92,6 +92,10 @@ def role_for(button):
         return None
     if data.startswith('tk_photo:'):
         return 'file'
+    if data.startswith(('spam_check:', 'spam_show:')) or data == 'spam_all':
+        return 'warranty'
+    if data == 'spam_all_yes':
+        return 'confirm'
     if data.startswith(('tk_reply:', 'tk_user:', 'tk_admin:', 'tk:', 'purchase_help:')):
         return 'support'
     if data.startswith('tk_close:'):

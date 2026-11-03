@@ -177,6 +177,8 @@ async def order_detail(request):
                     {'name': row.get('country', 'Аккаунт'), 'product_id': f"SBA-{row['account_id']:06d}" if row.get('account_id') else None, 'status_label': order_status(row)})
     result['warranty'] = quality.warranty(row)
     result['characteristics'] = json.loads(row.get('attributes_snapshot') or '{}')
+    from database.spam_checks import public as spam_status
+    result['characteristics']['spam_check'] = spam_status(result['characteristics'])
     result['review'] = await quality.my_review(request['user']['id'],row['id'])
     return response(result)
 
@@ -228,6 +230,8 @@ async def cart_checkout(request):
         if not isinstance(item, dict):
             raise ValueError
         account_value(item)
+        if 'spam_status' in item and (not isinstance(item['spam_status'],str) or item['spam_status'] not in {'not_checked','clear','limited','unknown','error'}):
+            raise ValueError
         if 'warranty_hours' in item and item['warranty_hours'] is not None and (type(item['warranty_hours']) is not int or not 0<=item['warranty_hours']<=8760):
             raise ValueError
         price = item.get('price')

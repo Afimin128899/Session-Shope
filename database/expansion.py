@@ -66,10 +66,11 @@ async def replace(admin,purchase,new_account,reason):
         if not order['in_time'] and not claim: raise ValueError('Нет действующей гарантии или принятой в срок заявки.')
         await cur.execute('SELECT purchase_id FROM replacement_orders WHERE purchase_id=%s',(purchase,))
         if await cur.fetchone(): raise ValueError('По этому заказу замена уже выполнена.')
-        await cur.execute('SELECT id,country,status FROM accounts WHERE id IN (%s,%s) ORDER BY id FOR UPDATE',(order['account_id'],new_account))
+        await cur.execute('SELECT id,country,status,spam_lease_until>UTC_TIMESTAMP() AS spam_running FROM accounts WHERE id IN (%s,%s) ORDER BY id FOR UPDATE',(order['account_id'],new_account))
         accounts={r['id']:r for r in await cur.fetchall()}
         old,new=accounts.get(order['account_id']),accounts.get(new_account)
         if not old or not new or new['status']!='available' or old['country']!=new['country']: raise ValueError('Нужен свободный аккаунт той же категории.')
+        if new.get('spam_running'): raise ValueError('Новый аккаунт проверяется через @SpamBot. Повторите через минуту.')
         await cur.execute('SELECT user_id FROM account_reservations WHERE account_id=%s AND expires_at>UTC_TIMESTAMP() FOR UPDATE',(new_account,))
         hold=await cur.fetchone()
         if hold and hold['user_id']!=order['user_id']: raise ValueError('Товар зарезервирован другим покупателем.')

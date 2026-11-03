@@ -11,6 +11,7 @@ from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMar
 
 from config import ADMIN_IDS
 from database import bot_store
+from database import spam_checks
 from database.db import get_category, get_purchase_for_user
 from keyboards.pagination import pagination
 from keyboards.user_kb import after_purchase_menu
@@ -90,9 +91,11 @@ async def show_product(call, state, account_id):
         await answer_safe(call, 'Аккаунт уже куплен, скрыт или зарезервирован. Обновите каталог.', show_alert=True)
         return
     token = secrets.token_urlsafe(6)
+    spam = spam_checks.public(item)
     await state.clear()
     await state.update_data(purchase_quote={
         'id': account_id, 'price': str(item['price']), 'warranty_hours': item['warranty_hours'],
+        'spam_status': spam['status'],
         'token': token, 'expires': time.time() + 600,
     })
     hours = 'Не указана' if item['warranty_hours'] is None else f"{item['warranty_hours']} ч"
@@ -102,11 +105,12 @@ async def show_product(call, state, account_id):
         f"Telegram ID: <code>{item['telegram_user_id'] or 'Не сохранён'}</code>\n"
         f"Гарантия: {hours}\nРегистрация: {escape(str(item['registration_date'] or 'Не указана'))}\n"
         f"Premium: {'Не проверено' if item['is_premium'] is None else 'Да' if item['is_premium'] else 'Нет'}\n"
+        f"Спамблок: {escape(spam_checks.description(item))}\n"
         f"Номер: <code>{escape(mask_phone(item['number']))}</code>\nК оплате: <b>{item['price']:.2f} ₽</b>\n\n"
         'После оплаты номер и данные входа появятся в покупках. После входа смените пароль и привяжите свою почту. '
         'Оптовая скидка и промокод на скидку применяются при оплате корзины в Mini App.'
     )
-    rows = [button(f"Купить за {item['price']:.2f} ₽", f'confirm_buy_acc:{account_id}:{token}', 'confirm'),
+    rows = [button('Обновить проверку', f'buy_acc:{account_id}', 'refresh') if spam['running'] else button(f"Купить за {item['price']:.2f} ₽", f'confirm_buy_acc:{account_id}:{token}', 'confirm'),
             button('Назад к категории', f"buy_{item['country']}", 'back')]
     await edit_message_safe(call, text, reply_markup=InlineKeyboardMarkup(inline_keyboard=rows))
     await answer_safe(call)
@@ -148,7 +152,8 @@ async def confirm_purchase(call: CallbackQuery, state: FSMContext):
             return
         try:
             from decimal import Decimal
-            result = await checkout(call.from_user.id, account_id, Decimal(quote['price']), warranty_hours=quote['warranty_hours'])
+            terms = {'spam_status':quote['spam_status']} if 'spam_status' in quote else {}
+            result = await checkout(call.from_user.id, account_id, Decimal(quote['price']), warranty_hours=quote['warranty_hours'], **terms)
         except CheckoutError as exc:
             await answer_safe(call, str(exc), show_alert=True)
             if exc.code in {'price_changed', 'terms_changed'}:

@@ -1,11 +1,13 @@
 """Owner-scoped order pages and explicit confirmation before session removal."""
 from html import escape
+import json
 
 from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
 
 from database import bot_store
+from database import spam_checks
 from database.db import get_category, get_purchase_for_user
 from database.quality import warranty
 from keyboards.pagination import pagination
@@ -63,6 +65,12 @@ async def render_order(call, purchase_id):
         name = cat['name'] if cat else order['country']
         assurance = warranty(order)
         paid = 'Сумма не сохранена' if order['paid_amount'] is None else f"{order['paid_amount']} {escape(order.get('currency') or '')}"
+        try:
+            snapshot = json.loads(order.get('attributes_snapshot') or '{}')
+        except (ValueError, TypeError):
+            snapshot = {}
+        if not isinstance(snapshot, dict):
+            snapshot = {}
         text = (
             f'<b>Детали покупки #{purchase_id}</b>\n\n'
             f"Категория: <b>{escape(name)}</b>\nСтатус: <b>{escape(order_status(order))}</b>\n"
@@ -71,6 +79,7 @@ async def render_order(call, purchase_id):
             f"Номер: <code>{escape(order['number'])}</code>\n"
             f"Пароль 2FA: <code>{escape(order.get('password') or 'Не установлен')}</code>\n"
             f"Оплачено: {paid}\nДата: {escape(str(order['date']))}\n"
+            f"Спамблок при покупке: {escape(spam_checks.description(snapshot))}\n"
             f"Гарантия: <b>{escape(assurance['label'])}</b>"
         )
         if assurance['active']:

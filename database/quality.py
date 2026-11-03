@@ -42,6 +42,8 @@ async def init_schema(cur, database):
     await expand_schema(cur)
     from database.imports import init_schema as import_schema
     await import_schema(cur)
+    from database.spam_checks import init_schema as spam_schema
+    await spam_schema(cur, database)
 
 
 async def snapshot(cur, purchase_id):
@@ -52,6 +54,7 @@ async def snapshot(cur, purchase_id):
             p.warranty_policy=%s,
             p.attributes_snapshot=JSON_OBJECT('country',a.country,'registration_date',a.registration_date,
                 'is_premium',a.is_premium,'features_note',a.features_note,'checked_at',a.attributes_checked_at,
+                'spam_status',a.spam_status,'spam_checked_at',a.spam_checked_at,
                 'two_fa',CASE WHEN a.password IS NOT NULL AND a.password NOT IN ('','-') THEN 'Пароль указан' ELSE 'Пароль не указан' END)
         WHERE p.id=%s''',(POLICY,purchase_id))
 
@@ -67,12 +70,13 @@ def warranty(row):
 
 
 def characteristics(row):
+    from database.spam_checks import public as spam_status
     registered=row.get('registration_date')
     return {'registration_date':str(registered) if registered else None,
             'is_premium':None if row.get('is_premium') is None else bool(row['is_premium']),
             'note':row.get('features_note') or '', 'checked_at':str(row['attributes_checked_at']) if row.get('attributes_checked_at') else None,
             'two_fa':'Пароль указан' if row.get('password') not in (None,'','-') else 'Пароль не указан',
-            'warranty_hours':row.get('warranty_hours')}
+            'warranty_hours':row.get('warranty_hours'), 'spam_check':spam_status(row)}
 
 
 async def edit_characteristics(admin_id, account_id, *, hours, registered, premium, note):

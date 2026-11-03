@@ -82,7 +82,7 @@ async def catalog(user_id, category='', query='', sort='new', page=0, *, min_pri
                 'discount': 'CASE WHEN a.compare_price>a.price THEN 1-a.price/a.compare_price ELSE 0 END DESC,a.id DESC',
             }[sort]
             await cur.execute(
-                'SELECT a.id,a.telegram_user_id,a.number,a.price,a.compare_price,a.status,a.password,a.registration_date,a.features_note,a.is_premium,a.attributes_checked_at,a.warranty_hours,c.is_active,c.slug,c.name,'
+                'SELECT a.id,a.telegram_user_id,a.number,a.price,a.compare_price,a.status,a.password,a.registration_date,a.features_note,a.is_premium,a.attributes_checked_at,a.warranty_hours,a.spam_status,a.spam_checked_at,a.spam_lease_until,c.is_active,c.slug,c.name,'
                 'f.user_id AS favorite,t.user_id AS in_cart,r.user_id AS reserved_by,r.expires_at '
                 'FROM accounts a JOIN categories c ON c.slug=a.country '
                 'LEFT JOIN account_favorites f ON f.account_id=a.id AND f.user_id=%s '
@@ -101,7 +101,7 @@ async def catalog(user_id, category='', query='', sort='new', page=0, *, min_pri
                               'price':str(price),'original_price':str(before),'discount':str(reduction),
                               'favorite':bool(row['favorite']), 'in_cart':bool(row['in_cart']),
                               'characteristics':quality.characteristics(row),
-                              'available':bool(row['is_active']) and row['status']=='available' and row['reserved_by'] in (None,user_id),
+                              'available':bool(row['is_active']) and row['status']=='available' and row['reserved_by'] in (None,user_id) and not quality.characteristics(row)['spam_check']['running'],
                               'reserved_until':row['expires_at'].replace(tzinfo=timezone.utc).isoformat() if row['reserved_by']==user_id else None})
             return {'categories':categories,'has_more':len(rows)>24,'items':items}
 
@@ -116,15 +116,19 @@ async def access_settings():
 _UNSET = object()
 
 
-async def checkout(user_id, account_id, quoted_price, *, warranty_hours=_UNSET):
+async def checkout(user_id, account_id, quoted_price, *, warranty_hours=_UNSET, spam_status=_UNSET):
     async with _transaction() as cur:
         await cur.execute(
-            "SELECT a.id, a.price, a.country, a.warranty_hours FROM accounts a JOIN categories c ON c.slug = a.country "
+            "SELECT a.id, a.price, a.country, a.warranty_hours, a.spam_status, a.spam_lease_until>UTC_TIMESTAMP() AS spam_running FROM accounts a JOIN categories c ON c.slug = a.country "
             "WHERE a.id = %s AND a.status = 'available' AND c.is_active = 1 FOR UPDATE", (account_id,),
         )
         account = await cur.fetchone()
         if account is None:
             raise CheckoutError('Этот аккаунт уже куплен. Обновите каталог.', 'sold')
+        if account.get('spam_running'):
+            raise CheckoutError('Идёт проверка аккаунта через @SpamBot. Повторите через минуту.', 'checking')
+        if spam_status is not _UNSET and account['spam_status'] != spam_status:
+            raise CheckoutError('Результат проверки спамблока изменился. Подтвердите покупку заново.', 'terms_changed')
         if warranty_hours is not _UNSET and account['warranty_hours'] != warranty_hours:
             raise CheckoutError('Условия гарантии изменились. Подтвердите покупку заново.', 'terms_changed')
         await cur.execute('SELECT user_id FROM account_reservations WHERE account_id=%s AND expires_at>UTC_TIMESTAMP() FOR UPDATE', (account_id,))
@@ -187,11 +191,15 @@ async def checkout_cart(user_id, requested, promo_code=None, expected_total=None
     ids=sorted(quotes)
     placeholders=','.join(['%s']*len(ids))
     async with _transaction() as cur:
-        await cur.execute("SELECT a.id,a.price,a.warranty_hours FROM accounts a JOIN categories c ON c.slug=a.country WHERE a.id IN ("+placeholders+") AND a.status='available' AND c.is_active=1 ORDER BY a.id FOR UPDATE",tuple(ids))
+        await cur.execute("SELECT a.id,a.price,a.warranty_hours,a.spam_status,a.spam_lease_until>UTC_TIMESTAMP() AS spam_running FROM accounts a JOIN categories c ON c.slug=a.country WHERE a.id IN ("+placeholders+") AND a.status='available' AND c.is_active=1 ORDER BY a.id FOR UPDATE",tuple(ids))
         accounts=list(await cur.fetchall())
         if len(accounts)!=len(ids):
             raise CheckoutError('Один из аккаунтов уже недоступен. Корзина не оплачена.', 'sold')
+        if any(row.get('spam_running') for row in accounts):
+            raise CheckoutError('Один из аккаунтов проверяется через @SpamBot. Повторите через минуту.', 'checking')
         terms={item['account_id']:item for item in requested}
+        if any('spam_status' in terms[row['id']] and terms[row['id']]['spam_status'] != row['spam_status'] for row in accounts):
+            raise CheckoutError('Результат проверки спамблока изменился. Обновите корзину.', 'terms_changed')
         if any('warranty_hours' in terms[row['id']] and terms[row['id']]['warranty_hours'] != row['warranty_hours'] for row in accounts):
             raise CheckoutError('Условия гарантии изменились. Обновите корзину.', 'terms_changed')
         await cur.execute('SELECT account_id,user_id FROM account_reservations WHERE account_id IN ('+placeholders+') AND expires_at>UTC_TIMESTAMP() ORDER BY account_id FOR UPDATE',tuple(ids))

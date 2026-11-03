@@ -59,6 +59,12 @@ def register(app,response,page_number):
         await store.edit_stock(request['user']['id'],identifier(request.match_info['id']),await read_body(request));return response({'ok':True})
     async def stock_bulk(request):
         body=await read_body(request);await expansion.bulk_edit(request['user']['id'],body.get('ids'),body.get('field'),body.get('value'));return response({'ok':True})
+    async def spam_all(request):
+        from database.spam_checks import enqueue
+        return response({'queued':await enqueue(request['user']['id'])})
+    async def spam_one(request):
+        from database.spam_checks import enqueue
+        return response({'queued':await enqueue(request['user']['id'],identifier(request.match_info['id']))})
     async def stock_delete(request):
         account=identifier(request.match_info['id'])
         row=await db.get_account(account)
@@ -193,6 +199,7 @@ def register(app,response,page_number):
     async def jobs(request):
         return response({'items':await store.rows('SELECT id,status,created_at,expires_at FROM import_batches WHERE admin_id=%s ORDER BY created_at DESC LIMIT 20',(request['user']['id'],))})
     app.add_routes([
+        web.post('/api/admin/spam-checks',spam_all),web.post('/api/admin/stock/{id}/spam-check',spam_one),
         web.get('/api/admin/overview',overview),web.get('/api/admin/stock',stock),web.post('/api/admin/stock/bulk',stock_bulk),
         web.patch('/api/admin/stock/{id}',stock_edit),web.delete('/api/admin/stock/{id}',stock_delete),
         web.get('/api/admin/categories',categories),web.post('/api/admin/categories',category_save),

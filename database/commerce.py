@@ -10,9 +10,12 @@ MAX_CART = 20
 
 async def add_to_cart(user_id, account_id):
     async with _transaction() as cur:
-        await cur.execute("SELECT a.id FROM accounts a JOIN categories c ON c.slug=a.country WHERE a.id=%s AND a.status='available' AND c.is_active=1 FOR UPDATE", (account_id,))
-        if not await cur.fetchone():
+        await cur.execute("SELECT a.id,a.spam_lease_until>UTC_TIMESTAMP() AS spam_running FROM accounts a JOIN categories c ON c.slug=a.country WHERE a.id=%s AND a.status='available' AND c.is_active=1 FOR UPDATE", (account_id,))
+        account = await cur.fetchone()
+        if not account:
             raise ValueError('Аккаунт больше недоступен.')
+        if account.get('spam_running'):
+            raise ValueError('Аккаунт проверяется через @SpamBot. Повторите через минуту.')
         await cur.execute('SELECT id FROM users WHERE id=%s FOR UPDATE', (user_id,))
         if not await cur.fetchone():
             raise ValueError('Покупатель не найден.')

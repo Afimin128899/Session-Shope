@@ -44,7 +44,7 @@ async def products(user_id, slug, page=0):
             await cur.execute('SELECT COUNT(*) AS n ' + where, (slug, user_id))
             count = (await cur.fetchone())['n']
             page = bounded_page(page, count)
-            await cur.execute('SELECT a.id,a.number,a.price ' + where + ' ORDER BY a.id DESC LIMIT %s OFFSET %s',
+            await cur.execute('SELECT a.id,a.number,a.price,a.spam_status,a.spam_checked_at,a.spam_lease_until ' + where + ' ORDER BY a.id DESC LIMIT %s OFFSET %s',
                               (slug, user_id, PAGE_SIZE, page * PAGE_SIZE))
             rows = list(await cur.fetchall())
             _, discount, _ = await pricing(cur, user_id)
@@ -58,7 +58,7 @@ async def product(user_id, account_id):
         async with conn.cursor(aiomysql.DictCursor) as cur:
             await cur.execute(
                 "SELECT a.id,a.country,a.number,a.price,a.telegram_user_id,a.warranty_hours,"
-                "a.registration_date,a.is_premium,c.name,c.emoji FROM accounts a "
+                "a.registration_date,a.is_premium,a.spam_status,a.spam_checked_at,a.spam_lease_until,c.name,c.emoji FROM accounts a "
                 "JOIN categories c ON c.slug=a.country WHERE a.id=%s AND a.status='available' "
                 "AND c.is_active=1 AND NOT EXISTS(SELECT 1 FROM account_reservations r "
                 "WHERE r.account_id=a.id AND r.expires_at>UTC_TIMESTAMP() AND r.user_id<>%s)",
