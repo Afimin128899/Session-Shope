@@ -12,3 +12,6 @@ __pycache__/
 # Local installer environment
 .venv*/
 venv/
+
+# Private durable Telegram Stars receipts
+data/star-receipts/

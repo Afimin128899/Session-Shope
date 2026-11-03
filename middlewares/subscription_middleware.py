@@ -15,6 +15,9 @@ class SubscriptionMiddleware(BaseMiddleware):
         event: TelegramObject,
         data: Dict[str, Any]
     ) -> Any:
+        from utils.payment_events import is_payment_event
+        if is_payment_event(event):
+            return await handler(event, data)
         user = None
         if isinstance(event, Message):
             user = event.from_user

@@ -1,4 +1,4 @@
-aiogram>=3.4,<4
+aiogram>=3.26,<4
 telethon>=1.36,<2
 aiomysql>=0.2.0
 python-dotenv>=1.0

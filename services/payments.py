@@ -17,11 +17,12 @@ PROVIDERS={'crypto':cryptopay,'xrocket':xrocket,'lave':lavepay}
 
 def methods():
     return [{'id':key,'name':name,'enabled':bool(getattr(config,variable,''))} for key,name,variable in [
-        ('crypto','Crypto Pay','CRYPTO_PAY_TOKEN'),('xrocket','xRocket','XROCKET_API_KEY'),('lave','Lave Pay','LAVE_PAY_API_KEY')]]
+        ('crypto','Crypto Pay','CRYPTO_PAY_TOKEN'),('xrocket','xRocket','XROCKET_API_KEY'),('lave','Laveshka (Lava Pay)','LAVE_PAY_API_KEY')]] + [{'id':'stars','name':'Telegram Stars ⭐','enabled':bool(getattr(config,'BOT_TOKEN','')),'unit':'XTR','rate':'1.20','min':1,'max':10000}]
 
 
 def invoice_payload(provider, invoice):
     if provider=='xrocket':
+        if isinstance(invoice.get('payload'),str): return invoice['payload']
         callback=invoice.get('callback') or {}
         value=callback.get('payload') or {}
         return str(value.get('orderId','')) if isinstance(value,dict) else str(value)
@@ -53,7 +54,7 @@ async def create_deposit(user_id, username, provider, amount):
     elif provider=='xrocket':
         invoice=await xrocket.create_invoice(await convert_rub_to_usdt(float(amount)),f'Пополнение на {amount:.2f} ₽',order_id,payload,user_id,username)
         invoice_id=invoice.get('id') if invoice else None
-        url=(invoice.get('links') or {}).get('telegramBotLink') if invoice else None
+        url=((invoice.get('links') or {}).get('telegramBotLink') or invoice.get('link')) if invoice else None
     else:
         invoice=await lavepay.create_invoice(await convert_rub_to_usdt(float(amount)),f'Пополнение на {amount:.2f} ₽',order_id,payload)
         invoice_id=invoice.get('id') if invoice else None

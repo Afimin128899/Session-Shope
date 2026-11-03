@@ -14,6 +14,7 @@ from config import BOT_TOKEN
 from database.db import init_db
 
 from handlers.user.start import start_router
+from handlers.user.stars import stars_router
 from handlers.navigation import commands_router, fallback_router
 from handlers.user.balance import balance_router
 from handlers.user.shop import shop_router
@@ -88,7 +89,7 @@ async def main():
     dp.callback_query.outer_middleware(MaintenanceMiddleware())
 
     dp.include_routers(
-        commands_router, start_router, balance_router, shop_router, purchases_router, promo_router, profile_router,
+        stars_router, commands_router, start_router, balance_router, shop_router, purchases_router, promo_router, profile_router,
         admin_router, manage_router, broadcast_router, add_account_router, button_editor_router,
         cat_router, restock_router, admin_tools_router, spam_router, ticket_router, refund_router, quality_router, expansion_router, fallback_router,
     )
@@ -99,7 +100,7 @@ async def main():
     try:
         from utils.button_icons import load_pack
         await load_pack(bot)
-        await bot.delete_webhook(drop_pending_updates=True)
+        await bot.delete_webhook(drop_pending_updates=False)
         from utils.miniapp import miniapp_url
         app_url = miniapp_url()
         if app_url:
@@ -111,7 +112,9 @@ async def main():
         from services.payments import payment_worker
         from services.market_notifications import market_worker
         from services.spam_check import spam_worker
-        notification_tasks = [asyncio.create_task(worker(bot)) for worker in (restock_worker, payment_worker, market_worker, spam_worker)]
+        from services.stars import stars_worker
+        from services.star_reconcile import star_reconcile_worker
+        notification_tasks = [asyncio.create_task(worker(bot)) for worker in (restock_worker, payment_worker, market_worker, spam_worker, stars_worker, star_reconcile_worker)]
         await dp.start_polling(bot, close_bot_session=False)
     finally:
         for task in notification_tasks:

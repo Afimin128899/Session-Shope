@@ -68,7 +68,7 @@ async def invoice(provider, invoice_id, user_id=None):
 async def pending_invoices():
     async with _get_pool().acquire() as conn:
         async with conn.cursor(aiomysql.DictCursor) as cur:
-            await cur.execute("SELECT * FROM payment_invoices WHERE status='pending' AND next_check_at<=UTC_TIMESTAMP() ORDER BY next_check_at LIMIT 25")
+            await cur.execute("SELECT * FROM payment_invoices WHERE status='pending' AND provider<>'stars' AND next_check_at<=UTC_TIMESTAMP() ORDER BY next_check_at LIMIT 25")
             return await cur.fetchall()
 
 

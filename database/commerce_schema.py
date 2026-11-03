@@ -40,3 +40,6 @@ async def init_commerce_schema(cur, database_name):
         ) ENGINE=InnoDB''',
     ):
         await cur.execute(statement)
+
+    from database.stars import init_schema as stars_schema
+    await stars_schema(cur, database_name)

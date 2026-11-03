@@ -225,27 +225,94 @@
       const data = await api('payment-methods'), methods = data.items.filter(m => m.enabled);
       if (dialogRevision !== state.dialogRevision) return;
       if (!methods.length) { modal('<h2 id="dialog-title">Пополнение баланса</h2><p>Платёжные сервисы пока не настроены. Обратись к администратору через Telegram-бота.</p><button class="primary-button" data-bot>Открыть бота <svg class="arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 18 18 6M6 6h12v12"/></svg></button>'); return; }
-      modal(`<h2 id="dialog-title">Пополнить баланс</h2><p>Оплата подтвердится автоматически, обычно в течение минуты после подтверждения сервисом.</p><label for="topup-amount">Сумма, ₽</label><input id="topup-amount" type="number" inputmode="decimal" min="10" max="1000000" step="0.01" value="500"><label for="topup-method">Способ оплаты</label><select id="topup-method">${methods.map(m => `<option value="${esc(m.id)}">${esc(m.name)}</option>`).join('')}</select><p id="dialog-error" class="dialog-error" role="alert" hidden></p><button class="primary-button" id="create-invoice">Создать счёт <svg class="arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 18 18 6M6 6h12v12"/></svg></button>`);
-      $('#create-invoice').onclick = async () => {
-        if (state.busy) return; state.busy = true; $('#create-invoice').disabled = true;
-        try { state.invoice = await post('invoices', { amount: $('#topup-amount').value, provider: $('#topup-method').value }); showInvoice(); }
-        catch (e) { dialogError(e); if ($('#create-invoice')) $('#create-invoice').disabled = false; }
-        finally { state.busy = false; }
+      modal(`<h2 id="dialog-title">Пополнить баланс</h2><p>Баланс обновится после подтверждения оплаты.</p><label for="topup-method">Способ оплаты</label><select id="topup-method">${methods.map(m => `<option value="${esc(m.id)}">${esc(m.name)}</option>`).join('')}</select><label for="topup-amount" id="topup-amount-label">Сумма, ₽</label><input id="topup-amount" type="number" inputmode="decimal" min="10" max="1000000" step="0.01" value="500"><p id="topup-quote" class="muted" aria-live="polite"></p><p id="dialog-error" class="dialog-error" role="alert" hidden></p><button class="primary-button" id="create-invoice">Создать счёт <svg class="arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 18 18 6M6 6h12v12"/></svg></button>`);
+      const amountInput = $('#topup-amount'), methodInput = $('#topup-method'), createButton = $('#create-invoice');
+      const remembered = { rub: '500', stars: '100' };
+      let currentUnit = null;
+      const starCount = () => /^[0-9]{1,5}$/.test(amountInput.value) && Number(amountInput.value) >= 1 && Number(amountInput.value) <= 10000;
+      const updateQuote = () => {
+        const stars = methodInput.value === 'stars', unit = stars ? 'stars' : 'rub';
+        if (currentUnit !== unit) {
+          if (currentUnit) remembered[currentUnit] = amountInput.value;
+          amountInput.value = remembered[unit]; currentUnit = unit;
+        }
+        $('#topup-amount-label').textContent = stars ? 'Количество звёзд, ⭐' : 'Сумма, ₽';
+        amountInput.min = stars ? '1' : '10'; amountInput.max = stars ? '10000' : '1000000'; amountInput.step = stars ? '1' : '0.01'; amountInput.inputMode = stars ? 'numeric' : 'decimal';
+        const valid = !stars || starCount();
+        $('#topup-quote').textContent = stars ? (valid ? `${num(amountInput.value)} ⭐ → ${Number(amountInput.value * 120 / 100).toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₽ на баланс. Курс: 1 ⭐ = 1,20 ₽.` : 'Введите целое число от 1 до 10 000 ⭐.') : 'Сумма пополнения указывается в рублях.';
+        createButton.disabled = state.busy || !valid;
+      };
+      methodInput.onchange = updateQuote; amountInput.oninput = updateQuote; updateQuote();
+      createButton.onclick = async () => {
+        if (state.busy || (methodInput.value === 'stars' && !starCount())) return;
+        const provider = methodInput.value;
+        const body = provider === 'stars' ? { provider, stars: Number(amountInput.value) } : { provider, amount: amountInput.value };
+        const revision = state.dialogRevision;
+        state.busy = true; createButton.disabled = true; amountInput.disabled = true; methodInput.disabled = true;
+        try {
+          state.invoice = await post('invoices', body);
+          if (revision === state.dialogRevision) showInvoice();
+        } catch (e) { dialogError(e); }
+        finally { state.busy = false; if (createButton.isConnected) { amountInput.disabled = false; methodInput.disabled = false; updateQuote(); } }
       };
     } catch (e) { error(e); }
   }
   function showInvoice() {
     const i = state.invoice; if (!i) return;
-    const url = new URL(i.pay_url); if (url.protocol !== 'https:') return;
-    modal(`<h2 id="dialog-title">Счёт на ${rub(i.amount)}</h2><p>Перейди к оплате. Баланс обновится автоматически после подтверждения платёжным сервисом.</p><a class="payment-link" href="${esc(url.href)}" target="_blank" rel="noopener noreferrer">Перейти к оплате <svg class="arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 18 18 6M6 6h12v12"/></svg></a><p id="invoice-state">Ожидаем оплату…</p><p>Можно закрыть это окно: проверка продолжится на сервере.</p><button id="another-invoice" class="secondary-button">Создать другой счёт</button>`);
+    let url;
+    try { url = new URL(i.pay_url); } catch (_) { state.invoice = null; throw new Error('Не удалось открыть ссылку счёта. Создай новый счёт.'); }
+    const stars = i.provider === 'stars';
+    if (url.protocol !== 'https:' || url.username || url.password || (stars && (!['t.me', 'telegram.me'].includes(url.hostname) || !Number.isInteger(i.stars) || i.stars < 1 || i.stars > 10000 || Math.round(Number(i.amount) * 100) !== i.stars * 120))) {
+      state.invoice = null; throw new Error('Счёт содержит некорректные условия оплаты. Создай новый счёт.');
+    }
+    const nativeStars = stars && typeof tg?.openInvoice === 'function';
+    const paymentControl = nativeStars ? `<button id="pay-stars" class="primary-button">Оплатить ${num(i.stars)} ⭐</button><a id="stars-payment-link" class="payment-link" href="${esc(url.href)}" target="_blank" rel="noopener noreferrer" hidden>Открыть счёт в Telegram</a>` : `<a class="payment-link" href="${esc(url.href)}" target="_blank" rel="noopener noreferrer">${stars ? `Оплатить ${num(i.stars)} ⭐ в Telegram` : 'Перейти к оплате'} <svg class="arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 18 18 6M6 6h12v12"/></svg></a>`;
+    modal(`<h2 id="dialog-title">${stars ? `Счёт на ${num(i.stars)} ⭐` : `Счёт на ${rub(i.amount)}`}</h2>${stars ? `<div class="info"><span>На баланс</span><b>${rub(i.amount)}</b></div><p>Курс: 1 ⭐ = 1,20 ₽. Зачисление произойдёт после подтверждения оплаты Telegram.</p>` : '<p>Перейди к оплате. Баланс обновится автоматически после подтверждения платёжным сервисом.</p>'}${paymentControl}<p id="invoice-state" role="status">Ожидаем оплату…</p><p id="dialog-error" class="dialog-error" role="alert" hidden></p>${stars ? '<button id="verify-invoice" class="secondary-button">Проверить зачисление</button>' : ''}<p>Можно закрыть это окно: проверка продолжится на сервере.</p><button id="another-invoice" class="secondary-button">Создать другой счёт</button>`);
+    if (nativeStars) {
+      const button = $('#pay-stars');
+      button.onclick = () => {
+        if (button.disabled || state.invoice !== i) return;
+        button.disabled = true;
+        try {
+          tg.openInvoice(url.href, async status => {
+            if (state.invoice !== i) return;
+            button.disabled = false;
+            const label = $('#invoice-state');
+            if (label) label.textContent = status === 'paid' || status === 'pending' ? 'Проверяем подтверждение оплаты Telegram…' : status === 'cancelled' ? 'Оплата отменена. Можно открыть счёт снова.' : 'Оплата не завершена. Проверь статус счёта или попробуй снова.';
+            if (status === 'paid' || status === 'pending') {
+              try { await checkInvoice(); await loadMe(); } catch (e) { dialogError(e); }
+            }
+          });
+        } catch (_) {
+          button.disabled = false;
+          $('#stars-payment-link').hidden = false;
+          $('#invoice-state').textContent = 'Не удалось открыть оплату в приложении. Воспользуйся ссылкой на счёт в Telegram.';
+        }
+      };
+    }
+    if ($('#verify-invoice')) $('#verify-invoice').onclick = async () => {
+      const button = $('#verify-invoice'); button.disabled = true;
+      try { await checkInvoice(); await loadMe(); } catch (e) { dialogError(e); }
+      finally { if (button.isConnected && state.invoice === i) button.disabled = false; }
+    };
     $('#another-invoice').onclick = () => { state.invoice = null; topup(); };
   }
   async function checkInvoice() {
     const i = state.invoice; if (!i) return;
     const data = await api('invoices/' + encodeURIComponent(i.provider) + '/' + encodeURIComponent(i.invoice_id));
     if (state.invoice !== i) return;
-    if (data.status === 'credited') { state.invoice = null; await loadMe(); if ($('#invoice-state')) $('#invoice-state').textContent = '✓ Оплата подтверждена. Баланс пополнен!'; toast('Баланс пополнен автоматически'); }
-    else if (data.status === 'expired') { state.invoice = null; if ($('#invoice-state')) $('#invoice-state').textContent = 'Срок счёта истёк. Создай новый счёт.'; }
+    if (data.status === 'credited' || data.status === 'refunded') {
+      state.invoice = null; await loadMe();
+      if ($('#invoice-state')) $('#invoice-state').textContent = data.status === 'credited' ? '✓ Оплата подтверждена. Баланс пополнен!' : 'Платёж возвращён. Баланс обновлён.';
+      if ($('#pay-stars')) $('#pay-stars').disabled = true;
+      if ($('#verify-invoice')) $('#verify-invoice').disabled = true;
+      toast(data.status === 'credited' ? 'Баланс пополнен автоматически' : 'Возврат платежа подтверждён');
+    } else if (data.status === 'expired') {
+      state.invoice = null;
+      if ($('#invoice-state')) $('#invoice-state').textContent = 'Срок счёта истёк. Создай новый счёт.';
+      if ($('#pay-stars')) $('#pay-stars').disabled = true;
+      if ($('#verify-invoice')) $('#verify-invoice').disabled = true;
+    }
   }
   async function synchronize() {
     if (!state.ready || state.busy || state.refreshing || document.hidden || document.body.classList.contains('admin-mode')) return;

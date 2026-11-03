@@ -46,7 +46,7 @@ async def back_to_main(call: CallbackQuery, state: FSMContext):
 async def topup_balance_menu(call: CallbackQuery, state: FSMContext):
     await state.clear()
     methods = [method for method in payments.methods() if method['enabled']]
-    rows = [button(method['name'] + ' · USDT', 'deposit_' + method['id'], 'money') for method in methods]
+    rows = [button(method['name'] + (' · 1 ⭐ = 1,20 ₽' if method['id']=='stars' else ' · USDT'), 'deposit_' + method['id'], 'money') for method in methods]
     rows.append(button('Назад к балансу', 'balance'))
     text = '<b>Пополнение баланса</b>\n\nСумма задаётся в рублях. Выберите способ оплаты.' if methods else '<b>Пополнение баланса</b>\n\nСервисы оплаты пока не настроены. Обратитесь в поддержку.'
     await edit_message_safe(call, text, reply_markup=InlineKeyboardMarkup(inline_keyboard=rows))

@@ -20,7 +20,7 @@ async def report(day):
         async with conn.cursor(aiomysql.DictCursor) as cur:
             await cur.execute('SELECT currency,COUNT(*) AS n,COALESCE(SUM(paid_amount),0) AS total,SUM(paid_amount IS NULL) AS unknown FROM purchases WHERE date>=%s AND date<%s GROUP BY currency', (start.strftime('%Y-%m-%d %H:%M:%S'), end.strftime('%Y-%m-%d %H:%M:%S')))
             sales = list(await cur.fetchall())
-            await cur.execute('SELECT currency,COUNT(*) AS n,SUM(amount) AS total FROM payment_logs WHERE UNIX_TIMESTAMP(created_at)>=%s AND UNIX_TIMESTAMP(created_at)<%s GROUP BY currency', (int(start.timestamp()),int(end.timestamp())))
+            await cur.execute('SELECT currency,SUM(amount>0) AS n,SUM(amount) AS total FROM payment_logs WHERE UNIX_TIMESTAMP(created_at)>=%s AND UNIX_TIMESTAMP(created_at)<%s GROUP BY currency', (int(start.timestamp()),int(end.timestamp())))
             deposits = list(await cur.fetchall())
             await cur.execute('SELECT currency,COUNT(*) AS n,SUM(amount) AS total FROM order_refunds WHERE created_at>=%s AND created_at<%s GROUP BY currency', (start.astimezone(timezone.utc).replace(tzinfo=None),end.astimezone(timezone.utc).replace(tzinfo=None)))
             refunds = list(await cur.fetchall())
@@ -29,7 +29,7 @@ async def report(day):
     def lines(rows):
         return '\n'.join(f"• {r['n']} шт. / {Decimal(str(r['total'])):.2f} {escape(r['currency'])}" + (f" (без суммы: {r['unknown']})" if r.get('unknown') else '') for r in rows) or '• Нет'
     return (f'📊 <b>Sband ACCS · {day:%d.%m.%Y}</b>\nПериод: 00:00–24:00 МСК\n\n'
-            f"Продажи (до возвратов):\n{lines(sales)}\n\nПополнения (без бонусов):\n{lines(deposits)}\n\nВозвраты:\n{lines(refunds)}\n\n"
+            f"Продажи (до возвратов):\n{lines(sales)}\n\nПополнения (без бонусов, за вычетом возвратов Stars):\n{lines(deposits)}\n\nВозвраты:\n{lines(refunds)}\n\n"
             f"Сейчас в продаже: {stock['total'] or 0}\nИз них в резерве: {stock['reserved'] or 0}")
 
 

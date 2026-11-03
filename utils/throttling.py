@@ -14,6 +14,9 @@ class ThrottlingMiddleware(BaseMiddleware):
         self.last_request = OrderedDict()
 
     async def __call__(self, handler, event, data):
+        from utils.payment_events import is_payment_event
+        if is_payment_event(event):
+            return await handler(event, data)
         user = getattr(event, 'from_user', None)
         if user:
             now = time.monotonic()

@@ -260,6 +260,10 @@ async def payment_methods(request):
 
 async def create_invoice(request):
     body = await json_body(request)
+    if body.get('provider') == 'stars':
+        from services.stars import create_invoice as stars_invoice
+        if type(body.get('stars')) is not int: raise ValueError
+        return response(await stars_invoice(request.app[BOT],request['user']['id'],body['stars']),201)
     if not isinstance(body.get('amount'), str) or len(body['amount']) > 24 or not isinstance(body.get('provider'), str):
         raise ValueError
     try:
@@ -271,11 +275,16 @@ async def create_invoice(request):
 
 async def invoice_status(request):
     provider, invoice_id = request.match_info['provider'], request.match_info['invoice']
-    if provider not in payments.PROVIDERS or len(invoice_id) > 128:
+    if provider not in {*payments.PROVIDERS, 'stars'} or len(invoice_id) > 128:
         raise ValueError
     row = await commerce.invoice(provider, invoice_id, request['user']['id'])
     if not row:
         return response({'error': 'Счёт не найден.', 'code': 'not_found'}, 404)
+    if provider == 'stars' and row['status'] == 'pending':
+        from datetime import datetime, timezone
+        if row['expires_at'] <= datetime.now(timezone.utc).replace(tzinfo=None):
+            await commerce.finish_invoice(provider,invoice_id,'expired')
+            row['status']='expired'
     return response({key: row[key] for key in ('status', 'amount_rub', 'credited_amount')})
 
 
