@@ -37,6 +37,7 @@ def get_admin_panel() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [InlineKeyboardButton(text="Инструменты магазина", callback_data="expand_tools")],
+            [InlineKeyboardButton(text="Тестовый магазин", callback_data="demo:open")],
             [InlineKeyboardButton(text="Проверить спамблок всех аккаунтов", callback_data="spam_all")],
             [InlineKeyboardButton(text="🎟 Создать промокод скидки", callback_data="quality_discount")],
             [InlineKeyboardButton(text="📊 Отчёт за вчера", callback_data="market_report")],

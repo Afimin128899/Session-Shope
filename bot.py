@@ -30,6 +30,8 @@ from services.restock import restock_worker
 
 from handlers.admin.admin_panel import admin_router
 from handlers.admin.tools import admin_tools_router
+from handlers.admin.demo import DEMO_ROUTER
+from utils.demo_guard import DemoGuard
 from handlers.admin.spam_checks import spam_router
 from handlers.admin.refunds import refund_router
 from handlers.admin.manage import manage_router
@@ -79,6 +81,9 @@ async def main():
     bot.session.middleware(MissingButtonIcons())
     dp = Dispatcher(storage=MemoryStorage())
 
+    dp.message.outer_middleware(DemoGuard())
+    dp.callback_query.outer_middleware(DemoGuard())
+
     # Protect the bot from spam and flood abuse
     dp.message.outer_middleware(ThrottlingMiddleware(limit=0.5))
     dp.callback_query.outer_middleware(ThrottlingMiddleware(limit=0.4))
@@ -90,7 +95,7 @@ async def main():
     dp.callback_query.outer_middleware(MaintenanceMiddleware())
 
     dp.include_routers(
-        stars_router, commands_router, start_router, balance_router, shop_router, purchases_router, promo_router, profile_router, rewards_router,
+        stars_router, DEMO_ROUTER, commands_router, start_router, balance_router, shop_router, purchases_router, promo_router, profile_router, rewards_router,
         admin_router, manage_router, broadcast_router, add_account_router, button_editor_router,
         cat_router, restock_router, admin_tools_router, spam_router, ticket_router, refund_router, quality_router, expansion_router, fallback_router,
     )

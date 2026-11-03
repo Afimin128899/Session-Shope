@@ -14,6 +14,8 @@
   function toast(text) { $('#toast').textContent = text; $('#toast').hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => { $('#toast').hidden = true; }, 4500); }
   function notice(text = '') { $('#notice').textContent = text; $('#notice').hidden = !text; }
   function reset(text) {
+    if($('#demo-mode-notice'))$('#demo-mode-notice').hidden=true;
+    document.querySelectorAll('[data-demo]').forEach(button=>button.hidden=true);
     window.SBAND_USER=null; document.dispatchEvent(new Event('sband-logout')); state.ready = false; state.me = null; state.items = []; state.orders = []; state.invoice = null; state.revision++;
     $('#header-balance').textContent = '— ₽'; $('#profile-balance').textContent = '— ₽'; $('#catalog-grid').replaceChildren(); $('#orders-list').replaceChildren();
     document.querySelectorAll('.page').forEach(el => { el.hidden = true; }); $('#login-panel').hidden = false;
@@ -30,6 +32,8 @@
   }
   async function loadMe() {
     const data = await api('me'); state.me = data; window.SBAND_USER=data; document.dispatchEvent(new CustomEvent('sband-identity',{detail:data}));
+    document.querySelectorAll('[data-demo]').forEach(button=>button.hidden=!data.is_admin);
+    if($('#demo-mode-notice'))$('#demo-mode-notice').hidden=!data.test_mode_active;
     const initial = (data.user.first_name || 'S').slice(0, 1).toUpperCase();
     $('#avatar').textContent = initial; $('#profile-avatar').textContent = initial;
     $('#profile-name').textContent = data.user.first_name || 'Покупатель'; $('#profile-username').textContent = data.user.username ? '@' + data.user.username : 'Покупатель Sband ACCS';
@@ -341,6 +345,8 @@
   document.addEventListener('sband-auth-error',()=>reset('Открой приложение заново через Telegram.'));
   document.addEventListener('click', async event => {
     const button = event.target.closest('button'); if (!button || button.disabled) return;
+    if(button.hasAttribute('data-demo')) { if(state.me?.is_admin){sessionStorage.setItem('sband_test_init',tg?.initData||'');location.assign('/demo'+location.hash);}return; }
+    if(button.hasAttribute('data-demo-exit')) { try{await post('demo/exit',{});await loadMe();notice('Тестовый режим закрыт. Рабочие операции доступны.');}catch(e){error(e);}return; }
     if (button.dataset.tab) { switchTab(button.dataset.tab); return; }
     if (button.hasAttribute('data-bot')) openBot();
     if (button.dataset.botOrder) openBot(Number(button.dataset.botOrder));

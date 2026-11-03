@@ -13,6 +13,7 @@ from aiohttp import web
 import config
 from database import db, commerce, quality, coupons, tickets
 from services import payments
+from services.demo import STORE
 from miniapp.auth import AuthError, validate_init_data
 from miniapp import storage
 from utils.order_status import order_status
@@ -81,6 +82,17 @@ async def authenticate(request, handler):
     raw = authorization[4:] if authorization.startswith('tma ') else ''
     user = validate_init_data(raw, request.app[TOKEN])
     request['user'] = user
+    if request.path.startswith('/api/demo/'):
+        if user['id'] not in config.ADMIN_IDS:
+            return response({'error':'Тестовый режим доступен только администратору.','code':'forbidden'},403)
+        if limited(request.app,user['id'],False):
+            return response({'error':'Подождите перед повтором.','code':'rate_limited'},429)
+        return await handler(request)
+    if user['id'] not in config.ADMIN_IDS:
+        STORE.exit(user['id'])
+    if STORE.active(user['id']) and request.method not in {'GET','HEAD'}:
+        return response({'error':'Сначала завершите тестовый режим. Рабочие операции отключены.','code':'test_mode'},409)
+
     if request.path.startswith('/api/admin/') or request.path=='/api/admin':
         if user['id'] not in config.ADMIN_IDS:
             return response({'error':'Доступ только администратору.','code':'forbidden'},403)
@@ -119,7 +131,7 @@ def order_id(request):
 async def me(request):
     user = await db.get_user(request['user']['id'])
     return response({'user': request['user'], 'balance': str(user['balance']), 'balance_usdt': str(user['balance_usdt']),
-                     'bot_username': request.app[BOT_USERNAME], 'version': BOT_VERSION, 'is_admin': request['user']['id'] in config.ADMIN_IDS})
+                     'bot_username': request.app[BOT_USERNAME], 'test_mode_active': STORE.active(request['user']['id']), 'version': BOT_VERSION, 'is_admin': request['user']['id'] in config.ADMIN_IDS})
 
 
 async def catalog(request):
@@ -384,6 +396,8 @@ def create_app(*, token=None, bot=None, bot_username=''):
         web.get('/api/orders', orders), web.get('/api/orders/{id}', order_detail),
         web.static('/assets', STATIC, show_index=False, follow_symlinks=False),
     ])
+    from miniapp.demo_api import register as register_demo
+    register_demo(app,response)
     from miniapp.admin_api import register
     register(app,response,page_number)
     return app

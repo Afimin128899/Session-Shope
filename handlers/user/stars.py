@@ -20,6 +20,9 @@ class StarsInput(StatesGroup):
 
 @stars_router.pre_checkout_query()
 async def pre_checkout(query):
+    from services.demo import STORE
+    if STORE.active(query.from_user.id):
+        await query.answer(ok=False,error_message="Выйдите из тестового режима, чтобы оплатить рабочий счёт.");return
     try: await asyncio.wait_for(ledger.check_precheckout(query.from_user.id,query.invoice_payload,query.currency,query.total_amount), timeout=7)
     except ValueError as exc:
         await query.answer(ok=False,error_message=str(exc)[:200]);return
