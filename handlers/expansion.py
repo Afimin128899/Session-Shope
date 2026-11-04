@@ -7,6 +7,7 @@ from aiogram.types import InlineKeyboardButton,InlineKeyboardMarkup
 from config import ADMIN_IDS
 from database import expansion
 from database.admin_tools import _transaction,_record
+from utils.nav import edit_message_safe
 
 router=Router()
 router.message.filter(F.chat.type=='private')
@@ -87,7 +88,7 @@ async def approve(call):
 @router.callback_query(F.data=='expand_tools')
 async def tools_menu(call):
     if call.from_user.id not in ADMIN_IDS: await call.answer('Нет доступа');return
-    await call.message.answer('Инструменты магазина: /shop_tools\nГрафик и ориентир ответа:\n<code>/support_schedule Ежедневно 10–22 МСК | Обычно до 24 часов</code>\nПубликуйте только действительный график. Нужен второй администратор в ADMIN_IDS для крупных возвратов.')
+    await edit_message_safe(call,'Инструменты магазина: /shop_tools\nГрафик и ориентир ответа:\n<code>/support_schedule Ежедневно 10–22 МСК | Обычно до 24 часов</code>\nПубликуйте только действительный график. Нужен второй администратор в ADMIN_IDS для крупных возвратов.',reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text='В админ-панель',callback_data='admin_home')]]))
     await call.answer()
 
 

@@ -8,7 +8,7 @@ from aiogram.types import InlineKeyboardButton,InlineKeyboardMarkup
 from config import ADMIN_IDS
 from database import db, quality, coupons, tickets
 from handlers.tickets import notify
-from utils.nav import answer_safe
+from utils.nav import answer_safe, edit_message_safe
 
 quality_router=Router()
 quality_router.message.filter(F.chat.type=='private')
@@ -39,7 +39,7 @@ async def begin_review(call,state):
     except ValueError as exc:
         await answer_safe(call,str(exc),show_alert=True);return
     await state.clear();await state.update_data(quality_order=order);await state.set_state(Input.review)
-    await call.message.answer('Отправьте оценку и отзыв: <code>5 Всё хорошо, вход работает</code>\nОтзыв будет публичным, имя и Telegram ID не публикуются. Не указывайте номер, пароль и коды входа. До 500 символов. Повторный отзыв обновит предыдущий.',reply_markup=back(order))
+    await edit_message_safe(call,'Отправьте оценку и отзыв: <code>5 Всё хорошо, вход работает</code>\nОтзыв будет публичным, имя и Telegram ID не публикуются. Не указывайте номер, пароль и коды входа. До 500 символов. Повторный отзыв обновит предыдущий.',reply_markup=back(order))
     await call.answer()
 
 
@@ -62,7 +62,7 @@ async def begin_warranty(call,state):
     except ValueError as exc:
         await answer_safe(call,str(exc),show_alert=True);return
     await state.clear();await state.update_data(quality_order=order);await state.set_state(Input.warranty)
-    await call.message.answer('Опишите проблему со входом (до 500 символов). Не отправляйте пароли, коды и сессии. Срок гарантии проверяется при отправке.',reply_markup=back(order));await call.answer()
+    await edit_message_safe(call,'Опишите проблему со входом (до 500 символов). Не отправляйте пароли, коды и сессии. Срок гарантии проверяется при отправке.',reply_markup=back(order));await call.answer()
 
 
 @quality_router.message(Input.warranty,F.text)
@@ -87,7 +87,7 @@ async def begin_features(call,state):
     except ValueError as exc:
         await answer_safe(call,str(exc),show_alert=True);return
     await state.clear();await state.update_data(quality_account=account);await state.set_state(Input.features)
-    await call.message.answer(f"Товар SBA-{account:06d}. Гарантия сейчас: {row.get('warranty_hours') if row.get('warranty_hours') is not None else 'не указана'} ч.\nОтправьте четыре строки:\n<code>24\n2024-01-31\nда\nОписание аккаунта</code>\n1. Гарантия в часах, 0 = без гарантии (до 8760).\n2. Проверенная дата регистрации или ?.\n3. Premium: да / нет / ?.\n4. Описание до 500 символов или -.\nСохраняйте только проверенные характеристики. Проданные заказы сохранят прежние условия.")
+    await edit_message_safe(call,f"Товар SBA-{account:06d}. Гарантия сейчас: {row.get('warranty_hours') if row.get('warranty_hours') is not None else 'не указана'} ч.\nОтправьте четыре строки:\n<code>24\n2024-01-31\nда\nОписание аккаунта</code>\n1. Гарантия в часах, 0 = без гарантии (до 8760).\n2. Проверенная дата регистрации или ?.\n3. Premium: да / нет / ?.\n4. Описание до 500 символов или -.\nСохраняйте только проверенные характеристики. Проданные заказы сохранят прежние условия.")
     await call.answer()
 
 
@@ -109,7 +109,7 @@ async def begin_discount(call,state):
     if call.from_user.id not in ADMIN_IDS:
         await answer_safe(call,'Нет доступа.',show_alert=True);return
     await state.clear();await state.set_state(Input.discount)
-    await call.message.answer('Отправьте код, процент и общий лимит: <code>SBAND10 10 100</code>\nКаждый покупатель применяет код один раз при оплате корзины. Скидка применяется после личной скидки. Старые промокоды пополнения баланса продолжат работать.')
+    await edit_message_safe(call,'Отправьте код, процент и общий лимит: <code>SBAND10 10 100</code>\nКаждый покупатель применяет код один раз при оплате корзины. Скидка применяется после личной скидки. Старые промокоды пополнения баланса продолжат работать.')
     await call.answer()
 
 

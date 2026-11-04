@@ -265,7 +265,7 @@ async def enter_purchase_promo(message: Message, state: FSMContext):
             screen=await message.answer('Проверяем условия покупки…')
             async def acknowledge(*args,**kwargs):
                 return None
-            call=SimpleNamespace(message=screen,from_user=message.from_user,answer=acknowledge)
+            call=SimpleNamespace(message=screen,from_user=message.from_user,answer=acknowledge,data=f'buy_acc:{account_id}')
             await show_product(call,state,account_id,promo['code'] if promo else None)
         except ValueError as exc:
             await message.answer(str(exc)+' Введите другой код или /cancel.')

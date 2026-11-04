@@ -36,6 +36,7 @@ from keyboards.admin_kb import (
 )
 from services.telethon_code import try_fetch_login_code
 from utils.nav import edit_message_safe, answer_safe
+from utils.section_banners import answer_screen
 
 admin_router = Router()
 
@@ -123,9 +124,9 @@ async def admin_start(message: Message, state: FSMContext):
     if not is_admin(message.from_user.id):
         return
     await state.clear()
-    await message.answer(
+    await answer_screen(message,
         f"{PANEL} <b>Премиум админ-панель</b>\n\n{CROWN} Добро пожаловать в центр управления.\n\n{ROBOT} Версия бота: <code>{BOT_VERSION}</code>",
-        reply_markup=get_admin_panel(),
+        reply_markup=get_admin_panel(), section="admin",
     )
 
 
@@ -1121,4 +1122,4 @@ async def market_report(call: CallbackQuery):
     from datetime import datetime, timedelta
     from services.market_notifications import report, MOSCOW
     await call.answer()
-    await call.message.answer(await report(datetime.now(MOSCOW).date() - timedelta(days=1)), parse_mode="HTML")
+    await edit_message_safe(call, await report(datetime.now(MOSCOW).date() - timedelta(days=1)), reply_markup=back_to_admin(), section="stats")

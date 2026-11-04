@@ -157,14 +157,14 @@ class AdminViewTests(unittest.IsolatedAsyncioTestCase):
             order.assert_not_awaited()
 
     async def test_valid_order_search_clears_state_and_escapes_html(self):
-        message = SimpleNamespace(from_user=SimpleNamespace(id=7), text='#52', answer=AsyncMock())
+        message = SimpleNamespace(from_user=SimpleNamespace(id=7), text='#52', answer=AsyncMock(), answer_photo=AsyncMock())
         order = {'id': 52, 'user_id': 42, 'account_id': 8, 'country': '<cat>', 'date': 'today', 'completed': True}
         with patch.object(ui, 'is_admin', return_value=True), patch.object(ui, 'find_order', AsyncMock(return_value=order)) as find:
             await ui.search_order(message, self.state)
             find.assert_awaited_once_with(52)
             self.state.clear.assert_awaited_once()
-            self.assertIn('&lt;cat&gt;', message.answer.call_args.args[0])
-            self.assertIn('Завершён', message.answer.call_args.args[0])
+            self.assertIn('&lt;cat&gt;', message.answer_photo.call_args.kwargs['caption'])
+            self.assertIn('Завершён', message.answer_photo.call_args.kwargs['caption'])
 
     async def test_invalid_order_search_does_not_query_database(self):
         message = SimpleNamespace(from_user=SimpleNamespace(id=7), text='bad', answer=AsyncMock())

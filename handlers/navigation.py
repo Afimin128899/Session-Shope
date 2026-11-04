@@ -10,6 +10,7 @@ from aiogram.types import CallbackQuery, ErrorEvent, Message
 
 from keyboards.user_kb import main_menu
 from utils.nav import answer_safe, ensure_user
+from utils.section_banners import answer_screen
 
 commands_router = Router()
 fallback_router = Router()
@@ -23,7 +24,7 @@ async def cancel(message: Message, state: FSMContext):
     with suppress(Exception):
         await asyncio.wait_for(remove_cached_client(message.from_user.id), timeout=5)
     await ensure_user(message.from_user.id, message.from_user.username)
-    await message.answer('Главное меню. Незавершённый ввод отменён.', reply_markup=await main_menu(message.from_user.id))
+    await answer_screen(message, 'Главное меню. Незавершённый ввод отменён.', section='home', reply_markup=await main_menu(message.from_user.id))
 
 
 @commands_router.callback_query(lambda call: call.data == 'page_info')

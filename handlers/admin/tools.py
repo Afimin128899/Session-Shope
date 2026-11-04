@@ -12,6 +12,7 @@ from database.admin_tools import find_user, user_orders, find_order, audit_entri
 from handlers.admin.admin_panel import is_admin
 from utils.nav import answer_safe, edit_message_safe
 from utils.order_status import order_status
+from utils.section_banners import answer_screen
 
 admin_tools_router = Router()
 
@@ -121,7 +122,7 @@ async def search_user(message, state):
     orders = await user_orders(user['id'])
     text, keyboard = user_card(user, orders)
     await state.clear()
-    await message.answer(text, reply_markup=keyboard)
+    await answer_screen(message, text, section='users', reply_markup=keyboard)
 
 
 @admin_tools_router.message(AdminSearch.order)
@@ -137,7 +138,7 @@ async def search_order(message, state):
         await message.answer('Заказ не найден. Проверьте номер покупки.', reply_markup=search_menu())
         return
     await state.clear()
-    await message.answer(order_card(order), reply_markup=order_menu(order))
+    await answer_screen(message, order_card(order), section='orders', reply_markup=order_menu(order))
 
 
 @admin_tools_router.callback_query(F.data.startswith('adm_order:'))

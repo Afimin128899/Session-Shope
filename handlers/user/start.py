@@ -1,14 +1,14 @@
-import os
 from html import escape
 from aiogram import Router, F
 from aiogram.filters import CommandStart
-from aiogram.types import CallbackQuery, Message, FSInputFile, InlineKeyboardButton, InlineKeyboardMarkup
+from aiogram.types import CallbackQuery, Message, InlineKeyboardButton, InlineKeyboardMarkup
 
 from database.db import create_user_with_referrer, is_new_user, get_setting, update_user_username
 
 from keyboards.user_kb import main_menu, back_to_main_menu
 from utils import constants as c
 from utils.nav import edit_message_safe, answer_safe
+from utils.section_banners import answer_screen
 
 start_router = Router()
 
@@ -66,11 +66,7 @@ async def cmd_start(message: Message, command, state=None):
     user_name = escape(message.from_user.first_name or "Гость")
     caption_text = c.START_TEXT.replace("{name}", user_name)
 
-    if os.path.isfile("assets/welcome.png"):
-        photo = FSInputFile("assets/welcome.png")
-        await message.answer_photo(photo, caption=caption_text, reply_markup=await main_menu(message.from_user.id))
-    else:
-        await message.answer(caption_text, reply_markup=await main_menu(message.from_user.id))
+    await answer_screen(message, caption_text, section='home', reply_markup=await main_menu(message.from_user.id))
 
 
 @start_router.callback_query(F.data == "back_main")

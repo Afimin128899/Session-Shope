@@ -12,6 +12,7 @@ from keyboards.user_kb import balance_menu
 from utils.actions import single_action
 from utils.button_icons import icon_for
 from utils.nav import answer_safe, edit_balance, edit_main, edit_message_safe
+from utils.section_banners import answer_screen
 
 balance_router = Router()
 logger = logging.getLogger(__name__)
@@ -98,10 +99,10 @@ async def process_lave_amount(message: Message, state: FSMContext):
                 button('Проверить оплату', f"{method}_check:{result['invoice_id']}", 'refresh'),
                 button('Вернуться к балансу', 'balance')]
         await state.clear()
-        await message.answer(
+        await answer_screen(message,
             f"<b>Счёт создан</b>\n\nСумма: <b>{amount:.2f} ₽</b>\nНомер: <code>{escape(result['invoice_id'])}</code>\n\n"
             'Баланс пополнится автоматически после подтверждения сервисом. Кнопка проверки доступна как запасной вариант.',
-            reply_markup=InlineKeyboardMarkup(inline_keyboard=rows))
+            section='wallet', reply_markup=InlineKeyboardMarkup(inline_keyboard=rows))
 
 
 @balance_router.callback_query(F.data.startswith('lave_check:') | F.data.startswith('xrocket_check:') | F.data.startswith('crypto_check:'))
