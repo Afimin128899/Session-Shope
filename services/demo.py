@@ -15,10 +15,10 @@ def amount(value):
     try:
         if isinstance(value,bool) or len(str(value))>24: raise ValueError
         number=Decimal(str(value).replace(',','.'))
-        if not number.is_finite() or not Decimal(10)<=number<=Decimal(1000000) or number!=number.quantize(Decimal('.01')): raise ValueError
+        if not number.is_finite() or not Decimal(10)<=number<=Decimal(10000) or number!=number.quantize(Decimal('.01')): raise ValueError
         return int(number*100)
     except (ValueError,InvalidOperation):
-        raise ValueError('Учебное пополнение: 10–1 000 000 ₽, до двух знаков после запятой.') from None
+        raise ValueError('Учебное пополнение: 10–10 000 ₽, до двух знаков после запятой.') from None
 
 
 class DemoStore:
@@ -89,10 +89,10 @@ class DemoStore:
         elif action=='checkout':self._buy(s,list(s['cart']),body.get('promo',''))
         elif action=='invoice':
             provider=body.get('provider')
-            if not isinstance(provider,str) or provider not in {'crypto','xrocket','lave','stars'}:raise ValueError('Выберите учебный способ оплаты.')
+            if not isinstance(provider,str) or provider not in {'crypto','xrocket','lave','platega','stars'}:raise ValueError('Выберите учебный способ оплаты.')
             if provider=='stars':
                 count=body.get('stars')
-                if type(count)is not int or not 1<=count<=10000:raise ValueError('Звёзды: целое число 1–10000.')
+                if type(count)is not int or not 1<=count<=8333:raise ValueError('Звёзды: целое число 1–8333.')
                 total=count*120
             else:total=amount(body.get('amount'))
             if len(s['invoices'])>=100:raise ValueError('Сбросьте учебный сценарий: достигнут лимит счетов.')

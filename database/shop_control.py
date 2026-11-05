@@ -22,6 +22,9 @@ async def init_schema(cur, database):
                        ('maintenance_reason', DEFAULT_REASON), ('maintenance_eta', 'Время завершения пока уточняется.')]:
         await cur.execute('INSERT IGNORE INTO settings(`key`,`value`) VALUES(%s,%s)', (key, value))
 
+    from database.sales_policy import migrate
+    await migrate(cur)
+
 
 async def set_review(admin, account, enabled, reason):
     if type(account) is not int or account <= 0 or type(enabled) is not bool:
@@ -38,6 +41,9 @@ async def set_review(admin, account, enabled, reason):
         await cur.execute('SELECT id FROM purchases WHERE account_id=%s LIMIT 1', (account,))
         if await cur.fetchone():
             raise ValueError(tr('Проданный аккаунт нельзя отправить на проверку или вернуть в продажу.'))
+        if not enabled:
+            from utils.commerce_policy import checkout
+            await checkout(cur, [account])
         await cur.execute('DELETE FROM account_reservations WHERE account_id=%s', (account,))
         await cur.execute('DELETE FROM shopping_cart WHERE account_id=%s', (account,))
         await cur.execute('UPDATE accounts SET status=%s,review_reason=%s,review_admin_id=%s,\n            review_started_at=CASE WHEN %s THEN UTC_TIMESTAMP() ELSE NULL END,\n            spam_token=NULL,spam_lease_until=NULL,spam_next_check_at=UTC_TIMESTAMP()\n            WHERE id=%s', (target, reason if enabled else None, admin if enabled else None, enabled, account))
@@ -45,13 +51,20 @@ async def set_review(admin, account, enabled, reason):
         return target
 
 
-async def check_sales(cur, *, tuple_cursor=False):
+async def check_sales(cur, *, tuple_cursor=False, account_ids=None):
     """Lock the switch after inventory, before balances. The admin toggle waits for buyers.
 
     Shared locks allow unrelated purchases concurrently. Pausing obtains an exclusive
     lock on the same setting: after the toggle commits no checkout can debit a wallet.
     Do not bypass for administrators; the isolated demo store is independent.
     """
+    if account_ids:
+        from utils.commerce_policy import checkout
+        try:
+            await checkout(cur, account_ids, tuple_cursor=tuple_cursor)
+        except ValueError as exc:
+            from miniapp.storage import CheckoutError
+            raise CheckoutError(str(exc), 'restricted_stock') from None
     await cur.execute("SELECT `value` FROM settings WHERE `key`='sales_paused' LOCK IN SHARE MODE")
     row = await cur.fetchone()
     value = (row[0] if tuple_cursor else row.get('value')) if row else '0'

@@ -35,7 +35,7 @@ async def main():
             await cur.execute("INSERT INTO referrals (referral_id, referrer_id) VALUES (42, 43)")
             await cur.execute('UPDATE referral_settings SET discount_pct = 5, bonus_pct = 5 WHERE id = 1')
             await cur.execute('DELETE FROM categories')
-            categories = [('us', 'США', '🇺🇸'), ('ru', 'Россия', '🇷🇺'), ('kz', 'Казахстан', '🇰🇿'), ('gb', 'Великобритания', '🇬🇧'), ('de', 'Германия', '🇩🇪'), ('nl', 'Нидерланды', '🇳🇱')]
+            categories = [('us', 'США', '🇺🇸'), ('fr', 'Франция', '🇫🇷'), ('kz', 'Казахстан', '🇰🇿'), ('gb', 'Великобритания', '🇬🇧'), ('de', 'Германия', '🇩🇪'), ('nl', 'Нидерланды', '🇳🇱')]
             for slug, label, emoji in categories:
                 await cur.execute('INSERT INTO categories (slug, name, emoji, is_active) VALUES (%s, %s, %s, 1)', (slug, label, emoji))
             for index in range(12):

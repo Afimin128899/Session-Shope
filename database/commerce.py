@@ -16,7 +16,7 @@ async def add_to_cart(user_id, account_id):
         if not account:
             raise ValueError(tr('Аккаунт больше недоступен.'))
         from database.shop_control import check_sales
-        await check_sales(cur)
+        await check_sales(cur, account_ids=[account_id])
         if account.get('spam_running'):
             raise ValueError(tr('Аккаунт проверяется через @SpamBot. Повторите через минуту.'))
         await cur.execute('SELECT id FROM users WHERE id=%s FOR UPDATE', (user_id,))

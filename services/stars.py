@@ -21,7 +21,7 @@ def fields(row):
 async def create_invoice(bot, user_id, count):
     if bot is None:
         raise ValueError(tr('Откройте оплату в Telegram-боте.'))
-    row = await ledger.register_invoice(user_id, ledger.parse_count(count))
+    row = await ledger.register_invoice(user_id, ledger.parse_new_count(count))
     url = await bot.create_invoice_link(**fields(row))
     from urllib.parse import urlsplit
     parsed = urlsplit(url)
@@ -31,7 +31,7 @@ async def create_invoice(bot, user_id, count):
 
 
 async def send_invoice(bot,user_id,count):
-    row=await ledger.register_invoice(user_id,ledger.parse_count(count))
+    row=await ledger.register_invoice(user_id,ledger.parse_new_count(count))
     await bot.send_invoice(chat_id=user_id,start_parameter='sband_stars',**fields(row))
     return row
 

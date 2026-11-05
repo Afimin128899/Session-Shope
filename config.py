@@ -27,6 +27,9 @@ ADMIN_IDS = [
     if value.strip().isdigit()
 ]
 
+PLATEGA_MERCHANT_ID = os.getenv("PLATEGA_MERCHANT_ID", "").strip()
+PLATEGA_SECRET = os.getenv("PLATEGA_SECRET", "").strip()
+
 LAVE_PAY_API_KEY = os.getenv("LAVE_PAY_API_KEY", "").strip()
 CRYPTO_PAY_TOKEN = os.getenv("CRYPTO_PAY_TOKEN", "").strip()
 XROCKET_API_KEY = os.getenv("XROCKET_API_KEY", "").strip()

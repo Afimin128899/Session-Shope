@@ -123,6 +123,13 @@
     const total = sum(0);
     modal(SbandT("<h2 id=\"dialog-title\">Подтвердить покупку</h2><p>{0} аккаунт(ов). После оплаты они появятся в покупках и Telegram-боте.</p><p>{1}</p><p>Гарантия на проблемы со входом в пределах срока. Решение по обращению принимает поддержка после проверки.</p><div class=\"info\"><span>К оплате</span><b id=\"quoted-total\">{2}</b></div><div class=\"info\"><span>Баланс</span><b>{3}</b></div><p>Оптовая скидка: {4}%. Порог {5} до применения промокода.</p><label for=\"coupon-code\">Промокод (необязательно)</label><input id=\"coupon-code\" maxlength=\"64\" placeholder=\"Например, SBAND10\"><button id=\"preview-coupon\" class=\"secondary-button\">Проверить промокод</button><p id=\"coupon-result\" aria-live=\"polite\"></p><p id=\"dialog-error\" class=\"dialog-error\" role=\"alert\" hidden></p><button id=\"confirm-purchase\" class=\"primary-button\">Оплатить {6} <svg class=\"arrow\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M6 18 18 6M6 6h12v12\"/></svg></button>",items.length,state.items.map(i=>esc(i.product_id)+SbandT(": гарантия ")+(i.characteristics?.warranty_hours == null ? SbandT("не указана") : i.characteristics.warranty_hours+SbandT(" ч"))+SbandT("; спамблок: ")+esc(spamLabel(i.characteristics?.spam_check))).join('<br>'),rub(total),rub(state.me.balance),bulk,rub(state.wholesale.minimum),rub(total)));
     const confirmButton = $('#confirm-purchase');
+    const applyCartLimit = () => {
+      const over = sum(promo?.value || 0) > 10000;
+      confirmButton.disabled = over;
+      if (over) { $('#dialog-error').textContent = SbandT('Сумма корзины не должна превышать 10 000 ₽.'); $('#dialog-error').hidden = false; }
+      return over;
+    };
+    applyCartLimit();
     $('#preview-coupon').onclick = async () => {
       if (state.busy) return;
       confirmButton.disabled = true; $('#preview-coupon').disabled = true;
@@ -142,13 +149,13 @@
         if (confirmButton.isConnected) {
           $('#quoted-total').textContent = rub(sum(promo?.value || 0));
           confirmButton.textContent = SbandT("Оплатить ")+rub(sum(promo?.value || 0));
-          confirmButton.disabled = false; $('#preview-coupon').disabled = false;
+          applyCartLimit(); $('#preview-coupon').disabled = false;
         }
       }
     };
-    $('#coupon-code').oninput = () => { promo = null; $('#dialog-error').hidden = true; $('#quoted-total').textContent = rub(total); confirmButton.textContent = SbandT("Оплатить ")+rub(total); $('#coupon-result').textContent = ''; };
+    $('#coupon-code').oninput = () => { promo = null; $('#dialog-error').hidden = true; $('#quoted-total').textContent = rub(total); confirmButton.textContent = SbandT("Оплатить ")+rub(total); $('#coupon-result').textContent = ''; applyCartLimit(); };
     $('#confirm-purchase').onclick = async () => {
-      if (state.busy) return; state.busy = true; $('#confirm-purchase').disabled = true;
+      if (state.busy || applyCartLimit()) return; state.busy = true; $('#confirm-purchase').disabled = true;
       try {
         const result = await post('cart/checkout', { items, expected_total:sum(promo?.value || 0).toFixed(2), ...(promo ? {promo_code:promo.code} : {}) });
         modal(SbandT("<div class=\"success-icon\">✓</div><h2 id=\"dialog-title\">Покупка готова!</h2><p>Заказов: {0}. Списано {1}.<br>Остаток: {2}.</p><button class=\"primary-button\" id=\"show-my-orders\">Мои покупки <svg class=\"arrow\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M6 18 18 6M6 6h12v12\"/></svg></button>",result.order_ids.length,rub(result.paid_amount),rub(result.balance)));
@@ -257,11 +264,11 @@
       const data = await api('payment-methods'), methods = data.items.filter(m => m.enabled);
       if (dialogRevision !== state.dialogRevision) return;
       if (!methods.length) { modal(SbandT("<h2 id=\"dialog-title\">Пополнение баланса</h2><p>Платёжные сервисы пока не настроены. Обратись к администратору через Telegram-бота.</p><button class=\"primary-button\" data-bot>Открыть бота <svg class=\"arrow\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M6 18 18 6M6 6h12v12\"/></svg></button>")); return; }
-      modal(SbandT("<h2 id=\"dialog-title\">Пополнить баланс</h2><p>Баланс обновится после подтверждения оплаты.</p><label for=\"topup-method\">Способ оплаты</label><select id=\"topup-method\">{0}</select><label for=\"topup-amount\" id=\"topup-amount-label\">Сумма, ₽</label><input id=\"topup-amount\" type=\"number\" inputmode=\"decimal\" min=\"10\" max=\"1000000\" step=\"0.01\" value=\"500\"><p id=\"topup-quote\" class=\"muted\" aria-live=\"polite\"></p><p id=\"dialog-error\" class=\"dialog-error\" role=\"alert\" hidden></p><button class=\"primary-button\" id=\"create-invoice\">Создать счёт <svg class=\"arrow\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M6 18 18 6M6 6h12v12\"/></svg></button>",methods.map(m => `<option value="${esc(m.id)}">${esc(m.name)}</option>`).join('')));
+      modal(SbandT("<h2 id=\"dialog-title\">Пополнить баланс</h2><p>Баланс обновится после подтверждения оплаты.</p><label for=\"topup-method\">Способ оплаты</label><select id=\"topup-method\">{0}</select><label for=\"topup-amount\" id=\"topup-amount-label\">Сумма, ₽</label><input id=\"topup-amount\" type=\"number\" inputmode=\"decimal\" min=\"10\" max=\"10000\" step=\"0.01\" value=\"500\"><p id=\"topup-quote\" class=\"muted\" aria-live=\"polite\"></p><p id=\"dialog-error\" class=\"dialog-error\" role=\"alert\" hidden></p><button class=\"primary-button\" id=\"create-invoice\">Создать счёт <svg class=\"arrow\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M6 18 18 6M6 6h12v12\"/></svg></button>",methods.map(m => `<option value="${esc(m.id)}">${esc(m.name)}</option>`).join('')));
       const amountInput = $('#topup-amount'), methodInput = $('#topup-method'), createButton = $('#create-invoice');
       const remembered = { rub: '500', stars: '100' };
       let currentUnit = null;
-      const starCount = () => /^[0-9]{1,5}$/.test(amountInput.value) && Number(amountInput.value) >= 1 && Number(amountInput.value) <= 10000;
+      const starCount = () => /^[0-9]{1,5}$/.test(amountInput.value) && Number(amountInput.value) >= 1 && Number(amountInput.value) <= 8333;
       const updateQuote = () => {
         const stars = methodInput.value === 'stars', unit = stars ? 'stars' : 'rub';
         if (currentUnit !== unit) {
@@ -269,9 +276,9 @@
           amountInput.value = remembered[unit]; currentUnit = unit;
         }
         $('#topup-amount-label').textContent = stars ? SbandT("Количество звёзд, ⭐") : SbandT("Сумма, ₽");
-        amountInput.min = stars ? '1' : '10'; amountInput.max = stars ? '10000' : '1000000'; amountInput.step = stars ? '1' : '0.01'; amountInput.inputMode = stars ? 'numeric' : 'decimal';
-        const valid = !stars || starCount();
-        $('#topup-quote').textContent = stars ? (valid ? SbandT("{0} ⭐ → {1} ₽ на баланс. Курс: 1 ⭐ = 1,20 ₽.",num(amountInput.value),Number(amountInput.value * 120 / 100).toLocaleString(window.SbandI18n.locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })) : SbandT("Введите целое число от 1 до 10 000 ⭐.")) : SbandT("Сумма пополнения указывается в рублях.");
+        amountInput.min = stars ? '1' : '10'; amountInput.max = stars ? '8333' : '10000'; amountInput.step = stars ? '1' : '0.01'; amountInput.inputMode = stars ? 'numeric' : 'decimal';
+        const valid = stars ? starCount() : amountInput.checkValidity() && Number(amountInput.value) >= 10 && Number(amountInput.value) <= 10000;
+        $('#topup-quote').textContent = stars ? (valid ? SbandT("{0} ⭐ → {1} ₽ на баланс. Курс: 1 ⭐ = 1,20 ₽.",num(amountInput.value),Number(amountInput.value * 120 / 100).toLocaleString(window.SbandI18n.locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })) : SbandT("Введите целое число от 1 до 8 333 ⭐.")) : SbandT("Сумма пополнения: от 10 до 10 000 ₽.");
         createButton.disabled = state.busy || !valid;
       };
       methodInput.onchange = updateQuote; amountInput.oninput = updateQuote; updateQuote();
@@ -294,7 +301,7 @@
     let url;
     try { url = new URL(i.pay_url); } catch (_) { state.invoice = null; throw new Error(SbandT("Не удалось открыть ссылку счёта. Создай новый счёт.")); }
     const stars = i.provider === 'stars';
-    if (url.protocol !== 'https:' || url.username || url.password || (stars && (!['t.me', 'telegram.me'].includes(url.hostname) || !Number.isInteger(i.stars) || i.stars < 1 || i.stars > 10000 || Math.round(Number(i.amount) * 100) !== i.stars * 120))) {
+    if (url.protocol !== 'https:' || url.username || url.password || (stars && (!['t.me', 'telegram.me'].includes(url.hostname) || !Number.isInteger(i.stars) || i.stars < 1 || i.stars > 8333 || Math.round(Number(i.amount) * 100) !== i.stars * 120))) {
       state.invoice = null; throw new Error(SbandT("Счёт содержит некорректные условия оплаты. Создай новый счёт."));
     }
     const nativeStars = stars && typeof tg?.openInvoice === 'function';

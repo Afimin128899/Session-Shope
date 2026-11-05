@@ -308,8 +308,8 @@ async def process_new_price(message: Message, state: FSMContext):
         return
     import re
     text = message.text.strip()
-    if not re.match('^\\d+(\\.\\d{1,2})?$', text) or not 0 < float(text) <= 99999999.99:
-        await message.answer(tr('❌ Цена должна быть от 0.01 до 99 999 999.99 ₽, не более 2 знаков после запятой.\nПример: <code>1.50</code>'))
+    if not re.match('^\\d+(\\.\\d{1,2})?$', text) or not 0 < float(text) <= 10000:
+        await message.answer(tr('❌ Цена должна быть от 0.01 до 10 000 ₽, не более 2 знаков после запятой.\nПример: <code>1.50</code>'))
         return
     new_price = float(text)
     data = await state.get_data()
@@ -504,8 +504,8 @@ async def edit_price_save(message: Message, state: FSMContext):
         return
     import re
     text = message.text.strip()
-    if not re.match('^\\d+(\\.\\d{1,2})?$', text) or not 0 < float(text) <= 99999999.99:
-        await message.answer(tr('❌ Цена должна быть от 0.01 до 99 999 999.99 ₽, не более 2 знаков после запятой.\nПример: <code>1.50</code>'))
+    if not re.match('^\\d+(\\.\\d{1,2})?$', text) or not 0 < float(text) <= 10000:
+        await message.answer(tr('❌ Цена должна быть от 0.01 до 10 000 ₽, не более 2 знаков после запятой.\nПример: <code>1.50</code>'))
         return
     new_price = float(text)
     data = await state.get_data()

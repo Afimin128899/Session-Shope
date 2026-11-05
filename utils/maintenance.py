@@ -12,6 +12,8 @@ def maintenance_keyboard() -> InlineKeyboardMarkup:
     import re
     if re.fullmatch('@?[A-Za-z0-9_]{5,32}', SUPPORT_USERNAME or ''):
         rows.append([InlineKeyboardButton(text=tr('💬 Поддержка'), url='https://t.me/' + SUPPORT_USERNAME.lstrip('@'))])
+    from utils.legal import document_rows
+    rows.extend(document_rows())
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 

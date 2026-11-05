@@ -8,17 +8,18 @@ from uuid import uuid4
 
 import config
 from database import commerce, db
-from services import cryptopay, xrocket, lavepay
+from services import cryptopay, xrocket, lavepay, platega
+from utils.commerce_policy import MAX_NEW_STARS
 from services.exchange import convert_rub_to_usdt
 from services.operations import payment_health
 
 logger=logging.getLogger(__name__)
-PROVIDERS={'crypto':cryptopay,'xrocket':xrocket,'lave':lavepay}
+PROVIDERS={'crypto':cryptopay,'xrocket':xrocket,'lave':lavepay,'platega':platega}
 
 
 def methods():
-    return [{'id':key,'name':name,'enabled':bool(getattr(config,variable,''))} for key,name,variable in [
-        ('crypto','Crypto Pay','CRYPTO_PAY_TOKEN'),('xrocket','xRocket','XROCKET_API_KEY'),('lave','Laveshka (Lava Pay)','LAVE_PAY_API_KEY')]] + [{'id':'stars','name':'Telegram Stars ⭐','enabled':bool(getattr(config,'BOT_TOKEN','')),'unit':'XTR','rate':'1.20','min':1,'max':10000}]
+    return [{'id':key,'name':name,'enabled':bool(getattr(config,variable,'')),'currency':'RUB','min':10,'max':10000} for key,name,variable in [
+        ('crypto','Crypto Pay','CRYPTO_PAY_TOKEN'),('xrocket','xRocket','XROCKET_API_KEY'),('lave','Laveshka (Lava Pay)','LAVE_PAY_API_KEY')]] + [{'id':'platega','name':tr('Platega · СБП'),'enabled':bool(getattr(config,'PLATEGA_MERCHANT_ID','') and getattr(config,'PLATEGA_SECRET','')),'currency':'RUB','min':10,'max':10000}] + [{'id':'stars','name':'Telegram Stars ⭐','enabled':bool(getattr(config,'BOT_TOKEN','')),'unit':'XTR','rate':'1.20','min':1,'max':MAX_NEW_STARS}]
 
 
 def invoice_payload(provider, invoice):
@@ -35,10 +36,10 @@ def parse_amount(value):
         if isinstance(value, bool) or len(str(value)) > 40:
             raise ValueError
         amount = Decimal(str(value).strip().replace('\xa0', '').replace(' ', '').replace(',', '.'))
-        if not amount.is_finite() or not Decimal('10') <= amount <= Decimal('1000000') or amount != amount.quantize(Decimal('.01')):
+        if not amount.is_finite() or not Decimal('10') <= amount <= Decimal('10000') or amount != amount.quantize(Decimal('.01')):
             raise ValueError
     except (InvalidOperation, ValueError):
-        raise ValueError(tr('Сумма должна быть от 10 до 1 000 000 ₽, до двух знаков после запятой.')) from None
+        raise ValueError(tr('Сумма должна быть от 10 до 10 000 ₽, до двух знаков после запятой.')) from None
     return amount
 
 
@@ -52,6 +53,10 @@ async def create_deposit(user_id, username, provider, amount):
         invoice = await cryptopay.create_invoice(float(amount), f'Пополнение на {amount:.2f} ₽', payload)
         invoice_id = invoice.get('invoice_id') if invoice else None
         url = invoice.get('bot_invoice_url') if invoice else None
+    elif provider == 'platega':
+        invoice = await platega.create_invoice(amount, f'Пополнение SBAND ACCS на {amount:.2f} ₽', payload, user_id)
+        invoice_id = invoice.get('id') if invoice else None
+        url = invoice.get('pay_url') if invoice else None
     elif provider == 'xrocket':
         invoice = await xrocket.create_invoice(await convert_rub_to_usdt(float(amount)), f'Пополнение на {amount:.2f} ₽', order_id, payload, user_id, username)
         invoice_id = invoice.get('id') if invoice else None
@@ -90,13 +95,17 @@ async def check_invoice(user_id, provider, invoice_id):
 
 async def settle_invoice(row, invoice):
     provider=row['provider']
+    if provider == 'platega' and platega.identity(invoice.get('id')) != str(row['invoice_id']):
+        raise ValueError('Invoice identity mismatch')
     if not PROVIDERS[provider].is_paid(invoice):
         if str(invoice.get('status','')).lower() in {'expired','cancelled','canceled'}:
             await commerce.finish_invoice(provider,row['invoice_id'],'expired')
         return None
-    reported=invoice.get('invoice_id' if provider=='crypto' else 'id')
+    reported=platega.identity(invoice.get('id')) if provider=='platega' else invoice.get('invoice_id' if provider=='crypto' else 'id')
     if reported is None or str(reported)!=str(row['invoice_id']):
         raise ValueError('Invoice identity mismatch')
+    if provider == 'platega':
+        platega.verify(invoice, row)
     payload=invoice_payload(provider,invoice)
     try:
         prefix,user,amount=payload.split(':')

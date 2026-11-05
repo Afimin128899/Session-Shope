@@ -50,6 +50,8 @@ async def change_balance(admin_id, user_id, amount, currency, mode, request_key=
     if currency not in {'RUB', 'USDT'} or mode not in {'add', 'set'}:
         raise ValueError(tr('Некорректная операция с балансом.'))
     amount = _decimal(amount, '0.00000001', '9999999999.99999999')
+    if currency == 'RUB' and abs(amount) > Decimal('10000'):
+        raise ValueError(tr('Сумма операции не должна превышать 10 000 ₽.'))
     column = 'balance_usdt' if currency == 'USDT' else 'balance'
     async with _transaction() as cur:
         if request_key:
@@ -68,6 +70,8 @@ async def change_balance(admin_id, user_id, amount, currency, mode, request_key=
             raise ValueError(tr('Пользователь не найден.'))
         before = Decimal(str(user['balance']))
         after = before + amount if mode == 'add' else amount
+        if currency == 'RUB' and abs(after - before) > Decimal('10000'):
+            raise ValueError(tr('Сумма операции не должна превышать 10 000 ₽.'))
         if not Decimal('0') <= after <= Decimal('9999999999.99999999'):
             raise ValueError(tr('Итоговый баланс не может быть отрицательным или превышать лимит.'))
         await cur.execute(f'UPDATE users SET {column} = %s WHERE id = %s', (after, user_id))
@@ -75,11 +79,11 @@ async def change_balance(admin_id, user_id, amount, currency, mode, request_key=
 
 
 async def change_account_price(admin_id, account_id, price):
-    price = _decimal(price, '0.01', '99999999.99')
+    price = _decimal(price, '0.01', '10000.00')
     if price <= 0:
         raise ValueError(tr('Цена должна быть больше нуля.'))
     async with _transaction() as cur:
-        await cur.execute('SELECT price FROM accounts WHERE id = %s FOR UPDATE', (account_id,))
+        await cur.execute("SELECT price FROM accounts WHERE id = %s AND status IN ('available','review') FOR UPDATE", (account_id,))
         row = await cur.fetchone()
         if row is None:
             return False
@@ -89,16 +93,16 @@ async def change_account_price(admin_id, account_id, price):
 
 
 async def change_category_price(admin_id, slug, price):
-    price = _decimal(price, '0.01', '99999999.99')
+    price = _decimal(price, '0.01', '10000.00')
     if price <= 0:
         raise ValueError(tr('Цена должна быть больше нуля.'))
     async with _transaction() as cur:
-        await cur.execute('SELECT price FROM accounts WHERE country = %s FOR UPDATE', (slug,))
+        await cur.execute("SELECT price FROM accounts WHERE country = %s AND status IN ('available','review') FOR UPDATE", (slug,))
         rows = await cur.fetchall()
         if not rows:
             return 0
         prices = sorted({str(row['price']) for row in rows})
-        await cur.execute('UPDATE accounts SET compare_price = CASE WHEN price>%s THEN GREATEST(price,COALESCE(compare_price,0)) WHEN compare_price>%s THEN compare_price ELSE NULL END,price=%s WHERE country=%s', (price, price, price, slug))
+        await cur.execute('UPDATE accounts SET compare_price = CASE WHEN price>%s THEN GREATEST(price,COALESCE(compare_price,0)) WHEN compare_price>%s THEN compare_price ELSE NULL END,price=%s WHERE country=%s AND status IN (\'available\',\'review\')', (price, price, price, slug))
         updated = cur.rowcount
         await _record(cur, admin_id, 'category_price', 'category', slug, {'before': prices[:20], 'distinct_prices': len(prices), 'after': str(price), 'matched': len(rows), 'updated': updated})
         return updated

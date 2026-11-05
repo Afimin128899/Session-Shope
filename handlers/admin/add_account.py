@@ -64,7 +64,7 @@ async def start_add_account(call: CallbackQuery, state: FSMContext):
         return
     await state.update_data(password='-')
     await state.set_state(AddAccountState.waiting_for_phone)
-    text = tr("<tg-emoji emoji-id='{0}'>📞</tg-emoji> <b>Добавление аккаунта через Telethon</b>\n\nОтправьте номер телефона в международном формате:\n<blockquote>+79991234567</blockquote>\n<tg-emoji emoji-id='{1}'>📣</tg-emoji> <i>На этот номер придёт код авторизации. Убедитесь, что аккаунт не в спам-блоке.</i>", f'{EMOJI_PHONE}', f'{EMOJI_MEGA}')
+    text = tr("<tg-emoji emoji-id='{0}'>📞</tg-emoji> <b>Добавление аккаунта через Telethon</b>\n\nОтправьте номер телефона в международном формате:\n<blockquote>+15551234567</blockquote>\n<tg-emoji emoji-id='{1}'>📣</tg-emoji> <i>На этот номер придёт код авторизации. Убедитесь, что аккаунт не в спам-блоке.</i>", f'{EMOJI_PHONE}', f'{EMOJI_MEGA}')
     await edit_message_safe(call, text, reply_markup=back_to_admin())
     await answer_safe(call)
 
@@ -72,6 +72,8 @@ async def start_add_account(call: CallbackQuery, state: FSMContext):
 async def execute_send_code(message: Message, state: FSMContext, phone: str, user_id: int):
     """Вспомогательная функция для отправки кода через Telethon"""
     try:
+        from utils.commerce_policy import require_phone
+        require_phone(phone)
         client = await create_telethon_client()
         phone_code_hash, error_msg = await send_code_to_phone(client, phone)
         if not phone_code_hash:
@@ -117,6 +119,8 @@ async def process_session_file(message: Message, state: FSMContext):
         if not session_string or not phone:
             await message.answer(tr('❌ Не удалось импортировать сессию.\nПричина: <b>{0}</b>', f"{error or tr('файл недействителен или авторизация отсутствует')}"))
             return
+        from utils.commerce_policy import require_phone
+        require_phone(phone)
         await state.update_data(session_string=session_string, telegram_user_id=metadata.get('telegram_user_id'), is_premium=metadata.get('is_premium'), phone=phone, password='-')
         await state.set_state(AddAccountState.waiting_for_price)
         await message.answer(tr('✅ <b>Сессия успешно загружена</b>\n\n📞 Номер: <code>{0}</code>\n\n🪙 Введите цену аккаунта в рублях (₽):\nПример: <code>150</code>', f'{phone}'))
@@ -194,7 +198,12 @@ async def process_price(message: Message, state: FSMContext):
     if not re.match('^\\d+(\\.\\d{1,2})?$', text) or float(text) <= 0:
         await message.answer(tr('❌ Цена должна быть положительным числом с не более чем 2 знаками после запятой.\nПример: <code>1.50</code>'))
         return
-    price = float(text)
+    from utils.commerce_policy import money
+    try:
+        price = float(money(text))
+    except ValueError as exc:
+        await message.answer(str(exc))
+        return
     await state.update_data(custom_price=price)
     data = await state.get_data()
     pre_set_slug = data.get('category_slug')

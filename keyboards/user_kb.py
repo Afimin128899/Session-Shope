@@ -47,6 +47,8 @@ async def main_menu(user_id: int | None=None) -> InlineKeyboardMarkup:
     if support_val:
         reviews_row.insert(0, InlineKeyboardButton(text=label_support, url=support_url, icon_custom_emoji_id=emoji_support))
     rows.append(reviews_row)
+    from utils.legal import document_rows
+    rows.extend(document_rows())
     is_admin_user = False
     try:
         is_admin_user = int(user_id) in [int(x) for x in ADMIN_IDS]
@@ -66,6 +68,8 @@ async def profile_menu():
         rows.append([InlineKeyboardButton(text=text, callback_data=callback, icon_custom_emoji_id=emoji)])
     rows.insert(1, [InlineKeyboardButton(text=tr('Мои обращения'), callback_data='tk_user:0', icon_custom_emoji_id=icon_for('support'))])
     rows.append([InlineKeyboardButton(text=tr('Бонусы · Колесо удачи'), callback_data='wheel', icon_custom_emoji_id=icon_for('reviews'))])
+    from utils.legal import document_rows
+    rows.extend(document_rows())
     rows.append([InlineKeyboardButton(text=tr('🌐 Язык / Language'), callback_data='language')])
     rows.append([InlineKeyboardButton(text=tr('В главное меню'), callback_data='back_main', icon_custom_emoji_id=icon_for('back'))])
     return InlineKeyboardMarkup(inline_keyboard=rows)

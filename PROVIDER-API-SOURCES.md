@@ -46,3 +46,9 @@ python -m unittest discover -s tests -p test_provider_apis.py
 ```
 
 Тесты используют только фиктивные ключи и ответы HTTP. Для проверки подключения на VPS необходимы действующие ключи соответствующих кабинетов.
+
+## Platega
+
+Проверен опубликованный в PyPI сторонний SDK [platega==0.1.5](https://pypi.org/project/platega/0.1.5/), исходники [komarukomaru/platega](https://github.com/komarukomaru/platega): `client.py` (адрес `https://app.platega.io`, X-MerchantId/X-Secret, POST `/transaction/process`, GET `/transaction/{id}`), `models.py` (СБП=2, статус `CONFIRMED`, UUID, redirect, paymentDetails, payload). Это сторонний SDK, не доказательство доступности текущего боевого API.
+
+Загруженная владельцем PDF «памятка почты.pdf» подтверждает `metadata.user_email` и постоянный Telegram ID в формате `ID@telegram.org` (правило на стр. 1; пример стр. 2 использует `@t.me`). Положения `paymentMethod` в SDK и примере PDF различаются; запрос содержит одинаковое значение 2 в обоих местах, без повторного POST или переключения API. Официальный сайт документации и страницы Telegra.ph были недоступны в среде (CONNECT 403). Рабочие ключи и реальные оплаченные счета не использовались. Подробности и настройка: [PLATEGA.md](PLATEGA.md).

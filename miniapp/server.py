@@ -408,7 +408,9 @@ def create_app(*, token=None, bot=None, bot_username=''):
     app[BOT] = bot
     app[BOT_USERNAME] = bot_username
     app[LIMITS] = OrderedDict()
+    from miniapp.public_info import about
     app.add_routes([
+        web.get('/about', about),
         web.get('/', index), web.get('/api/health', health),
         web.get('/api/status',shop_status),web.post('/api/preferences/language',save_language),
         web.get('/api/rewards',reward_status),web.post('/api/rewards/claim',reward_claim),

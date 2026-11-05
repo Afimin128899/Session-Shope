@@ -9,9 +9,10 @@ import aiomysql
 
 from database.admin_tools import _transaction
 from database.db import _get_pool
+from utils.commerce_policy import MAX_NEW_STARS
 
 STARS_RATE = Decimal('1.20')
-MAX_STARS = 10000
+MAX_STARS = 10000  # Historical receipt/reconciliation ceiling; do not discard paid invoices.
 BALANCE_LIMIT = Decimal('9999999999.99999999')
 PAYLOAD_PREFIX = 'sband_stars:'
 _ID = re.compile(r'[0-9a-f]{32}\Z')
@@ -25,6 +26,16 @@ def parse_count(value):
         value = int(value)
     if type(value) is not int or not 1 <= value <= MAX_STARS:
         raise ValueError(tr('Введите целое количество звёзд от 1 до 10 000.'))
+    return value
+
+
+def parse_new_count(value):
+    try:
+        value = parse_count(value)
+    except ValueError:
+        raise ValueError(tr('Введите целое количество звёзд от 1 до 8 333 (лимит 10 000 ₽).')) from None
+    if value > MAX_NEW_STARS:
+        raise ValueError(tr('Лимит пополнения — 10 000 ₽: не более 8 333 ⭐.'))
     return value
 
 
@@ -68,7 +79,7 @@ async def init_schema(cur, database):
 
 
 async def register_invoice(user_id, stars):
-    user_id, stars = _user_id(user_id), parse_count(stars)
+    user_id, stars = _user_id(user_id), parse_new_count(stars)
     identity, amount = uuid4().hex, (stars * STARS_RATE).quantize(Decimal('0.01'))
     async with _transaction() as cur:
         await cur.execute('''INSERT INTO payment_invoices
@@ -90,7 +101,7 @@ async def check_precheckout(user_id, payload, currency, total_amount):
     identity, user_id = (invoice_id(payload), _user_id(user_id))
     if currency != 'XTR' or type(total_amount) is not int:
         raise ValueError(tr('Валюта или сумма Stars не совпадает со счётом.'))
-    stars = parse_count(total_amount)
+    stars = parse_new_count(total_amount)
     async with _transaction() as cur:
         await cur.execute("SELECT *,expires_at<=UTC_TIMESTAMP() AS expired FROM payment_invoices WHERE provider='stars' AND invoice_id=%s FOR UPDATE", (identity,))
         row = await cur.fetchone()

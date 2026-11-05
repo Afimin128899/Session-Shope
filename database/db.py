@@ -298,7 +298,6 @@ async def init_db ():
                         cat_row = await cur.fetchone()
                         if not cat_row or cat_row[0] == 0:
                             default_cats = [
-                                ("ru", "Россия 🇷🇺", "5258509201306557640"),
                                 ("kz", "Казахстан 🇰🇿", "5258509201306557640"),
                                 ("us", "США 🇺🇸", "5258509201306557640"),
                                 ("id", "Индонезия 🇮🇩", "5258509201306557640"),
@@ -438,12 +437,14 @@ async def credit_paid_deposit(
 
     try:
         amount = Decimal(str(amount))
+        # Settlement ceiling for already paid legacy invoices. New invoices are
+        # capped at RUB 10,000 in services.payments before any provider request.
         if not amount.is_finite() or not Decimal("10") <= amount <= Decimal("1000000"):
             raise ValueError("Invalid deposit amount")
         amount = amount.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
     except InvalidOperation as exc:
         raise ValueError("Invalid deposit amount") from exc
-    if provider not in {"lave", "xrocket", "crypto"} or not invoice_id:
+    if provider not in {"lave", "xrocket", "crypto", "platega"} or not invoice_id:
         raise ValueError("Invalid payment reference")
     comment_key = f"{provider}_{invoice_id}"
     if len(comment_key) > 255:
@@ -587,7 +588,10 @@ async def buy_account(user_id: int, account_id: int, price: float, date_str: str
 
                 # Проверяем баланс с блокировкой строки
                 from database.shop_control import check_sales
-                await check_sales(cur, tuple_cursor=True)
+                await check_sales(cur, tuple_cursor=True, account_ids=[account_id])
+                if currency == 'RUB':
+                    from utils.commerce_policy import money as policy_money
+                    policy_money(price, minimum=0)
 
                 balance_col = "balance_usdt" if currency == "USDT" else "balance"
                 await cur.execute(f"SELECT {balance_col} FROM users WHERE id = %s FOR UPDATE", (user_id,))
@@ -647,7 +651,10 @@ async def complete_user_purchase(account_id: int):
 async def add_account(country, code, number, password, price, data, telegram_user_id=None, is_premium=None):
     from database.admin_tools import _transaction
     from database.imports import claim, bind
+    from utils.commerce_policy import money, category as check_category
+    price = money(price)
     async with _transaction() as cur:
+        await check_category(cur, country)
         keys = await claim(cur, number, telegram_user_id, data)
         await cur.execute("INSERT INTO accounts(country,code,number,password,price,data,telegram_user_id,warranty_hours,is_premium,attributes_checked_at) VALUES(%s,%s,%s,%s,%s,%s,%s,24,%s,UTC_TIMESTAMP())", (country,code,number,password,price,data,telegram_user_id,is_premium))
         await bind(cur, keys, cur.lastrowid)
@@ -659,24 +666,29 @@ async def delete_account (account_id :int ):
             await cur .execute ("DELETE FROM accounts WHERE id = %s",(account_id ,))
 
 async def update_account_country(account_id: int, new_country: str) -> bool:
-    async with _get_pool().acquire() as conn:
-        async with conn.cursor() as cur:
-            await cur.execute("SELECT id FROM accounts WHERE id = %s", (account_id,))
-            if not await cur.fetchone():
-                return False
-            await cur.execute("UPDATE accounts SET country = %s WHERE id = %s", (new_country, account_id))
-            return True
+    from database.admin_tools import _transaction
+    from utils.commerce_policy import category, require_phone
+    async with _transaction() as cur:
+        await cur.execute("SELECT id,number FROM accounts WHERE id=%s AND status IN ('available','review') FOR UPDATE", (account_id,))
+        row = await cur.fetchone()
+        if not row:
+            return False
+        require_phone(row['number'])
+        await category(cur, new_country)
+        await cur.execute('UPDATE accounts SET country=%s WHERE id=%s', (new_country, account_id))
+        return True
 
 async def update_account_price(account_id: int, new_price: float) -> bool:
+    from utils.commerce_policy import money
+    price = money(new_price)
     async with _get_pool().acquire() as conn:
         async with conn.cursor() as cur:
-            await cur.execute("SELECT id FROM accounts WHERE id = %s", (account_id,))
-            if not await cur.fetchone():
-                return False
-            await cur.execute("UPDATE accounts SET price = %s WHERE id = %s", (new_price, account_id))
-            return True
+            await cur.execute("UPDATE accounts SET price=%s WHERE id=%s AND status IN ('available','review')", (price, account_id))
+            return bool(cur.rowcount)
 
 async def create_promo (code ,value ,max_uses ):
+    from utils.commerce_policy import money
+    value = money(value)
     async with _get_pool().acquire() as conn :
         async with conn .cursor ()as cur :
             await cur .execute ("REPLACE INTO promocodes (code, value, max_uses) VALUES (%s, %s, %s)",(code ,value ,max_uses ))
@@ -703,6 +715,9 @@ async def check_and_use_promo(user_id: int, code: str) -> float:
         return 0.0
 
 async def update_country_price (country :str ,new_price :float ):
+    from utils.commerce_policy import money, require_category
+    new_price = money(new_price)
+    require_category(country)
     async with _get_pool().acquire() as conn :
         async with conn .cursor ()as cur :
             await cur .execute ("UPDATE accounts SET price = %s WHERE country = %s AND status = 'available'",(new_price ,country ))
@@ -819,7 +834,10 @@ async def complete_user_purchase(account_id: int):
 async def add_account(country, code, number, password, price, data, telegram_user_id=None, is_premium=None):
     from database.admin_tools import _transaction
     from database.imports import claim, bind
+    from utils.commerce_policy import money, category as check_category
+    price = money(price)
     async with _transaction() as cur:
+        await check_category(cur, country)
         keys = await claim(cur, number, telegram_user_id, data)
         await cur.execute("INSERT INTO accounts(country,code,number,password,price,data,telegram_user_id,warranty_hours,is_premium,attributes_checked_at) VALUES(%s,%s,%s,%s,%s,%s,%s,24,%s,UTC_TIMESTAMP())", (country,code,number,password,price,data,telegram_user_id,is_premium))
         await bind(cur, keys, cur.lastrowid)
@@ -831,24 +849,29 @@ async def delete_account (account_id :int ):
             await cur .execute ("DELETE FROM accounts WHERE id = %s",(account_id ,))
 
 async def update_account_country(account_id: int, new_country: str) -> bool:
-    async with _get_pool().acquire() as conn:
-        async with conn.cursor() as cur:
-            await cur.execute("SELECT id FROM accounts WHERE id = %s", (account_id,))
-            if not await cur.fetchone():
-                return False
-            await cur.execute("UPDATE accounts SET country = %s WHERE id = %s", (new_country, account_id))
-            return True
+    from database.admin_tools import _transaction
+    from utils.commerce_policy import category, require_phone
+    async with _transaction() as cur:
+        await cur.execute("SELECT id,number FROM accounts WHERE id=%s AND status IN ('available','review') FOR UPDATE", (account_id,))
+        row = await cur.fetchone()
+        if not row:
+            return False
+        require_phone(row['number'])
+        await category(cur, new_country)
+        await cur.execute('UPDATE accounts SET country=%s WHERE id=%s', (new_country, account_id))
+        return True
 
 async def update_account_price(account_id: int, new_price: float) -> bool:
+    from utils.commerce_policy import money
+    price = money(new_price)
     async with _get_pool().acquire() as conn:
         async with conn.cursor() as cur:
-            await cur.execute("SELECT id FROM accounts WHERE id = %s", (account_id,))
-            if not await cur.fetchone():
-                return False
-            await cur.execute("UPDATE accounts SET price = %s WHERE id = %s", (new_price, account_id))
-            return True
+            await cur.execute("UPDATE accounts SET price=%s WHERE id=%s AND status IN ('available','review')", (price, account_id))
+            return bool(cur.rowcount)
 
 async def create_promo (code ,value ,max_uses ):
+    from utils.commerce_policy import money
+    value = money(value)
     async with _get_pool().acquire() as conn :
         async with conn .cursor ()as cur :
             await cur .execute ("REPLACE INTO promocodes (code, value, max_uses) VALUES (%s, %s, %s)",(code ,value ,max_uses ))
@@ -875,6 +898,9 @@ async def check_and_use_promo(user_id: int, code: str) -> float:
         return 0.0
 
 async def update_country_price (country :str ,new_price :float ):
+    from utils.commerce_policy import money, require_category
+    new_price = money(new_price)
+    require_category(country)
     async with _get_pool().acquire() as conn :
         async with conn .cursor ()as cur :
             await cur .execute ("UPDATE accounts SET price = %s WHERE country = %s AND status = 'available'",(new_price ,country ))
@@ -1039,7 +1065,10 @@ async def buy_account_with_referral(
                     return None
 
                 from database.shop_control import check_sales
-                await check_sales(cur, tuple_cursor=True)
+                await check_sales(cur, tuple_cursor=True, account_ids=[account_id])
+                if currency == 'RUB':
+                    from utils.commerce_policy import money as policy_money
+                    policy_money(price, minimum=0)
 
                 balance_col = "balance_usdt" if currency == "USDT" else "balance"
                 await cur.execute(
@@ -1159,6 +1188,8 @@ async def get_category(slug: str) -> dict | None:
 
 
 async def create_category(slug: str, name: str, emoji: str | None = None) -> bool:
+    from utils.commerce_policy import require_category
+    require_category(slug, name, emoji)
     async with _get_pool().acquire() as conn:
         async with conn.cursor() as cur:
             try:
@@ -1172,6 +1203,8 @@ async def create_category(slug: str, name: str, emoji: str | None = None) -> boo
 
 
 async def update_category(slug: str, name: str, emoji: str | None) -> bool:
+    from utils.commerce_policy import require_category
+    require_category(slug, name, emoji)
     async with _get_pool().acquire() as conn:
         async with conn.cursor() as cur:
             await cur.execute(
@@ -1182,6 +1215,8 @@ async def update_category(slug: str, name: str, emoji: str | None) -> bool:
 
 
 async def update_category_emoji(slug: str, emoji: str | None) -> bool:
+    from utils.commerce_policy import require_category
+    require_category(slug, emoji)
     async with _get_pool().acquire() as conn:
         async with conn.cursor() as cur:
             await cur.execute(
@@ -1192,6 +1227,10 @@ async def update_category_emoji(slug: str, emoji: str | None) -> bool:
 
 
 async def toggle_category(slug: str) -> bool:
+    from utils.commerce_policy import require_category
+    row = await get_category(slug)
+    if row:
+        require_category(slug, row["name"])
     async with _get_pool().acquire() as conn:
         async with conn.cursor() as cur:
             await cur.execute("UPDATE categories SET is_active = NOT is_active WHERE slug = %s", (slug,))

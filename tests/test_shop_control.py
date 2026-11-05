@@ -18,6 +18,7 @@ from aiogram.types import Message
 class ControlTransactionTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         self.cur = MagicMock(execute=AsyncMock(), fetchone=AsyncMock(), fetchall=AsyncMock())
+        self.cur.fetchall.return_value = [{'country':'us','number':'+15550001111','price':100,'category_name':'США'}]
         self.conn = MagicMock(begin=AsyncMock(), commit=AsyncMock(), rollback=AsyncMock())
         self.conn.cursor.return_value.__aenter__.return_value = self.cur
         pool=MagicMock();pool.acquire.return_value.__aenter__.return_value=self.conn

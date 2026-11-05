@@ -49,7 +49,7 @@ async def prepare(message, state):
             pct = Decimal(pct)
             threshold = Decimal(threshold)
             low = int(low)
-            if not pct.is_finite() or not threshold.is_finite() or (not 1 <= quantity <= 99999999) or (not 0 <= pct <= 50) or (pct != pct.quantize(Decimal('.01'))) or (threshold != threshold.quantize(Decimal('.01'))) or (not 0 <= threshold <= 99999999) or (not 0 <= low <= 10000):
+            if not pct.is_finite() or not threshold.is_finite() or (not 1 <= quantity <= 10000) or (not 0 <= pct <= 50) or (pct != pct.quantize(Decimal('.01'))) or (threshold != threshold.quantize(Decimal('.01'))) or (not 0 <= threshold <= 10000) or (not 0 <= low <= 10000):
                 raise ValueError
             data = {'quantity': quantity, 'pct': str(pct), 'threshold': str(threshold), 'low': low}
         import secrets

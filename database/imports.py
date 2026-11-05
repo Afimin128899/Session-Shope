@@ -30,6 +30,8 @@ async def init_schema(cur):
 
 
 async def claim(cur, phone, telegram_id, session):
+    from utils.commerce_policy import require_phone
+    require_phone(phone)
     digits = re.sub('\\D', '', phone)
     fingerprint = hashlib.sha256(session.encode()).hexdigest()
     keys = ['phone:' + digits, 'session:' + fingerprint]
@@ -98,7 +100,7 @@ async def commit(admin, batch, selections):
         if not isinstance(item, dict) or type(item.get('id')) is not int or item['id'] in seen:
             raise ValueError(tr('Проверьте выбранные строки.'))
         seen.add(item['id'])
-        price = _decimal(item.get('price'), '0.01', '99999999.99')
+        price = _decimal(item.get('price'), '0.01', '10000.00')
         hours = item.get('warranty_hours', 24)
         category = item.get('category')
         password = item.get('password', '-')
@@ -119,6 +121,8 @@ async def commit(admin, batch, selections):
             await cur.execute('SELECT slug FROM categories WHERE slug=%s AND is_active=1', (category,))
             if not await cur.fetchone():
                 raise ValueError(tr('Категория отключена или не существует.'))
+            from utils.commerce_policy import category as check_category
+            await check_category(cur, category)
             keys = await claim(cur, item['phone'], item['telegram_id'], item['session_data'])
             await cur.execute("INSERT INTO accounts(country,code,number,password,price,data,telegram_user_id,warranty_hours,is_premium,attributes_checked_at)\n                VALUES(%s,'',%s,%s,%s,%s,%s,%s,%s,UTC_TIMESTAMP())", (category, item['phone'], password, price, item['session_data'], item['telegram_id'], hours, item['premium']))
             account = cur.lastrowid

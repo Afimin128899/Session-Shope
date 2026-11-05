@@ -83,8 +83,8 @@ f"{INFO_EMOJI_SUPPORT } <b>Поддержка:</b>\n"
 f"Если у вас возникли проблемы с покупкой или есть вопросы, обращайтесь в нашу поддержку.\n\n"
 f"{INFO_EMOJI_SHIELD } <b>Документация:</b>\n"
 f"Используя нашего бота, вы соглашаетесь со следующими документами:\n"
-f"• <a href='https://telegra.ph/Polzovatelskoe-soglashenie-08-15-10'>Пользовательское соглашение</a>\n"
-f"• <a href='https://telegra.ph/Politika-konfidencialnosti-08-15-17'>Политика конфиденциальности</a>"
+f"• <a href='https://telegra.ph/POLZOVATELSKOE-SOGLASHENIE-SBAND-ACCS-11-05'>Пользовательское соглашение</a>\n"
+f"• <a href='https://telegra.ph/POLITIKA-KONFIDENCIALNOSTI-SBAND-ACCS-11-05-2'>Политика конфиденциальности</a>"
 )
 
 
@@ -101,6 +101,6 @@ def info_text():
     if LANGUAGE.get() == 'en':
         return ("ℹ️ <b>About the store</b>\n\n💬 Contact support if you have a question or a problem with a purchase.\n\n"
                 "📄 <b>Documents</b>\nBy using this bot, you agree to the following documents:\n"
-                "• <a href='https://telegra.ph/Polzovatelskoe-soglashenie-08-15-10'>User agreement</a>\n"
-                "• <a href='https://telegra.ph/Politika-konfidencialnosti-08-15-17'>Privacy policy</a>")
-    return INFO_TEXT
+                "• <a href='https://telegra.ph/POLZOVATELSKOE-SOGLASHENIE-SBAND-ACCS-11-05'>User agreement</a>\n"
+                "• <a href='https://telegra.ph/POLITIKA-KONFIDENCIALNOSTI-SBAND-ACCS-11-05-2'>Privacy policy</a>\n\nStore verification code: <code>mekbuda</code>\nMaximum top-up, item price and cart purchase: RUB 10,000. Stars: 1 ⭐ = RUB 1.20.")
+    return INFO_TEXT + '\n\nКод проверки магазина: <code>mekbuda</code>\nЛимит одной оплаты, товара и корзины — 10 000 ₽. Оплата Stars: 1 ⭐ = 1,20 ₽.'

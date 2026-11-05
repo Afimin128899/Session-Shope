@@ -110,7 +110,11 @@ async def category_toggle(call: CallbackQuery):
     if not is_admin(call.from_user.id):
         return
     slug = call.data.split(':', 1)[1]
-    await toggle_category(slug)
+    try:
+        await toggle_category(slug)
+    except ValueError as exc:
+        await answer_safe(call, str(exc), show_alert=True)
+        return
     await answer_safe(call, tr('✅ Статус изменён'), show_alert=True)
     await category_detail(call)
 
@@ -150,6 +154,12 @@ async def category_create_name_process(message: Message, state: FSMContext):
     if not is_admin(message.from_user.id):
         return
     name = message.text.strip()
+    from utils.commerce_policy import require_category
+    try:
+        require_category(name)
+    except ValueError as exc:
+        await message.answer(str(exc))
+        return
     if len(name) < 1:
         await message.answer(tr('❌ Название не может быть пустым.'))
         return
@@ -206,6 +216,12 @@ async def category_edit_name_process(message: Message, state: FSMContext):
     if not is_admin(message.from_user.id):
         return
     name = message.text.strip()
+    from utils.commerce_policy import require_category
+    try:
+        require_category(name)
+    except ValueError as exc:
+        await message.answer(str(exc))
+        return
     data = await state.get_data()
     slug = data.get('edit_slug')
     cat = await get_category(slug)

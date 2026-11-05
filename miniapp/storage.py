@@ -124,7 +124,7 @@ async def checkout(user_id, account_id, quoted_price, *, warranty_hours=_UNSET, 
         if account is None:
             raise CheckoutError(tr('Этот аккаунт недоступен. Обновите каталог.'), 'sold')
         from database.shop_control import check_sales
-        await check_sales(cur)
+        await check_sales(cur, account_ids=[account_id])
         if account.get('spam_running'):
             raise CheckoutError(tr('Идёт проверка аккаунта через @SpamBot. Повторите через минуту.'), 'checking')
         if spam_status is not _UNSET and account['spam_status'] != spam_status:
@@ -153,6 +153,8 @@ async def checkout(user_id, account_id, quoted_price, *, warranty_hours=_UNSET, 
             actual_price = money(actual_price * (1 - Decimal(str(promo['value'])) / 100))
             if expected_total is None or actual_price != Decimal(str(expected_total)):
                 raise CheckoutError(tr('Скидка изменилась. Подтвердите новую сумму.'), 'price_changed')
+        if actual_price > Decimal('10000'):
+            raise CheckoutError(tr('Сумма покупки не должна превышать 10 000 ₽.'), 'amount_limit')
         users = sorted({user_id, referrer} - {None})
         await cur.execute('SELECT id, balance FROM users WHERE id IN (' + ','.join(['%s'] * len(users)) + ') ORDER BY id FOR UPDATE', tuple(users))
         balances = {row['id']: row['balance'] for row in await cur.fetchall()}
@@ -202,7 +204,7 @@ async def checkout_cart(user_id, requested, promo_code=None, expected_total=None
         if len(accounts) != len(ids):
             raise CheckoutError(tr('Один из аккаунтов уже недоступен. Корзина не оплачена.'), 'sold')
         from database.shop_control import check_sales
-        await check_sales(cur)
+        await check_sales(cur, account_ids=ids)
         if any((row.get('spam_running') for row in accounts)):
             raise CheckoutError(tr('Один из аккаунтов проверяется через @SpamBot. Повторите через минуту.'), 'checking')
         terms = {item['account_id']: item for item in requested}
@@ -244,6 +246,8 @@ async def checkout_cart(user_id, requested, promo_code=None, expected_total=None
         await cur.execute('SELECT id,balance FROM users WHERE id IN (' + ','.join(['%s'] * len(users)) + ') ORDER BY id FOR UPDATE', tuple(users))
         balances = {row['id']: Decimal(str(row['balance'])) for row in await cur.fetchall()}
         total = sum(prices.values(), Decimal('0'))
+        if total > Decimal('10000'):
+            raise CheckoutError(tr('Сумма корзины не должна превышать 10 000 ₽.'), 'amount_limit')
         if user_id not in balances or balances[user_id] < total:
             raise CheckoutError(tr('Недостаточно средств для всей корзины.'), 'insufficient_balance')
         await cur.execute('SELECT account_id FROM shopping_cart WHERE user_id=%s AND account_id IN (' + placeholders + ') FOR UPDATE', (user_id, *ids))

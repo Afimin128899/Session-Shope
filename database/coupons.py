@@ -25,6 +25,9 @@ async def validate(cur, user_id, value, *, lock=False):
     amount = Decimal(str(promo['value']))
     if not amount.is_finite() or amount <= 0 or (promo['kind'] == 'discount' and amount > 100) or (promo['kind'] not in {'balance', 'discount'}):
         raise ValueError(tr('Промокод временно недоступен.'))
+    if promo['kind'] == 'balance':
+        from utils.commerce_policy import money
+        money(amount)
     return promo
 
 

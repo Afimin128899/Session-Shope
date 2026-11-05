@@ -211,6 +211,8 @@ COUNTRY_MAP: dict[str, tuple[str, str, str]] = {
 
 def detect_country(phone: str) -> str:
     clean = phone.lstrip("+")
+    if clean.startswith(("76", "77")):
+        return "Казахстан"
     for length in range(min(4, len(clean)), 0, -1):
         prefix = "+" + clean[:length]
         if prefix in COUNTRY_MAP:
@@ -229,6 +231,8 @@ def detect_country_code(phone: str) -> str:
 
 def detect_country_flag(phone: str) -> str:
     clean = phone.lstrip("+")
+    if clean.startswith(("76", "77")):
+        return "🇰🇿"
     for length in range(min(4, len(clean)), 0, -1):
         prefix = "+" + clean[:length]
         if prefix in COUNTRY_MAP:

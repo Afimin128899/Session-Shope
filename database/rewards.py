@@ -24,7 +24,7 @@ async def eligibility(cur,user_id,*,lock=False):
     await cur.execute('SELECT created_at FROM reward_claims WHERE user_id=%s ORDER BY id DESC LIMIT 1'+(' FOR UPDATE' if lock else ''),(user_id,))
     last=await cur.fetchone()
     next_at=last['created_at']+PERIOD if last else None
-    await cur.execute("SELECT COALESCE(SUM(amount),0) AS total FROM payment_logs WHERE user_id=%s AND currency='RUB' AND method IN ('lave_pay','xrocket_pay','crypto_pay') AND amount>0 AND UNIX_TIMESTAMP(created_at)>%s",(user_id,int((now.replace(tzinfo=timezone.utc)-PERIOD).timestamp())))
+    await cur.execute("SELECT COALESCE(SUM(amount),0) AS total FROM payment_logs WHERE user_id=%s AND currency='RUB' AND method IN ('lave_pay','xrocket_pay','crypto_pay','platega_pay') AND amount>0 AND UNIX_TIMESTAMP(created_at)>%s",(user_id,int((now.replace(tzinfo=timezone.utc)-PERIOD).timestamp())))
     paid=Decimal(str((await cur.fetchone())['total']))
     await cur.execute('SELECT COALESCE(SUM(amount_rub),0) AS total FROM star_payments WHERE user_id=%s AND paid_seen=1 AND refunded_seen=0 AND created_at>DATE_SUB(UTC_TIMESTAMP(),INTERVAL 3 DAY)',(user_id,))
     paid+=Decimal(str((await cur.fetchone())['total']))

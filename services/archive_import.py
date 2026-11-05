@@ -65,6 +65,12 @@ async def process(admin,batch,files,verifier=None):
                 if not session or not phone or not metadata.get('telegram_user_id'):
                     await imports.add_item(batch,label,'error',error='Не удалось подтвердить сессию. Проверьте авторизацию и доступность Telegram.')
                     continue
+                from utils.commerce_policy import require_phone
+                try:
+                    require_phone(phone)
+                except ValueError as exc:
+                    await imports.add_item(batch,label,'error',error=str(exc))
+                    continue
                 identity=metadata['telegram_user_id']
                 existing=await rows("SELECT id FROM accounts WHERE telegram_user_id=%s OR REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(number,'+',''),' ',''),'-',''),'(',''),')','')=%s OR data=%s LIMIT 1",(identity,''.join(c for c in phone if c.isdigit()),session))
                 if identity in seen or existing:

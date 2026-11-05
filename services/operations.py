@@ -3,7 +3,7 @@ from database.db import _get_pool
 
 
 async def payment_health(provider, ok):
-    if provider not in {'crypto','xrocket','lave'}: return
+    if provider not in {'crypto','xrocket','lave','platega'}: return
     key='payments:'+provider
     async with _get_pool().acquire() as conn:
         async with conn.cursor() as cur:

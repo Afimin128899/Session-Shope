@@ -48,7 +48,7 @@ async def orders(query='',page=0):
 
 
 async def edit_stock(admin, account, body):
-    price = _decimal(body.get('price'), '0.01', '99999999.99')
+    price = _decimal(body.get('price'), '0.01', '10000.00')
     hours = body.get('warranty_hours')
     category = body.get('category')
     note = body.get('note', '')
@@ -63,9 +63,13 @@ async def edit_stock(admin, account, body):
         if not date(2013, 8, 1) <= registered <= datetime.now(ZoneInfo('Europe/Moscow')).date():
             raise ValueError(tr('Проверьте дату регистрации.'))
     async with _transaction() as cur:
-        await cur.execute("SELECT id FROM accounts WHERE id=%s AND status IN ('available','review') FOR UPDATE", (account,))
-        if not await cur.fetchone():
+        await cur.execute("SELECT id,number FROM accounts WHERE id=%s AND status IN ('available','review') FOR UPDATE", (account,))
+        account_row = await cur.fetchone()
+        if not account_row:
             raise ValueError(tr('Редактирование доступно только для свободного товара.'))
+        from utils.commerce_policy import require_phone, category as check_category
+        require_phone(account_row['number'])
+        await check_category(cur, category)
         await cur.execute('SELECT user_id FROM account_reservations WHERE account_id=%s AND expires_at>UTC_TIMESTAMP() FOR UPDATE', (account,))
         if await cur.fetchone():
             raise ValueError(tr('Товар зарезервирован покупателем. Дождитесь окончания резерва.'))
@@ -87,6 +91,8 @@ async def save_category(admin, body):
     active = body.get('active', True)
     if not isinstance(slug, str) or not re.fullmatch('[a-z0-9_-]{1,32}', slug) or (not isinstance(name, str)) or (not 1 <= len(name.strip()) <= 64) or (type(active) is not bool):
         raise ValueError(tr('Проверьте название и код категории.'))
+    from utils.commerce_policy import require_category
+    require_category(slug, name)
     async with _transaction() as cur:
         await cur.execute('INSERT INTO categories(slug,name,is_active) VALUES(%s,%s,%s) ON DUPLICATE KEY UPDATE name=VALUES(name),is_active=VALUES(is_active)', (slug, name.strip(), active))
         await _record(cur, admin, 'web_category', 'category', slug, {'name': name.strip(), 'active': active})
@@ -100,7 +106,7 @@ async def settings():
 
 async def save_settings(admin, body):
     from decimal import Decimal
-    allowed = {'wholesale_min_total': (1, 99999999), 'wholesale_pct': (0, 50), 'refund_approval_threshold': (0, 99999999), 'low_stock_limit': (0, 10000)}
+    allowed = {'wholesale_min_total': (1, 10000), 'wholesale_pct': (0, 50), 'refund_approval_threshold': (0, 10000), 'low_stock_limit': (0, 10000)}
     values = {}
     for key, value in body.items():
         if key in allowed:
@@ -125,7 +131,7 @@ async def save_settings(admin, body):
 async def create_balance_promo(admin, code, value, limit):
     from database.coupons import code as normalize
     code = normalize(code)
-    amount = _decimal(value, '0.01', '99999999.99')
+    amount = _decimal(value, '0.01', '10000.00')
     if len(code.encode()) > 40 or amount <= 0 or type(limit) is not int or (not 1 <= limit <= 1000000):
         raise ValueError(tr('Проверьте код, сумму и лимит.'))
     async with _transaction() as cur:

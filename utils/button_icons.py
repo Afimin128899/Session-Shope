@@ -135,7 +135,7 @@ def role_for(button):
         return None
     if data.startswith('deposit_') or data == 'toggle_currency':
         return 'money'
-    if data.startswith(('lave_check:', 'xrocket_check:', 'crypto_check:')):
+    if data.startswith(('lave_check:', 'xrocket_check:', 'crypto_check:', 'platega_check:')):
         return 'refresh'
     if data.startswith(('btn_set_label:', 'cat_edit_name:', 'cat_edit_emoji:',
                         'btn_edit_welcome_photo')):

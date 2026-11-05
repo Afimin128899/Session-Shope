@@ -40,7 +40,7 @@ async def bulk_edit(admin, ids, field, value):
         raise ValueError(tr('Укажите до 100 разных ID.'))
     if field == 'price':
         value = Decimal(value)
-        if not value.is_finite() or not 0 < value <= 99999999 or value != value.quantize(Decimal('.01')):
+        if not value.is_finite() or not 0 < value <= 10000 or value != value.quantize(Decimal('.01')):
             raise ValueError(tr('Проверьте цену.'))
     elif field == 'warranty_hours':
         value = int(value)
@@ -89,6 +89,8 @@ async def replace(admin, purchase, new_account, reason):
         hold = await cur.fetchone()
         if hold and hold['user_id'] != order['user_id']:
             raise ValueError(tr('Товар зарезервирован другим покупателем.'))
+        from utils.commerce_policy import checkout
+        await checkout(cur, [new_account])
         await cur.execute('INSERT INTO replacement_orders VALUES(%s,%s,%s,%s,%s,UTC_TIMESTAMP())', (purchase, old['id'], new_account, admin, reason.strip()))
         await cur.execute("UPDATE accounts SET status='replaced',password=NULL,data=NULL WHERE id=%s", (old['id'],))
         await cur.execute("UPDATE accounts SET status='sold' WHERE id=%s", (new_account,))

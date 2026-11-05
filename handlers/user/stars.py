@@ -68,7 +68,7 @@ async def entry(call, state):
     await state.set_state(StarsInput.count)
     rows = [[InlineKeyboardButton(text=f'{n} ⭐ → {Decimal(n) * ledger.STARS_RATE:.2f} ₽', callback_data=f'stars_buy:{n}', icon_custom_emoji_id=icon_for('reviews'))] for n in (100, 250, 500, 1000)]
     rows.append([InlineKeyboardButton(text=tr('Назад'), callback_data='topup_balance', icon_custom_emoji_id=icon_for('back'))])
-    await edit_message_safe(call, tr('<b>Пополнение звёздами</b>\n\n1 ⭐ = 1,20 ₽ на баланс. Выберите вариант или введите целое количество от 1 до 10 000 ⭐. Отмена: /cancel.'), reply_markup=InlineKeyboardMarkup(inline_keyboard=rows))
+    await edit_message_safe(call, tr('<b>Пополнение звёздами</b>\n\n1 ⭐ = 1,20 ₽ на баланс. Выберите вариант или введите целое количество от 1 до 8 333 ⭐ (не более 10 000 ₽). Отмена: /cancel.'), reply_markup=InlineKeyboardMarkup(inline_keyboard=rows))
     await answer_safe(call)
 
 
@@ -81,7 +81,7 @@ async def native(bot,user_id,count,state):
 @stars_router.callback_query(F.data.startswith('stars_buy:'))
 async def preset(call, state):
     try:
-        sent = await native(call.bot, call.from_user.id, ledger.parse_count(call.data.split(':', 1)[1]), state)
+        sent = await native(call.bot, call.from_user.id, ledger.parse_new_count(call.data.split(':', 1)[1]), state)
     except ValueError as exc:
         await answer_safe(call, str(exc), show_alert=True)
         return
@@ -90,7 +90,7 @@ async def preset(call, state):
 
 @stars_router.message(StarsInput.count,F.text & ~F.text.startswith('/'))
 async def count(message,state):
-    try: await native(message.bot,message.from_user.id,ledger.parse_count(message.text.strip()),state)
+    try: await native(message.bot,message.from_user.id,ledger.parse_new_count(message.text.strip()),state)
     except ValueError as exc: await message.answer(str(exc))
 
 
