@@ -1,4 +1,5 @@
 """Shared marketplace state. Transactions lock stock before user rows."""
+from utils.i18n import tr
 from uuid import uuid4
 import aiomysql
 
@@ -13,22 +14,23 @@ async def add_to_cart(user_id, account_id):
         await cur.execute("SELECT a.id,a.spam_lease_until>UTC_TIMESTAMP() AS spam_running FROM accounts a JOIN categories c ON c.slug=a.country WHERE a.id=%s AND a.status='available' AND c.is_active=1 FOR UPDATE", (account_id,))
         account = await cur.fetchone()
         if not account:
-            raise ValueError('Аккаунт больше недоступен.')
+            raise ValueError(tr('Аккаунт больше недоступен.'))
+        from database.shop_control import check_sales
+        await check_sales(cur)
         if account.get('spam_running'):
-            raise ValueError('Аккаунт проверяется через @SpamBot. Повторите через минуту.')
+            raise ValueError(tr('Аккаунт проверяется через @SpamBot. Повторите через минуту.'))
         await cur.execute('SELECT id FROM users WHERE id=%s FOR UPDATE', (user_id,))
         if not await cur.fetchone():
-            raise ValueError('Покупатель не найден.')
+            raise ValueError(tr('Покупатель не найден.'))
         await cur.execute('SELECT account_id FROM shopping_cart WHERE user_id=%s FOR UPDATE', (user_id,))
         cart_ids = {row['account_id'] for row in await cur.fetchall()}
         if account_id not in cart_ids and len(cart_ids) >= MAX_CART:
-            raise ValueError('В корзине может быть не больше 20 аккаунтов.')
+            raise ValueError(tr('В корзине может быть не больше 20 аккаунтов.'))
         await cur.execute('SELECT user_id, expires_at > UTC_TIMESTAMP() AS active FROM account_reservations WHERE account_id=%s FOR UPDATE', (account_id,))
         hold = await cur.fetchone()
-        if hold and hold['active'] and hold['user_id'] != user_id:
-            raise ValueError('Аккаунт временно зарезервирован другим покупателем.')
+        if hold and hold['active'] and (hold['user_id'] != user_id):
+            raise ValueError(tr('Аккаунт временно зарезервирован другим покупателем.'))
         await cur.execute('INSERT IGNORE INTO shopping_cart (user_id,account_id,created_at) VALUES (%s,%s,UTC_TIMESTAMP())', (user_id, account_id))
-        # Repeated clicks and page refreshes cannot extend a live reservation.
         if not hold or not hold['active']:
             await cur.execute('INSERT INTO account_reservations (account_id,user_id,expires_at) VALUES (%s,%s,DATE_ADD(UTC_TIMESTAMP(),INTERVAL 5 MINUTE)) ON DUPLICATE KEY UPDATE user_id=VALUES(user_id),expires_at=VALUES(expires_at)', (account_id, user_id))
 
@@ -48,7 +50,7 @@ async def favorite(user_id, account_id, enabled):
         await cur.execute("SELECT a.price FROM accounts a JOIN categories c ON c.slug=a.country WHERE a.id=%s AND a.status='available' AND c.is_active=1 FOR UPDATE", (account_id,))
         account = await cur.fetchone()
         if not account:
-            raise ValueError('Аккаунт больше недоступен.')
+            raise ValueError(tr('Аккаунт больше недоступен.'))
         await cur.execute('INSERT IGNORE INTO account_favorites (user_id,account_id,token,last_price,next_attempt_at) VALUES (%s,%s,%s,%s,UTC_TIMESTAMP())', (user_id, account_id, uuid4().hex, account['price']))
 
 

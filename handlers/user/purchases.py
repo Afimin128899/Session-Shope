@@ -1,4 +1,5 @@
 """Owner-scoped order pages and explicit confirmation before session removal."""
+from utils.i18n import tr
 from html import escape
 import json
 
@@ -33,16 +34,16 @@ async def my_purchases(call: CallbackQuery, state: FSMContext):
         await answer_safe(call, str(exc), show_alert=True)
         return
     orders, total, page = await bot_store.orders(call.from_user.id, page)
-    lines, rows = [], []
+    lines, rows = ([], [])
     for order in orders:
-        label = str(order.get('name') or order['country'] or 'Аккаунт')[:40]
+        label = str(order.get('name') or order['country'] or tr('Аккаунт'))[:40]
         lines.append(f"<b>#{order['id']} · {escape(label)}</b>\n{escape(order_status(order))} · {escape(str(order['date'])[:32])}")
         rows.append(button(f"#{order['id']} · {label}", f"open_purchase:{order['id']}", 'orders'))
     rows += pagination(page, total, bot_store.PAGE_SIZE, 'orders_page')
-    rows.append(button('Мой профиль', 'my_profile', 'back'))
-    text = '<b>Мои покупки</b>\n\n' + ('\n\n'.join(lines) if lines else 'Покупок пока нет. Выберите аккаунт в каталоге.')
+    rows.append(button(tr('Мой профиль'), 'my_profile', 'back'))
+    text = tr('<b>Мои покупки</b>\n\n') + ('\n\n'.join(lines) if lines else tr('Покупок пока нет. Выберите аккаунт в каталоге.'))
     if not orders:
-        rows.insert(0, button('Открыть каталог', 'buy', 'catalog'))
+        rows.insert(0, button(tr('Открыть каталог'), 'buy', 'catalog'))
     await edit_message_safe(call, text, reply_markup=InlineKeyboardMarkup(inline_keyboard=rows))
     await answer_safe(call)
 
@@ -50,51 +51,38 @@ async def my_purchases(call: CallbackQuery, state: FSMContext):
 async def render_order(call, purchase_id):
     order = await get_purchase_for_user(purchase_id, call.from_user.id)
     if not order:
-        await answer_safe(call, 'Покупка не найдена.', show_alert=True)
+        await answer_safe(call, tr('Покупка не найдена.'), show_alert=True)
         return
-    rows = [button('Есть проблема', f'purchase_help:{purchase_id}', 'support'),
-            button('Оставить / изменить отзыв', f'quality_review:{purchase_id}', 'reviews')]
+    rows = [button(tr('Есть проблема'), f'purchase_help:{purchase_id}', 'support'), button(tr('Оставить / изменить отзыв'), f'quality_review:{purchase_id}', 'reviews')]
     if order['status'] == 'refunded':
         from database.refunds import get_refund
         refund = await get_refund(purchase_id, call.from_user.id)
-        details = (f"Возвращено: {refund['amount']} {escape(refund['currency'])}\nПричина: {escape(refund['reason'])}"
-                   if refund else 'Средства возвращены на баланс бота.')
-        text = f'<b>Заказ #{purchase_id} возвращён</b>\n\n{details}'
+        details = tr('Возвращено: {0} {1}\nПричина: {2}', f"{refund['amount']}", f"{escape(refund['currency'])}", f"{escape(refund['reason'])}") if refund else tr('Средства возвращены на баланс бота.')
+        text = tr('<b>Заказ #{0} возвращён</b>\n\n{1}', f'{purchase_id}', f'{details}')
     else:
         cat = await get_category(order['country'])
         name = cat['name'] if cat else order['country']
         assurance = warranty(order)
-        paid = 'Сумма не сохранена' if order['paid_amount'] is None else f"{order['paid_amount']} {escape(order.get('currency') or '')}"
+        paid = tr('Сумма не сохранена') if order['paid_amount'] is None else f"{order['paid_amount']} {escape(order.get('currency') or '')}"
         try:
             snapshot = json.loads(order.get('attributes_snapshot') or '{}')
         except (ValueError, TypeError):
             snapshot = {}
         if not isinstance(snapshot, dict):
             snapshot = {}
-        text = (
-            f'<b>Детали покупки #{purchase_id}</b>\n\n'
-            f"Категория: <b>{escape(name)}</b>\nСтатус: <b>{escape(order_status(order))}</b>\n"
-            f"Товар: <code>SBA-{order['account_id']:06d}</code>\n"
-            f"Telegram ID: <code>{order.get('telegram_user_id') or 'Не сохранён'}</code>\n"
-            f"Номер: <code>{escape(order['number'])}</code>\n"
-            f"Пароль 2FA: <code>{escape(order.get('password') or 'Не установлен')}</code>\n"
-            f"Оплачено: {paid}\nДата: {escape(str(order['date']))}\n"
-            f"Спамблок при покупке: {escape(spam_checks.description(snapshot))}\n"
-            f"Гарантия: <b>{escape(assurance['label'])}</b>"
-        )
+        text = tr('<b>Детали покупки #{0}</b>\n\nКатегория: <b>{1}</b>\nСтатус: <b>{2}</b>\nТовар: <code>SBA-{3}</code>\nTelegram ID: <code>{4}</code>\nНомер: <code>{5}</code>\nПароль 2FA: <code>{6}</code>\nОплачено: {7}\nДата: {8}\nСпамблок при покупке: {9}\nГарантия: <b>{10}</b>', f'{purchase_id}', f'{escape(name)}', f'{escape(order_status(order))}', f"{order['account_id']:06d}", f"{order.get('telegram_user_id') or tr('Не сохранён')}", f"{escape(order['number'])}", f"{escape(order.get('password') or tr('Не установлен'))}", f'{paid}', f"{escape(str(order['date']))}", f'{escape(spam_checks.description(snapshot))}', f"{escape(assurance['label'])}")
         if assurance['active']:
             from datetime import datetime
             from zoneinfo import ZoneInfo
             until = datetime.fromisoformat(assurance['until']).astimezone(ZoneInfo('Europe/Moscow'))
-            text += f"\nДо {until:%d.%m.%Y %H:%M} МСК.\n{escape(assurance['policy'])}"
-            rows.insert(0, button('Обратиться по гарантии', f'quality_warranty:{purchase_id}', 'warranty'))
+            text += tr('\nДо {0} МСК.\n{1}', f'{until:%d.%m.%Y %H:%M}', f"{escape(assurance['policy'])}")
+            rows.insert(0, button(tr('Обратиться по гарантии'), f'quality_warranty:{purchase_id}', 'warranty'))
         if order['status'] == 'completed' or order.get('data') == bot_store.DELETED_SESSION:
-            text += '\n\nДанные сессии удалены из рабочей базы. Получить код через магазин больше нельзя.'
+            text += tr('\n\nДанные сессии удалены из рабочей базы. Получить код через магазин больше нельзя.')
         else:
-            text += '\n\nВведите номер в Telegram, затем нажмите «Получить код». После входа смените пароль и привяжите свою почту.'
-            rows += [button('Получить код', f'get_code:{purchase_id}', 'code'),
-                     button('Завершить покупку', f'complete_purchase:{purchase_id}', 'confirm')]
-    rows.append(button('Мои покупки', 'my_purchases', 'back'))
+            text += tr('\n\nВведите номер в Telegram, затем нажмите «Получить код». После входа смените пароль и привяжите свою почту.')
+            rows += [button(tr('Получить код'), f'get_code:{purchase_id}', 'code'), button(tr('Завершить покупку'), f'complete_purchase:{purchase_id}', 'confirm')]
+    rows.append(button(tr('Мои покупки'), 'my_purchases', 'back'))
     await edit_message_safe(call, text, reply_markup=InlineKeyboardMarkup(inline_keyboard=rows))
     await answer_safe(call)
 
@@ -105,7 +93,7 @@ async def open_purchase(call: CallbackQuery, state: FSMContext):
     try:
         purchase_id = positive_id(call.data.split(':')[1])
     except (ValueError, IndexError):
-        await answer_safe(call, 'Некорректный заказ.', show_alert=True)
+        await answer_safe(call, tr('Некорректный заказ.'), show_alert=True)
         return
     await render_order(call, purchase_id)
 
@@ -115,20 +103,13 @@ async def complete_purchase(call: CallbackQuery):
     try:
         purchase_id = positive_id(call.data.split(':')[1])
     except (ValueError, IndexError):
-        await answer_safe(call, 'Некорректный заказ.', show_alert=True)
+        await answer_safe(call, tr('Некорректный заказ.'), show_alert=True)
         return
     order = await get_purchase_for_user(purchase_id, call.from_user.id)
     if not order or order['status'] != 'issued':
-        await answer_safe(call, 'Заказ уже завершён или недоступен.', show_alert=True)
+        await answer_safe(call, tr('Заказ уже завершён или недоступен.'), show_alert=True)
         return
-    await edit_message_safe(call,
-        f'<b>Завершить покупку #{purchase_id}?</b>\n\n'
-        'Продолжайте, только если уже вошли в аккаунт. Сессия будет удалена из рабочей базы, '
-        'и получить код через магазин больше не получится. Данные могут оставаться в резервных копиях до окончания срока их хранения.',
-        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-            button('Я вошёл, удалить сессию', f'complete_confirm:{purchase_id}', 'confirm'),
-            button('Отмена', f'open_purchase:{purchase_id}', 'cancel'),
-        ]))
+    await edit_message_safe(call, tr('<b>Завершить покупку #{0}?</b>\n\nПродолжайте, только если уже вошли в аккаунт. Сессия будет удалена из рабочей базы, и получить код через магазин больше не получится. Данные могут оставаться в резервных копиях до окончания срока их хранения.', f'{purchase_id}'), reply_markup=InlineKeyboardMarkup(inline_keyboard=[button(tr('Я вошёл, удалить сессию'), f'complete_confirm:{purchase_id}', 'confirm'), button(tr('Отмена'), f'open_purchase:{purchase_id}', 'cancel')]))
     await answer_safe(call)
 
 
@@ -138,6 +119,6 @@ async def confirm_completion(call: CallbackQuery):
         purchase_id = positive_id(call.data.split(':')[1])
         await bot_store.complete_order(call.from_user.id, purchase_id)
     except (ValueError, IndexError) as exc:
-        await answer_safe(call, str(exc) or 'Некорректный заказ.', show_alert=True)
+        await answer_safe(call, str(exc) or tr('Некорректный заказ.'), show_alert=True)
         return
     await render_order(call, purchase_id)

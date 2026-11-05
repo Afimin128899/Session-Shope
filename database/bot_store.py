@@ -1,4 +1,5 @@
 """Bounded bot lists: public inventory fields only, shared pricing and owner checks."""
+from utils.i18n import tr
 from decimal import Decimal
 
 import aiomysql
@@ -88,15 +89,13 @@ async def orders(user_id, page=0):
 
 
 async def complete_order(user_id, purchase_id):
-    # Same lock order as refunds: purchase before account.
     async with _transaction() as cur:
-        await cur.execute('SELECT account_id,status FROM purchases WHERE id=%s AND user_id=%s FOR UPDATE',
-                          (purchase_id, user_id))
+        await cur.execute('SELECT account_id,status FROM purchases WHERE id=%s AND user_id=%s FOR UPDATE', (purchase_id, user_id))
         row = await cur.fetchone()
         if not row or row['status'] not in {'issued', 'completed'}:
-            raise ValueError('Заказ недоступен или возвращён на баланс.')
+            raise ValueError(tr('Заказ недоступен или возвращён на баланс.'))
         if row['status'] == 'completed':
             return False
-        await cur.execute("UPDATE accounts SET data=%s WHERE id=%s", (DELETED_SESSION, row['account_id']))
+        await cur.execute('UPDATE accounts SET data=%s WHERE id=%s', (DELETED_SESSION, row['account_id']))
         await cur.execute("UPDATE purchases SET status='completed' WHERE id=%s", (purchase_id,))
         return True

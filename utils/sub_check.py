@@ -1,3 +1,4 @@
+from utils.i18n import tr
 import logging
 from html import escape
 from aiogram import Bot
@@ -36,37 +37,12 @@ async def send_sub_prompt(event: CallbackQuery | Message, bot: Bot):
     """Отправляет или обновляет сообщение с требованием подписаться на канал."""
     from database.db import get_subscription_settings
     settings = await get_subscription_settings()
-    url = settings.get("channel_url")
+    url = settings.get('channel_url')
     if not url:
-        ch = settings.get("channel_id", "").lstrip("@")
-        url = f"https://t.me/{ch}"
-
-    text = (
-        f"<tg-emoji emoji-id='{EMOJI_MEGA}'>📢</tg-emoji> <b>Обязательная подписка</b>\n\n"
-        f"Для доступа к боту необходимо подписаться на наш официальный канал!\n\n"
-        f"<blockquote>"
-        f"<tg-emoji emoji-id='{EMOJI_PIN}'>📍</tg-emoji> <b>Ссылка на наш канал:</b>\n{escape(url)}"
-        f"</blockquote>\n\n"
-        f"<i>После подписки нажмите кнопку <b>«<tg-emoji emoji-id='{EMOJI_CHECK}'>✅</tg-emoji> Я подписался»</b> ниже 👇</i>"
-    )
-
-    kb = InlineKeyboardMarkup(inline_keyboard=[
-        [
-            InlineKeyboardButton(
-                text="Подписаться на канал",
-                url=url,
-                icon_custom_emoji_id=EMOJI_MEGA,
-            )
-        ],
-        [
-            InlineKeyboardButton(
-                text="Я подписался",
-                callback_data="check_sub_status",
-                icon_custom_emoji_id=EMOJI_CHECK,
-            )
-        ]
-    ])
-
+        ch = settings.get('channel_id', '').lstrip('@')
+        url = f'https://t.me/{ch}'
+    text = tr("<tg-emoji emoji-id='{0}'>📢</tg-emoji> <b>Обязательная подписка</b>\n\nДля доступа к боту необходимо подписаться на наш официальный канал!\n\n<blockquote><tg-emoji emoji-id='{1}'>📍</tg-emoji> <b>Ссылка на наш канал:</b>\n{2}</blockquote>\n\n<i>После подписки нажмите кнопку <b>«<tg-emoji emoji-id='{3}'>✅</tg-emoji> Я подписался»</b> ниже 👇</i>", f'{EMOJI_MEGA}', f'{EMOJI_PIN}', f'{escape(url)}', f'{EMOJI_CHECK}')
+    kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text=tr('Подписаться на канал'), url=url, icon_custom_emoji_id=EMOJI_MEGA)], [InlineKeyboardButton(text=tr('Я подписался'), callback_data='check_sub_status', icon_custom_emoji_id=EMOJI_CHECK)]])
     if isinstance(event, CallbackQuery):
         await edit_message_safe(event, text, reply_markup=kb)
         await answer_safe(event)

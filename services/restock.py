@@ -2,6 +2,8 @@
 import asyncio
 import logging
 from html import escape
+from utils.i18n import tr
+from utils.notification_language import recipient_language
 
 from aiogram.exceptions import TelegramForbiddenError, TelegramRetryAfter
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
@@ -16,17 +18,15 @@ async def send_pending_notifications(bot) -> None:
         if not await claim_notification(item['token']):
             continue
         try:
-            await bot.send_message(
-                item['user_id'],
-                '🔔 <b>Новое поступление!</b>\n\n'
-                f"В категории <b>{escape(item['name'])}</b> появился товар.\n"
-                'Наличие и цену можно проверить в магазине.\n\n'
-                'Уведомление отправлено один раз. На следующее поступление можно подписаться снова.',
-                reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
-                    InlineKeyboardButton(text='Открыть магазин', callback_data='buy'),
-                ]]),
-                parse_mode='HTML',
-            )
+            async with recipient_language(item['user_id']):
+                await bot.send_message(
+                    item['user_id'],
+                    tr('🔔 <b>Новое поступление!</b>\n\nВ категории <b>{0}</b> появился товар.\nНаличие и цену можно проверить в магазине.\n\nУведомление отправлено один раз. На следующее поступление можно подписаться снова.', escape(item['name'])),
+                    reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
+                        InlineKeyboardButton(text=tr('Открыть магазин'), callback_data='buy'),
+                    ]]),
+                    parse_mode='HTML',
+                )
         except TelegramForbiddenError:
             await finish_notification(item['token'])
         except TelegramRetryAfter as exc:

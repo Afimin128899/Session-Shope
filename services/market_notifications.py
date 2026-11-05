@@ -1,5 +1,6 @@
 """Durable opt-in price alerts and daily Moscow-time admin summaries."""
 import asyncio
+from utils.i18n import tr
 from datetime import datetime, timedelta, time, timezone
 from decimal import Decimal
 from html import escape
@@ -20,17 +21,16 @@ async def report(day):
         async with conn.cursor(aiomysql.DictCursor) as cur:
             await cur.execute('SELECT currency,COUNT(*) AS n,COALESCE(SUM(paid_amount),0) AS total,SUM(paid_amount IS NULL) AS unknown FROM purchases WHERE date>=%s AND date<%s GROUP BY currency', (start.strftime('%Y-%m-%d %H:%M:%S'), end.strftime('%Y-%m-%d %H:%M:%S')))
             sales = list(await cur.fetchall())
-            await cur.execute('SELECT currency,SUM(amount>0) AS n,SUM(amount) AS total FROM payment_logs WHERE UNIX_TIMESTAMP(created_at)>=%s AND UNIX_TIMESTAMP(created_at)<%s GROUP BY currency', (int(start.timestamp()),int(end.timestamp())))
+            await cur.execute('SELECT currency,SUM(amount>0) AS n,SUM(amount) AS total FROM payment_logs WHERE UNIX_TIMESTAMP(created_at)>=%s AND UNIX_TIMESTAMP(created_at)<%s GROUP BY currency', (int(start.timestamp()), int(end.timestamp())))
             deposits = list(await cur.fetchall())
-            await cur.execute('SELECT currency,COUNT(*) AS n,SUM(amount) AS total FROM order_refunds WHERE created_at>=%s AND created_at<%s GROUP BY currency', (start.astimezone(timezone.utc).replace(tzinfo=None),end.astimezone(timezone.utc).replace(tzinfo=None)))
+            await cur.execute('SELECT currency,COUNT(*) AS n,SUM(amount) AS total FROM order_refunds WHERE created_at>=%s AND created_at<%s GROUP BY currency', (start.astimezone(timezone.utc).replace(tzinfo=None), end.astimezone(timezone.utc).replace(tzinfo=None)))
             refunds = list(await cur.fetchall())
             await cur.execute("SELECT COUNT(*) AS total,SUM(EXISTS(SELECT 1 FROM account_reservations r WHERE r.account_id=a.id AND r.expires_at>UTC_TIMESTAMP())) AS reserved FROM accounts a JOIN categories c ON c.slug=a.country WHERE a.status='available' AND c.is_active=1")
             stock = await cur.fetchone()
+
     def lines(rows):
-        return '\n'.join(f"• {r['n']} шт. / {Decimal(str(r['total'])):.2f} {escape(r['currency'])}" + (f" (без суммы: {r['unknown']})" if r.get('unknown') else '') for r in rows) or '• Нет'
-    return (f'📊 <b>Sband ACCS · {day:%d.%m.%Y}</b>\nПериод: 00:00–24:00 МСК\n\n'
-            f"Продажи (до возвратов):\n{lines(sales)}\n\nПополнения (без бонусов, за вычетом возвратов Stars):\n{lines(deposits)}\n\nВозвраты:\n{lines(refunds)}\n\n"
-            f"Сейчас в продаже: {stock['total'] or 0}\nИз них в резерве: {stock['reserved'] or 0}")
+        return '\n'.join((tr('• {0} шт. / {1} {2}', f"{r['n']}", f"{Decimal(str(r['total'])):.2f}", f"{escape(r['currency'])}") + (tr(' (без суммы: {0})', f"{r['unknown']}") if r.get('unknown') else '') for r in rows)) or tr('• Нет')
+    return tr('📊 <b>Sband ACCS · {0}</b>\nПериод: 00:00–24:00 МСК\n\nПродажи (до возвратов):\n{1}\n\nПополнения (без бонусов, за вычетом возвратов Stars):\n{2}\n\nВозвраты:\n{3}\n\nСейчас в продаже: {4}\nИз них в резерве: {5}', f'{day:%d.%m.%Y}', f'{lines(sales)}', f'{lines(deposits)}', f'{lines(refunds)}', f"{stock['total'] or 0}", f"{stock['reserved'] or 0}")
 
 
 async def send_reports(bot, now=None):
@@ -47,7 +47,9 @@ async def send_reports(bot, now=None):
         if not claimed:
             continue
         try:
-            await bot.send_message(admin,await report(day),parse_mode='HTML')
+            from utils.notification_language import recipient_language
+            async with recipient_language(admin):
+                await bot.send_message(admin,await report(day),parse_mode='HTML')
         except Exception:
             log.warning('Daily admin report delivery deferred')
             continue
@@ -69,7 +71,8 @@ async def price_alerts(bot):
         if not claimed:
             continue
         try:
-            await bot.send_message(item['user_id'],f"💚 Цена снизилась!\n{escape(item['name'])} · SBA-{item['account_id']:06d}\nНовая базовая цена: {item['price']:.2f} ₽. Личная скидка применяется в магазине.\n\nУбрать уведомления можно, удалив аккаунт из избранного.",parse_mode='HTML')
+            from utils.notification_language import send_translated
+            await send_translated(bot,item['user_id'],"💚 Цена снизилась!\n{0} · SBA-{1}\nНовая базовая цена: {2} ₽. Личная скидка применяется в магазине.\n\nУбрать уведомления можно, удалив аккаунт из избранного.",escape(item['name']),f"{item['account_id']:06d}",f"{item['price']:.2f}",parse_mode='HTML')
         except Exception:
             log.warning('Price alert delivery deferred')
             continue

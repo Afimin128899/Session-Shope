@@ -1,4 +1,5 @@
 """Validate promos without losing the input form on a typo."""
+from utils.i18n import tr
 from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
@@ -21,7 +22,7 @@ async def ask_promo(call: CallbackQuery, state: FSMContext):
     await state.clear()
     await ensure_user(call.from_user.id)
     await state.set_state(PromoState.waiting_for_promo)
-    await edit_message_safe(call, '<b>Промокод</b>\n\nВведите код. Отмена: /cancel.', reply_markup=promo_cancel())
+    await edit_message_safe(call, tr('<b>Промокод</b>\n\nВведите код. Отмена: /cancel.'), reply_markup=promo_cancel())
     await answer_safe(call)
 
 
@@ -37,17 +38,17 @@ async def cancel_promo(call: CallbackQuery, state: FSMContext):
 async def process_promo(message: Message, state: FSMContext):
     async with single_action(message.from_user.id, 'promo') as acquired:
         if not acquired:
-            await message.answer('Промокод уже проверяется.')
+            await message.answer(tr('Промокод уже проверяется.'))
             return
         try:
             preview = await coupons.preview(message.from_user.id, message.text)
             if preview['kind'] == 'discount':
-                await message.answer(f"Это промокод на скидку {preview['value']}%. Введите его в подтверждении покупки или при оплате корзины Mini App. Сейчас он не расходуется.", reply_markup=back_to_profile())
+                await message.answer(tr('Это промокод на скидку {0}%. Введите его в подтверждении покупки или при оплате корзины Mini App. Сейчас он не расходуется.', f"{preview['value']}"), reply_markup=back_to_profile())
                 await state.clear()
                 return
             value = await coupons.redeem_balance(message.from_user.id, preview['code'])
         except ValueError as exc:
-            await message.answer(str(exc) + '\nПроверьте код и введите его ещё раз. Отмена: /cancel.', reply_markup=promo_cancel())
+            await message.answer(str(exc) + tr('\nПроверьте код и введите его ещё раз. Отмена: /cancel.'), reply_markup=promo_cancel())
             return
         await state.clear()
-        await message.answer(f'✅ <b>Промокод активирован!</b>\n\nЗачислено: <b>{value:.2f} ₽</b>.', reply_markup=back_to_profile())
+        await message.answer(tr('✅ <b>Промокод активирован!</b>\n\nЗачислено: <b>{0} ₽</b>.', f'{value:.2f}'), reply_markup=back_to_profile())

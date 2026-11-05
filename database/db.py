@@ -586,6 +586,9 @@ async def buy_account(user_id: int, account_id: int, price: float, date_str: str
                     return None
 
                 # Проверяем баланс с блокировкой строки
+                from database.shop_control import check_sales
+                await check_sales(cur, tuple_cursor=True)
+
                 balance_col = "balance_usdt" if currency == "USDT" else "balance"
                 await cur.execute(f"SELECT {balance_col} FROM users WHERE id = %s FOR UPDATE", (user_id,))
                 row = await cur.fetchone()
@@ -1034,6 +1037,9 @@ async def buy_account_with_referral(
                 if reservation and reservation[0] != user_id:
                     await conn.rollback()
                     return None
+
+                from database.shop_control import check_sales
+                await check_sales(cur, tuple_cursor=True)
 
                 balance_col = "balance_usdt" if currency == "USDT" else "balance"
                 await cur.execute(

@@ -18,6 +18,10 @@ class SubscriptionMiddleware(BaseMiddleware):
         from utils.payment_events import is_payment_event
         if is_payment_event(event):
             return await handler(event, data)
+        if isinstance(event, CallbackQuery) and (event.data == 'language' or (event.data or '').startswith('language:')):
+            return await handler(event, data)
+        if isinstance(event, Message) and (event.text or '').split('@')[0].strip() == '/language':
+            return await handler(event, data)
         user = None
         if isinstance(event, Message):
             user = event.from_user

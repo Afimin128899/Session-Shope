@@ -1,4 +1,5 @@
 """Deposit-backed promotional rewards; bonus credits never count as deposits."""
+from utils.i18n import tr
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 import secrets
@@ -39,17 +40,17 @@ async def status(user_id):
 
 async def claim(user_id):
     async with _transaction() as cur:
-        # One stable owner lock serializes clicks from bot and Mini App.
-        await cur.execute('SELECT balance FROM users WHERE id=%s FOR UPDATE',(user_id,))
-        user=await cur.fetchone()
-        if not user: raise ValueError('Профиль не найден. Отправьте /start.')
-        current=await eligibility(cur,user_id,lock=True)
+        await cur.execute('SELECT balance FROM users WHERE id=%s FOR UPDATE', (user_id,))
+        user = await cur.fetchone()
+        if not user:
+            raise ValueError(tr('Профиль не найден. Отправьте /start.'))
+        current = await eligibility(cur, user_id, lock=True)
         if not current['eligible']:
-            raise ValueError('Бонус доступен раз в 3 дня при подтверждённых пополнениях от 50 ₽ за последние 72 часа.')
-        amount=Decimal(secrets.randbelow(10)+1)
-        if Decimal(str(user['balance']))+amount>Decimal('9999999999.99999999'):
-            raise ValueError('Достигнут лимит баланса.')
-        await cur.execute('INSERT INTO reward_claims(user_id,amount,created_at) VALUES(%s,%s,UTC_TIMESTAMP())',(user_id,amount))
-        await cur.execute('UPDATE users SET balance=balance+%s WHERE id=%s',(amount,user_id))
-        await _record(cur,0,'wheel_reward','user',user_id,{'amount':str(amount)})
-        return {'amount':str(amount),'balance':str(Decimal(str(user['balance']))+amount)}
+            raise ValueError(tr('Бонус доступен раз в 3 дня при подтверждённых пополнениях от 50 ₽ за последние 72 часа.'))
+        amount = Decimal(secrets.randbelow(10) + 1)
+        if Decimal(str(user['balance'])) + amount > Decimal('9999999999.99999999'):
+            raise ValueError(tr('Достигнут лимит баланса.'))
+        await cur.execute('INSERT INTO reward_claims(user_id,amount,created_at) VALUES(%s,%s,UTC_TIMESTAMP())', (user_id, amount))
+        await cur.execute('UPDATE users SET balance=balance+%s WHERE id=%s', (amount, user_id))
+        await _record(cur, 0, 'wheel_reward', 'user', user_id, {'amount': str(amount)})
+        return {'amount': str(amount), 'balance': str(Decimal(str(user['balance'])) + amount)}

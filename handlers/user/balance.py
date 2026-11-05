@@ -1,4 +1,5 @@
 """Telegram payments use the same invoice registry and settlement as Mini App."""
+from utils.i18n import tr
 import logging
 from html import escape
 
@@ -47,9 +48,9 @@ async def back_to_main(call: CallbackQuery, state: FSMContext):
 async def topup_balance_menu(call: CallbackQuery, state: FSMContext):
     await state.clear()
     methods = [method for method in payments.methods() if method['enabled']]
-    rows = [button(method['name'] + (' · 1 ⭐ = 1,20 ₽' if method['id']=='stars' else ' · USDT'), 'deposit_' + method['id'], 'money') for method in methods]
-    rows.append(button('Назад к балансу', 'balance'))
-    text = '<b>Пополнение баланса</b>\n\nСумма задаётся в рублях. Выберите способ оплаты.' if methods else '<b>Пополнение баланса</b>\n\nСервисы оплаты пока не настроены. Обратитесь в поддержку.'
+    rows = [button(method['name'] + (' · 1 ⭐ = 1,20 ₽' if method['id'] == 'stars' else ' · USDT'), 'deposit_' + method['id'], 'money') for method in methods]
+    rows.append(button(tr('Назад к балансу'), 'balance'))
+    text = tr('<b>Пополнение баланса</b>\n\nСумма задаётся в рублях. Выберите способ оплаты.') if methods else tr('<b>Пополнение баланса</b>\n\nСервисы оплаты пока не настроены. Обратитесь в поддержку.')
     await edit_message_safe(call, text, reply_markup=InlineKeyboardMarkup(inline_keyboard=rows))
     await answer_safe(call)
 
@@ -57,14 +58,12 @@ async def topup_balance_menu(call: CallbackQuery, state: FSMContext):
 async def _start_deposit(call, state, method):
     configured = next((m for m in payments.methods() if m['id'] == method and m['enabled']), None)
     if not configured:
-        await answer_safe(call, 'Этот способ оплаты пока не настроен.', show_alert=True)
+        await answer_safe(call, tr('Этот способ оплаты пока не настроен.'), show_alert=True)
         return
     await state.clear()
     await state.set_state(LaveDepositState.waiting_amount)
     await state.update_data(payment_method=method)
-    await edit_message_safe(call,
-        f"<b>Пополнение через {configured['name']}</b>\n\nВведите сумму от 10 до 1 000 000 ₽. Например: <code>500</code> или <code>1000,50</code>.\n\nОтмена: /cancel",
-        reply_markup=InlineKeyboardMarkup(inline_keyboard=[button('Назад', 'topup_balance')]))
+    await edit_message_safe(call, tr('<b>Пополнение через {0}</b>\n\nВведите сумму от 10 до 1 000 000 ₽. Например: <code>500</code> или <code>1000,50</code>.\n\nОтмена: /cancel', f"{configured['name']}"), reply_markup=InlineKeyboardMarkup(inline_keyboard=[button(tr('Назад'), 'topup_balance')]))
     await answer_safe(call)
 
 
@@ -82,7 +81,7 @@ async def process_lave_amount(message: Message, state: FSMContext):
         return
     async with single_action(message.from_user.id, 'create_invoice') as acquired:
         if not acquired:
-            await message.answer('Счёт уже создаётся. Подождите.')
+            await message.answer(tr('Счёт уже создаётся. Подождите.'))
             return
         data = await state.get_data()
         method = data.get('payment_method')
@@ -93,16 +92,11 @@ async def process_lave_amount(message: Message, state: FSMContext):
             return
         except Exception:
             logger.error('Invoice creation failed')
-            await message.answer('Не удалось создать счёт. Попробуйте позже. Если счёт уже появился в платёжном сервисе, обратитесь в поддержку.')
+            await message.answer(tr('Не удалось создать счёт. Попробуйте позже. Если счёт уже появился в платёжном сервисе, обратитесь в поддержку.'))
             return
-        rows = [[InlineKeyboardButton(text='Оплатить', url=result['pay_url'], icon_custom_emoji_id=icon_for('money'))],
-                button('Проверить оплату', f"{method}_check:{result['invoice_id']}", 'refresh'),
-                button('Вернуться к балансу', 'balance')]
+        rows = [[InlineKeyboardButton(text=tr('Оплатить'), url=result['pay_url'], icon_custom_emoji_id=icon_for('money'))], button(tr('Проверить оплату'), f"{method}_check:{result['invoice_id']}", 'refresh'), button(tr('Вернуться к балансу'), 'balance')]
         await state.clear()
-        await answer_screen(message,
-            f"<b>Счёт создан</b>\n\nСумма: <b>{amount:.2f} ₽</b>\nНомер: <code>{escape(result['invoice_id'])}</code>\n\n"
-            'Баланс пополнится автоматически после подтверждения сервисом. Кнопка проверки доступна как запасной вариант.',
-            section='wallet', reply_markup=InlineKeyboardMarkup(inline_keyboard=rows))
+        await answer_screen(message, tr('<b>Счёт создан</b>\n\nСумма: <b>{0} ₽</b>\nНомер: <code>{1}</code>\n\nБаланс пополнится автоматически после подтверждения сервисом. Кнопка проверки доступна как запасной вариант.', f'{amount:.2f}', f"{escape(result['invoice_id'])}"), section='wallet', reply_markup=InlineKeyboardMarkup(inline_keyboard=rows))
 
 
 @balance_router.callback_query(F.data.startswith('lave_check:') | F.data.startswith('xrocket_check:') | F.data.startswith('crypto_check:'))
@@ -111,7 +105,7 @@ async def check_payment(call: CallbackQuery):
     provider = provider.removesuffix('_check')
     async with single_action(call.from_user.id, 'check_invoice') as acquired:
         if not acquired:
-            await answer_safe(call, 'Платёж уже проверяется. Подождите.')
+            await answer_safe(call, tr('Платёж уже проверяется. Подождите.'))
             return
         try:
             result = await payments.check_invoice(call.from_user.id, provider, invoice_id)
@@ -120,14 +114,13 @@ async def check_payment(call: CallbackQuery):
             return
         if result['credited']:
             amount, bonus = result['credited']
-            text = f'<b>Оплата получена!</b>\n\nНа баланс зачислено: <b>{amount:.2f} ₽</b>.'
+            text = tr('<b>Оплата получена!</b>\n\nНа баланс зачислено: <b>{0} ₽</b>.', f'{amount:.2f}')
             if bonus:
-                text += f'\nБонус первого пополнения: {bonus:.2f} ₽.'
+                text += tr('\nБонус первого пополнения: {0} ₽.', f'{bonus:.2f}')
             await edit_message_safe(call, text, reply_markup=balance_menu())
-            await answer_safe(call, 'Баланс пополнен!')
+            await answer_safe(call, tr('Баланс пополнен!'))
         else:
-            text = {'credited': 'Этот платёж уже зачислен. Откройте баланс.',
-                    'expired': 'Срок счёта истёк. Создайте новый счёт.'}.get(result['status'], 'Оплата ещё не подтверждена. Проверка продолжится автоматически.')
+            text = {'credited': tr('Этот платёж уже зачислен. Откройте баланс.'), 'expired': tr('Срок счёта истёк. Создайте новый счёт.')}.get(result['status'], tr('Оплата ещё не подтверждена. Проверка продолжится автоматически.'))
             await answer_safe(call, text, show_alert=True)
 
 

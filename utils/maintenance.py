@@ -1,15 +1,18 @@
+from utils.i18n import tr
 from aiogram import BaseMiddleware
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 from typing import Any, Awaitable, Callable
 
-from config import ADMIN_IDS
+from config import ADMIN_IDS, SUPPORT_USERNAME
 from database.db import get_setting
 
 
 def maintenance_keyboard() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🔄 Проверить доступность", callback_data="check_maintenance")],
-    ])
+    rows = [[InlineKeyboardButton(text=tr('🔄 Проверить статус'), callback_data='check_maintenance')], [InlineKeyboardButton(text=tr('🌐 Язык / Language'), callback_data='language')]]
+    import re
+    if re.fullmatch('@?[A-Za-z0-9_]{5,32}', SUPPORT_USERNAME or ''):
+        rows.append([InlineKeyboardButton(text=tr('💬 Поддержка'), url='https://t.me/' + SUPPORT_USERNAME.lstrip('@'))])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 async def is_maintenance() -> bool:
@@ -17,11 +20,8 @@ async def is_maintenance() -> bool:
 
 
 def maintenance_text() -> str:
-    return (
-        "🔧 <b>Технические работы</b>\n\n"
-        "Бот временно недоступен. Мы уже работаем над обновлением.\n\n"
-        "Нажмите кнопку ниже, чтобы проверить доступность."
-    )
+    from database.shop_control import maintenance_message
+    return maintenance_message({})
 
 
 class MaintenanceMiddleware(BaseMiddleware):
@@ -33,6 +33,10 @@ class MaintenanceMiddleware(BaseMiddleware):
     ) -> Any:
         from utils.payment_events import is_payment_event
         if is_payment_event(event):
+            return await handler(event, data)
+        if isinstance(event, CallbackQuery) and (event.data == 'language' or (event.data or '').startswith('language:')):
+            return await handler(event, data)
+        if isinstance(event, Message) and (event.text or '').split('@')[0].strip() == '/language':
             return await handler(event, data)
         user = getattr(event, "from_user", None)
         if not user:
@@ -49,26 +53,24 @@ class MaintenanceMiddleware(BaseMiddleware):
             if data.get('state'):
                 await data['state'].clear()
             await edit_main(event)
-            await answer_safe(event, 'Бот снова доступен!')
+            await answer_safe(event, tr('Бот снова доступен!'))
             return None
         if not maintenance:
             return await handler(event, data)
 
+        from miniapp.storage import access_settings
+        from database.shop_control import maintenance_message
+        text = maintenance_message(await access_settings())
+
         if isinstance(event, Message):
-            await event.answer(maintenance_text(), reply_markup=maintenance_keyboard())
+            from utils.section_banners import answer_screen
+            await answer_screen(event, text, section='maintenance', reply_markup=maintenance_keyboard())
             return None
 
         if isinstance(event, CallbackQuery):
-            if event.data == "check_maintenance":
-                await event.answer(
-                    "🔧 Технические работы ещё продолжаются.",
-                    show_alert=True,
-                )
-            else:
-                await event.answer(
-                    "🔧 Сейчас идут технические работы. Попробуйте позже.",
-                    show_alert=True,
-                )
+            from utils.nav import edit_message_safe, answer_safe
+            await edit_message_safe(event, text, section='maintenance', reply_markup=maintenance_keyboard())
+            await answer_safe(event, tr('🛠 Технические работы ещё продолжаются.'))
             return None
 
         return None

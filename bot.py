@@ -21,6 +21,8 @@ from handlers.user.shop import shop_router
 from handlers.user.purchases import purchases_router
 from handlers.user.promo import promo_router
 from handlers.user.profile import profile_router
+from handlers.user.language import language_router
+from utils.language_middleware import LanguageMiddleware
 from handlers.user.rewards import rewards_router
 from handlers.user.restock import restock_router
 from handlers.tickets import ticket_router
@@ -33,6 +35,7 @@ from handlers.admin.tools import admin_tools_router
 from handlers.admin.demo import DEMO_ROUTER
 from utils.demo_guard import DemoGuard
 from handlers.admin.spam_checks import spam_router
+from handlers.admin.shop_control import control_router
 from handlers.admin.refunds import refund_router
 from handlers.admin.manage import manage_router
 from handlers.admin.broadcast import broadcast_router
@@ -81,12 +84,17 @@ async def main():
     bot.session.middleware(MissingButtonIcons())
     dp = Dispatcher(storage=MemoryStorage())
 
-    dp.message.outer_middleware(DemoGuard())
-    dp.callback_query.outer_middleware(DemoGuard())
-
     # Protect the bot from spam and flood abuse
     dp.message.outer_middleware(ThrottlingMiddleware(limit=0.5))
     dp.callback_query.outer_middleware(ThrottlingMiddleware(limit=0.4))
+
+    # Resolve preferences after throttling, before any customer-facing guard.
+    dp.message.outer_middleware(LanguageMiddleware())
+    dp.callback_query.outer_middleware(LanguageMiddleware())
+
+    dp.message.outer_middleware(DemoGuard())
+    dp.callback_query.outer_middleware(DemoGuard())
+
 
     # Mandatory channel subscription check middleware
     dp.message.middleware(SubscriptionMiddleware())
@@ -95,8 +103,8 @@ async def main():
     dp.callback_query.outer_middleware(MaintenanceMiddleware())
 
     dp.include_routers(
-        stars_router, DEMO_ROUTER, commands_router, start_router, balance_router, shop_router, purchases_router, promo_router, profile_router, rewards_router,
-        admin_router, manage_router, broadcast_router, add_account_router, button_editor_router,
+        stars_router, DEMO_ROUTER, language_router, commands_router, start_router, balance_router, shop_router, purchases_router, promo_router, profile_router, rewards_router,
+        admin_router, control_router, manage_router, broadcast_router, add_account_router, button_editor_router,
         cat_router, restock_router, admin_tools_router, spam_router, ticket_router, refund_router, quality_router, expansion_router, fallback_router,
     )
 

@@ -80,6 +80,12 @@ def clean_label(text):
 def role_for(button):
     text = clean_label(button.text).strip()
     data = button.callback_data or ''
+    if data.startswith(('shop_mode:', 'shop_notice:', 'language')) or data == 'shop_status':
+        return 'settings'
+    if data.startswith(('review:', 'review_list:')):
+        return 'search'
+    if data.startswith('review_apply:'):
+        return 'confirm'
     # Numeric navigation and category/account selectors carry their own meaning.
     if text in {'←', '→', '‹', '›', '«', '»', 'Новее', 'Ранее'} or text.isdecimal():
         return None

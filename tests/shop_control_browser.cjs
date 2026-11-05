@@ -1,0 +1,40 @@
+// Run with integration_shop_control.py --serve. All users/data are disposable fixtures.
+const {chromium}=require('playwright'),crypto=require('crypto'),assert=require('assert/strict');
+function auth(id){const values={auth_date:String(Math.floor(Date.now()/1000)),user:JSON.stringify({id,first_name:id===43?'Мой профиль':'Admin',username:'fixture'})};const key=crypto.createHmac('sha256','WebAppData').update('123456:local-test-token-not-for-production').digest();values.hash=crypto.createHmac('sha256',key).update(Object.keys(values).sort().map(k=>k+'='+values[k]).join('\n')).digest('hex');return new URLSearchParams(values).toString();}
+(async()=>{
+ const browser=await chromium.launch({executablePath:'/usr/bin/chromium',headless:true,args:['--no-sandbox']});const errors=[];
+ async function open(id,width=390,height=844){const context=await browser.newContext({viewport:{width,height}});await context.route('https://telegram.org/**',r=>r.abort());await context.addInitScript(raw=>{window.Telegram={WebApp:{initData:raw,ready(){},expand(){},setHeaderColor(){},setBackgroundColor(){},openTelegramLink(){}}}},auth(id));const page=await context.newPage();page.on('pageerror',e=>errors.push(e.message));await page.goto('http://127.0.0.1:8088');await page.waitForSelector('.account-card');return page;}
+ const api=(page,path,body)=>page.evaluate(async({path,body})=>{const r=await fetch('/api/'+path,{method:body?'POST':'GET',headers:{Authorization:'tma '+window.Telegram.WebApp.initData,...(body?{'Content-Type':'application/json'}:{})},body:body?JSON.stringify(body):undefined});return {status:r.status,data:await r.json()};},{path,body});
+ try{
+  const buyer=await open(43),admin=await open(42,1440,1000);
+  await buyer.locator('.mobile-nav [data-tab=profile]').click();await buyer.locator('#profile-page [data-language=en]').click();await buyer.waitForFunction(()=>document.documentElement.lang==='en'&&document.querySelector('#profile-page h1')?.textContent==='My profile');
+  assert.equal(await buyer.locator('#profile-name').textContent(),'Мой профиль');assert.equal((await api(buyer,'me')).data.language,'en');
+  await buyer.locator('.mobile-nav [data-tab=catalog]').click();await buyer.waitForSelector('.account-card');assert((await buyer.locator('.account-card').first().innerText()).includes('Каталог'));assert((await buyer.locator('.account-card').first().innerText()).includes('In stock'));
+  await buyer.locator('.feature-link').first().click();await buyer.waitForSelector('#dialog-title');assert((await buyer.locator('#dialog-content').innerText()).includes('Registration'));await buyer.locator('#close-dialog').click();
+  await buyer.locator('.mobile-nav [data-tab=orders]').click();await buyer.waitForSelector('[data-order]');await buyer.locator('[data-order]').first().click();await buyer.waitForSelector('#show-password');await buyer.locator('#show-password').click();assert.equal(await buyer.locator('#order-password').textContent(),'Мой профиль {0} $& <secret>');await buyer.locator('#close-dialog').click();
+  await buyer.locator('.mobile-nav [data-tab=profile]').click();await buyer.screenshot({path:'/workspace/session-shope-previews/controls-profile-en.png',fullPage:true});
+
+  await admin.locator('.side-nav [data-open-admin]').click();await admin.waitForSelector('.admin-stats');await admin.locator('[data-admin-tab=stock]').click();await admin.waitForSelector('[data-review-stock]');
+  const control=admin.locator('[data-review-stock]').first(),id=await control.getAttribute('data-review-stock');await control.click();await admin.waitForSelector('#admin-action-form');await admin.locator('#admin-action-form [name=reason]').fill('Browser review <reason>');await admin.locator('#admin-action-form [type=submit]').click();await admin.waitForSelector('#purchase-dialog',{state:'hidden'});
+  await admin.locator('#admin-search [name=status]').selectOption('review');await admin.locator('#admin-search [type=submit]').click();await admin.waitForFunction(()=>document.querySelector('#admin-content')?.textContent.includes('Browser review <reason>'));
+  assert.equal((await api(buyer,'catalog')).data.items.some(x=>x.id===Number(id)),false);await admin.screenshot({path:'/workspace/session-shope-previews/controls-review-admin.png',fullPage:true});
+  await admin.locator('[data-review-stock="'+id+'"]').click();await admin.locator('#admin-action-form [name=reason]').fill('Browser review resolved');await admin.locator('#admin-action-form [type=submit]').click();await admin.waitForSelector('#purchase-dialog',{state:'hidden'});
+  assert.equal((await api(buyer,'catalog')).data.items.some(x=>x.id===Number(id)),true);
+
+  assert.equal((await api(admin,'admin/settings',{sales_paused:'1',sales_pause_reason:'Browser pause reason'})).status,200);
+  await buyer.reload();await buyer.waitForSelector('#sales-notice:visible');assert((await buyer.locator('#sales-notice').innerText()).includes('Sales temporarily paused'));assert.equal(await buyer.locator('.buy-button:enabled').count(),0);
+  assert.equal((await api(buyer,'orders')).status,200);
+  await buyer.screenshot({path:'/workspace/session-shope-previews/controls-sales-paused-mobile.png',fullPage:true});
+  assert.equal((await api(admin,'admin/settings',{maintenance_mode:'1',maintenance_reason:'Browser maintenance <safe>',maintenance_eta:'18:00 MSK'})).status,200);
+  await buyer.reload();await buyer.waitForSelector('#maintenance-page:visible');assert((await buyer.locator('#maintenance-page').innerText()).includes('Maintenance'));assert.equal(await buyer.locator('#maintenance-reason').textContent(),'Browser maintenance <safe>');assert.equal(await buyer.locator('#maintenance-reason safe').count(),0);
+  await buyer.locator('#check-maintenance').click();await buyer.waitForFunction(()=>document.querySelector('#maintenance-feedback').textContent.includes('Status updated'));
+  await buyer.locator('#maintenance-page [data-language=ru]').click();await buyer.waitForFunction(()=>document.documentElement.lang==='ru'&&document.querySelector('#maintenance-page h1')?.textContent==='Технические работы');
+  await buyer.screenshot({path:'/workspace/session-shope-previews/controls-maintenance-mobile.png',fullPage:true});assert.equal(await buyer.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
+  await buyer.setViewportSize({width:320,height:700});assert.equal(await buyer.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
+  await api(admin,'admin/settings',{maintenance_mode:'0',sales_paused:'0'});await buyer.locator('#check-maintenance').click();await buyer.waitForSelector('#market-page:visible');
+  await admin.locator('[data-admin-tab=settings]').click();await admin.waitForSelector('#admin-edit-settings');await admin.locator('#admin-edit-settings').click();assert.equal(await admin.locator('[name=sales_paused]').count(),1);assert.equal(await admin.locator('[name=maintenance_eta]').count(),1);await admin.locator('#close-dialog').click();
+  await api(admin,'preferences/language',{language:'en'});await admin.reload();await admin.waitForSelector('.account-card');await admin.locator('.side-nav [data-open-admin]').click();await admin.waitForSelector('.admin-stats');assert((await admin.locator('#admin-content').innerText()).includes('Overview'));
+  await admin.locator('[data-admin-tab=settings]').click();await admin.waitForSelector('#admin-edit-settings');await admin.locator('#admin-edit-settings').click();assert((await admin.locator('#admin-action-form').innerText()).includes('Full maintenance'));await admin.locator('#close-dialog').click();await admin.screenshot({path:'/workspace/session-shope-previews/controls-admin-settings-en.png',fullPage:true});await api(admin,'preferences/language',{language:'ru'});
+  assert.deepEqual(errors,[]);console.log('PASS: RU/EN persistence and private values, account review/release, paused sales with existing purchases, maintenance refresh/language/recovery, admin settings, 390/320px and no JS errors');
+ }finally{await browser.close();}
+})().catch(e=>{console.error(e);process.exit(1);});

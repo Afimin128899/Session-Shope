@@ -86,3 +86,21 @@ f"Используя нашего бота, вы соглашаетесь со �
 f"• <a href='https://telegra.ph/Polzovatelskoe-soglashenie-08-15-10'>Пользовательское соглашение</a>\n"
 f"• <a href='https://telegra.ph/Politika-konfidencialnosti-08-15-17'>Политика конфиденциальности</a>"
 )
+
+
+# Resolve text at request time, after the customer's persisted language is known.
+def start_text(name):
+    from utils.i18n import LANGUAGE
+    if LANGUAGE.get() == 'en':
+        return f'<blockquote>Hello, <b>{name}</b>! Welcome to SBAND ACCS 🛍</blockquote>\n\nBrowse Telegram accounts, manage purchases and contact support below.'
+    return START_TEXT.replace('{name}', name)
+
+
+def info_text():
+    from utils.i18n import LANGUAGE
+    if LANGUAGE.get() == 'en':
+        return ("ℹ️ <b>About the store</b>\n\n💬 Contact support if you have a question or a problem with a purchase.\n\n"
+                "📄 <b>Documents</b>\nBy using this bot, you agree to the following documents:\n"
+                "• <a href='https://telegra.ph/Polzovatelskoe-soglashenie-08-15-10'>User agreement</a>\n"
+                "• <a href='https://telegra.ph/Politika-konfidencialnosti-08-15-17'>Privacy policy</a>")
+    return INFO_TEXT

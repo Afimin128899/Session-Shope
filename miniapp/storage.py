@@ -1,4 +1,5 @@
 """Safe projections of the shared inventory and an authoritative checkout."""
+from utils.i18n import tr
 from datetime import datetime, timezone
 from decimal import Decimal, ROUND_HALF_UP
 from zoneinfo import ZoneInfo
@@ -29,13 +30,13 @@ async def pricing(cur, user_id):
     await cur.execute('SELECT referrer_id FROM referrals WHERE referral_id = %s', (user_id,))
     ref = await cur.fetchone()
     if not ref or ref['referrer_id'] == user_id:
-        return None, Decimal('0'), Decimal('0')
+        return (None, Decimal('0'), Decimal('0'))
     await cur.execute('SELECT discount_pct, bonus_pct FROM referral_settings WHERE id = 1')
     settings = await cur.fetchone() or {'discount_pct': 5, 'bonus_pct': 5}
-    discount, bonus = Decimal(str(settings['discount_pct'])), Decimal(str(settings['bonus_pct']))
+    discount, bonus = (Decimal(str(settings['discount_pct'])), Decimal(str(settings['bonus_pct'])))
     if not 0 <= discount <= 100 or not 0 <= bonus <= 100:
-        raise CheckoutError('Настройки скидки временно недоступны.', 'unavailable')
-    return ref['referrer_id'], discount, bonus
+        raise CheckoutError(tr('Настройки скидки временно недоступны.'), 'unavailable')
+    return (ref['referrer_id'], discount, bonus)
 
 
 async def catalog(user_id, category='', query='', sort='new', page=0, *, min_price=None, max_price=None, favorites=False, cart=False, premium=None, min_age=None, account_id=None):
@@ -109,7 +110,7 @@ async def catalog(user_id, category='', query='', sort='new', page=0, *, min_pri
 async def access_settings():
     async with _get_pool().acquire() as conn:
         async with conn.cursor(aiomysql.DictCursor) as cur:
-            await cur.execute("SELECT `key`, `value` FROM settings WHERE `key` IN ('maintenance_mode', 'sub_channel_id', 'sub_channel_enabled', 'sub_channel_url')")
+            await cur.execute("SELECT `key`, `value` FROM settings WHERE `key` IN ('maintenance_mode', 'sub_channel_id', 'sub_channel_enabled', 'sub_channel_url', 'sales_paused', 'sales_pause_reason', 'maintenance_reason', 'maintenance_eta')")
             return {row['key']: row['value'] for row in await cur.fetchall()}
 
 
@@ -118,66 +119,58 @@ _UNSET = object()
 
 async def checkout(user_id, account_id, quoted_price, *, warranty_hours=_UNSET, spam_status=_UNSET, promo_code=None, expected_total=None):
     async with _transaction() as cur:
-        await cur.execute(
-            "SELECT a.id, a.price, a.country, a.warranty_hours, a.spam_status, a.spam_lease_until>UTC_TIMESTAMP() AS spam_running FROM accounts a JOIN categories c ON c.slug = a.country "
-            "WHERE a.id = %s AND a.status = 'available' AND c.is_active = 1 FOR UPDATE", (account_id,),
-        )
+        await cur.execute("SELECT a.id, a.price, a.country, a.warranty_hours, a.spam_status, a.spam_lease_until>UTC_TIMESTAMP() AS spam_running FROM accounts a JOIN categories c ON c.slug = a.country WHERE a.id = %s AND a.status = 'available' AND c.is_active = 1 FOR UPDATE", (account_id,))
         account = await cur.fetchone()
         if account is None:
-            raise CheckoutError('Этот аккаунт уже куплен. Обновите каталог.', 'sold')
+            raise CheckoutError(tr('Этот аккаунт недоступен. Обновите каталог.'), 'sold')
+        from database.shop_control import check_sales
+        await check_sales(cur)
         if account.get('spam_running'):
-            raise CheckoutError('Идёт проверка аккаунта через @SpamBot. Повторите через минуту.', 'checking')
+            raise CheckoutError(tr('Идёт проверка аккаунта через @SpamBot. Повторите через минуту.'), 'checking')
         if spam_status is not _UNSET and account['spam_status'] != spam_status:
-            raise CheckoutError('Результат проверки спамблока изменился. Подтвердите покупку заново.', 'terms_changed')
+            raise CheckoutError(tr('Результат проверки спамблока изменился. Подтвердите покупку заново.'), 'terms_changed')
         if warranty_hours is not _UNSET and account['warranty_hours'] != warranty_hours:
-            raise CheckoutError('Условия гарантии изменились. Подтвердите покупку заново.', 'terms_changed')
+            raise CheckoutError(tr('Условия гарантии изменились. Подтвердите покупку заново.'), 'terms_changed')
         await cur.execute('SELECT user_id FROM account_reservations WHERE account_id=%s AND expires_at>UTC_TIMESTAMP() FOR UPDATE', (account_id,))
         reservation = await cur.fetchone()
         if reservation and reservation['user_id'] != user_id:
-            raise CheckoutError('Аккаунт зарезервирован другим покупателем.', 'reserved')
+            raise CheckoutError(tr('Аккаунт зарезервирован другим покупателем.'), 'reserved')
         referrer, discount, bonus_pct = await pricing(cur, user_id)
         base = Decimal(str(account['price']))
         actual_price = money(base * (1 - discount / 100))
         if base <= 0 or actual_price < 0:
-            raise CheckoutError('Некорректная цена товара.', 'unavailable')
+            raise CheckoutError(tr('Некорректная цена товара.'), 'unavailable')
         if actual_price != quoted_price:
-            raise CheckoutError('Цена изменилась. Обновите каталог и подтвердите покупку заново.', 'price_changed')
+            raise CheckoutError(tr('Цена изменилась. Обновите каталог и подтвердите покупку заново.'), 'price_changed')
         promo = None
         if promo_code:
             try:
-                promo = await coupons.validate(cur,user_id,promo_code,lock=True)
+                promo = await coupons.validate(cur, user_id, promo_code, lock=True)
             except ValueError as exc:
-                raise CheckoutError(str(exc),'invalid_promo') from None
+                raise CheckoutError(str(exc), 'invalid_promo') from None
             if promo['kind'] != 'discount':
-                raise CheckoutError('Этот промокод пополняет баланс. Активируйте его в профиле.','invalid_promo')
-            actual_price = money(actual_price*(1-Decimal(str(promo['value']))/100))
+                raise CheckoutError(tr('Этот промокод пополняет баланс. Активируйте его в профиле.'), 'invalid_promo')
+            actual_price = money(actual_price * (1 - Decimal(str(promo['value'])) / 100))
             if expected_total is None or actual_price != Decimal(str(expected_total)):
-                raise CheckoutError('Скидка изменилась. Подтвердите новую сумму.','price_changed')
-        # Stable lock ordering includes the referrer to avoid reciprocal-referral deadlocks.
+                raise CheckoutError(tr('Скидка изменилась. Подтвердите новую сумму.'), 'price_changed')
         users = sorted({user_id, referrer} - {None})
         await cur.execute('SELECT id, balance FROM users WHERE id IN (' + ','.join(['%s'] * len(users)) + ') ORDER BY id FOR UPDATE', tuple(users))
         balances = {row['id']: row['balance'] for row in await cur.fetchall()}
         if user_id not in balances or Decimal(str(balances[user_id])) < actual_price:
-            raise CheckoutError('Недостаточно средств. Пополните баланс в боте.', 'insufficient_balance')
+            raise CheckoutError(tr('Недостаточно средств. Пополните баланс в боте.'), 'insufficient_balance')
         if promo:
-            await coupons.consume(cur,user_id,promo)
+            await coupons.consume(cur, user_id, promo)
         await cur.execute('UPDATE users SET balance = balance - %s WHERE id = %s', (actual_price, user_id))
         await cur.execute("UPDATE accounts SET status = 'sold' WHERE id = %s", (account_id,))
-        await cur.execute(
-            'INSERT INTO purchases (user_id, account_id, date, currency, paid_amount) VALUES (%s, %s, %s, %s, %s)',
-            (user_id, account_id, datetime.now(ZoneInfo('Europe/Moscow')).strftime('%Y-%m-%d %H:%M:%S'), 'RUB', actual_price),
-        )
+        await cur.execute('INSERT INTO purchases (user_id, account_id, date, currency, paid_amount) VALUES (%s, %s, %s, %s, %s)', (user_id, account_id, datetime.now(ZoneInfo('Europe/Moscow')).strftime('%Y-%m-%d %H:%M:%S'), 'RUB', actual_price))
         order_id = cur.lastrowid
         await quality.snapshot(cur, order_id)
         if referrer in balances:
             bonus = (base * bonus_pct / 100).quantize(Decimal('0.00000001'))
             await cur.execute('UPDATE users SET balance = balance + %s WHERE id = %s', (bonus, referrer))
-        await cur.execute(
-            'UPDATE purchases SET referrer_id = %s, referral_bonus = %s WHERE id = %s',
-            (referrer if referrer in balances else None, bonus if referrer in balances else 0, order_id),
-        )
-        await cur.execute('DELETE FROM shopping_cart WHERE user_id=%s AND account_id=%s',(user_id,account_id))
-        await cur.execute('DELETE FROM account_reservations WHERE account_id=%s',(account_id,))
+        await cur.execute('UPDATE purchases SET referrer_id = %s, referral_bonus = %s WHERE id = %s', (referrer if referrer in balances else None, bonus if referrer in balances else 0, order_id))
+        await cur.execute('DELETE FROM shopping_cart WHERE user_id=%s AND account_id=%s', (user_id, account_id))
+        await cur.execute('DELETE FROM account_reservations WHERE account_id=%s', (account_id,))
         return {'id': order_id, 'paid_amount': str(actual_price), 'balance': str(Decimal(str(balances[user_id])) - actual_price)}
 
 
@@ -198,77 +191,79 @@ async def orders(user_id, page=0, query=''):
 
 
 async def checkout_cart(user_id, requested, promo_code=None, expected_total=None):
-    if not requested or len(requested)>20 or len({item['account_id'] for item in requested})!=len(requested):
-        raise CheckoutError('Выберите от 1 до 20 разных аккаунтов.', 'invalid_cart')
-    quotes={item['account_id']:Decimal(item['price']) for item in requested}
-    ids=sorted(quotes)
-    placeholders=','.join(['%s']*len(ids))
+    if not requested or len(requested) > 20 or len({item['account_id'] for item in requested}) != len(requested):
+        raise CheckoutError(tr('Выберите от 1 до 20 разных аккаунтов.'), 'invalid_cart')
+    quotes = {item['account_id']: Decimal(item['price']) for item in requested}
+    ids = sorted(quotes)
+    placeholders = ','.join(['%s'] * len(ids))
     async with _transaction() as cur:
-        await cur.execute("SELECT a.id,a.price,a.warranty_hours,a.spam_status,a.spam_lease_until>UTC_TIMESTAMP() AS spam_running FROM accounts a JOIN categories c ON c.slug=a.country WHERE a.id IN ("+placeholders+") AND a.status='available' AND c.is_active=1 ORDER BY a.id FOR UPDATE",tuple(ids))
-        accounts=list(await cur.fetchall())
-        if len(accounts)!=len(ids):
-            raise CheckoutError('Один из аккаунтов уже недоступен. Корзина не оплачена.', 'sold')
-        if any(row.get('spam_running') for row in accounts):
-            raise CheckoutError('Один из аккаунтов проверяется через @SpamBot. Повторите через минуту.', 'checking')
-        terms={item['account_id']:item for item in requested}
-        if any('spam_status' in terms[row['id']] and terms[row['id']]['spam_status'] != row['spam_status'] for row in accounts):
-            raise CheckoutError('Результат проверки спамблока изменился. Обновите корзину.', 'terms_changed')
-        if any('warranty_hours' in terms[row['id']] and terms[row['id']]['warranty_hours'] != row['warranty_hours'] for row in accounts):
-            raise CheckoutError('Условия гарантии изменились. Обновите корзину.', 'terms_changed')
-        await cur.execute('SELECT account_id,user_id FROM account_reservations WHERE account_id IN ('+placeholders+') AND expires_at>UTC_TIMESTAMP() ORDER BY account_id FOR UPDATE',tuple(ids))
-        holds={row['account_id']:row['user_id'] for row in await cur.fetchall()}
-        if any(holds.get(account)!=user_id for account in ids):
-            raise CheckoutError('Резерв истёк или принадлежит другому покупателю. Обновите резерв.', 'reservation_expired')
-        referrer,discount,bonus_pct=await pricing(cur,user_id)
-        prices={row['id']:money(Decimal(str(row['price']))*(1-discount/100)) for row in accounts}
-        if any(Decimal(str(row['price'])) <= 0 for row in accounts):
-            raise CheckoutError('Некорректная цена товара.', 'unavailable')
-        if any(prices[account]!=quotes[account] or prices[account]<0 for account in ids):
-            raise CheckoutError('Цена изменилась. Проверьте корзину и подтвердите заново.', 'price_changed')
+        await cur.execute('SELECT a.id,a.price,a.warranty_hours,a.spam_status,a.spam_lease_until>UTC_TIMESTAMP() AS spam_running FROM accounts a JOIN categories c ON c.slug=a.country WHERE a.id IN (' + placeholders + ") AND a.status='available' AND c.is_active=1 ORDER BY a.id FOR UPDATE", tuple(ids))
+        accounts = list(await cur.fetchall())
+        if len(accounts) != len(ids):
+            raise CheckoutError(tr('Один из аккаунтов уже недоступен. Корзина не оплачена.'), 'sold')
+        from database.shop_control import check_sales
+        await check_sales(cur)
+        if any((row.get('spam_running') for row in accounts)):
+            raise CheckoutError(tr('Один из аккаунтов проверяется через @SpamBot. Повторите через минуту.'), 'checking')
+        terms = {item['account_id']: item for item in requested}
+        if any(('spam_status' in terms[row['id']] and terms[row['id']]['spam_status'] != row['spam_status'] for row in accounts)):
+            raise CheckoutError(tr('Результат проверки спамблока изменился. Обновите корзину.'), 'terms_changed')
+        if any(('warranty_hours' in terms[row['id']] and terms[row['id']]['warranty_hours'] != row['warranty_hours'] for row in accounts)):
+            raise CheckoutError(tr('Условия гарантии изменились. Обновите корзину.'), 'terms_changed')
+        await cur.execute('SELECT account_id,user_id FROM account_reservations WHERE account_id IN (' + placeholders + ') AND expires_at>UTC_TIMESTAMP() ORDER BY account_id FOR UPDATE', tuple(ids))
+        holds = {row['account_id']: row['user_id'] for row in await cur.fetchall()}
+        if any((holds.get(account) != user_id for account in ids)):
+            raise CheckoutError(tr('Резерв истёк или принадлежит другому покупателю. Обновите резерв.'), 'reservation_expired')
+        referrer, discount, bonus_pct = await pricing(cur, user_id)
+        prices = {row['id']: money(Decimal(str(row['price'])) * (1 - discount / 100)) for row in accounts}
+        if any((Decimal(str(row['price'])) <= 0 for row in accounts)):
+            raise CheckoutError(tr('Некорректная цена товара.'), 'unavailable')
+        if any((prices[account] != quotes[account] or prices[account] < 0 for account in ids)):
+            raise CheckoutError(tr('Цена изменилась. Проверьте корзину и подтвердите заново.'), 'price_changed')
         await cur.execute("SELECT `key`,`value` FROM settings WHERE `key` IN ('wholesale_min_total','wholesale_pct')")
-        wholesale={r['key']:r['value'] for r in await cur.fetchall()}
-        rate=Decimal(wholesale.get('wholesale_pct','15')) if sum(prices.values(),Decimal(0))>=Decimal(wholesale.get('wholesale_min_total','500')) else Decimal(0)
-        if not 0<=rate<=50: raise CheckoutError('Настройки опта недоступны.')
+        wholesale = {r['key']: r['value'] for r in await cur.fetchall()}
+        rate = Decimal(wholesale.get('wholesale_pct', '15')) if sum(prices.values(), Decimal(0)) >= Decimal(wholesale.get('wholesale_min_total', '500')) else Decimal(0)
+        if not 0 <= rate <= 50:
+            raise CheckoutError(tr('Настройки опта недоступны.'))
         if rate:
-            prices={key:money(value*(1-rate/100)) for key,value in prices.items()}
+            prices = {key: money(value * (1 - rate / 100)) for key, value in prices.items()}
         promo = None
         if promo_code:
             try:
-                promo = await coupons.validate(cur,user_id,promo_code,lock=True)
+                promo = await coupons.validate(cur, user_id, promo_code, lock=True)
             except ValueError as exc:
-                raise CheckoutError(str(exc),'invalid_promo') from None
+                raise CheckoutError(str(exc), 'invalid_promo') from None
             if promo['kind'] != 'discount':
-                raise CheckoutError('Балансовый промокод сначала активируйте в профиле.', 'invalid_promo')
-            prices = {key: money(value*(1-Decimal(str(promo['value']))/100)) for key,value in prices.items()}
-            if expected_total is None or sum(prices.values(),Decimal('0')) != Decimal(str(expected_total)):
-                raise CheckoutError('Условия промокода изменились. Проверьте новую сумму.', 'price_changed')
-        if rate and (expected_total is None or sum(prices.values(),Decimal('0'))!=Decimal(str(expected_total))):
-            raise CheckoutError('Оптовые условия изменились. Обновите корзину.','price_changed')
-        users=sorted({user_id,referrer}-{None})
-        await cur.execute('SELECT id,balance FROM users WHERE id IN ('+','.join(['%s']*len(users))+') ORDER BY id FOR UPDATE',tuple(users))
-        balances={row['id']:Decimal(str(row['balance'])) for row in await cur.fetchall()}
-        total=sum(prices.values(),Decimal('0'))
-        if user_id not in balances or balances[user_id]<total:
-            raise CheckoutError('Недостаточно средств для всей корзины.', 'insufficient_balance')
-        await cur.execute('SELECT account_id FROM shopping_cart WHERE user_id=%s AND account_id IN ('+placeholders+') FOR UPDATE',(user_id,*ids))
-        if {row['account_id'] for row in await cur.fetchall()}!=set(ids):
-            raise CheckoutError('Корзина изменилась. Обновите страницу.', 'cart_changed')
+                raise CheckoutError(tr('Балансовый промокод сначала активируйте в профиле.'), 'invalid_promo')
+            prices = {key: money(value * (1 - Decimal(str(promo['value'])) / 100)) for key, value in prices.items()}
+            if expected_total is None or sum(prices.values(), Decimal('0')) != Decimal(str(expected_total)):
+                raise CheckoutError(tr('Условия промокода изменились. Проверьте новую сумму.'), 'price_changed')
+        if rate and (expected_total is None or sum(prices.values(), Decimal('0')) != Decimal(str(expected_total))):
+            raise CheckoutError(tr('Оптовые условия изменились. Обновите корзину.'), 'price_changed')
+        users = sorted({user_id, referrer} - {None})
+        await cur.execute('SELECT id,balance FROM users WHERE id IN (' + ','.join(['%s'] * len(users)) + ') ORDER BY id FOR UPDATE', tuple(users))
+        balances = {row['id']: Decimal(str(row['balance'])) for row in await cur.fetchall()}
+        total = sum(prices.values(), Decimal('0'))
+        if user_id not in balances or balances[user_id] < total:
+            raise CheckoutError(tr('Недостаточно средств для всей корзины.'), 'insufficient_balance')
+        await cur.execute('SELECT account_id FROM shopping_cart WHERE user_id=%s AND account_id IN (' + placeholders + ') FOR UPDATE', (user_id, *ids))
+        if {row['account_id'] for row in await cur.fetchall()} != set(ids):
+            raise CheckoutError(tr('Корзина изменилась. Обновите страницу.'), 'cart_changed')
         if promo:
-            await coupons.consume(cur,user_id,promo)
-        await cur.execute('UPDATE users SET balance=balance-%s WHERE id=%s',(total,user_id))
-        order_ids=[]
-        bonus_total=Decimal('0')
+            await coupons.consume(cur, user_id, promo)
+        await cur.execute('UPDATE users SET balance=balance-%s WHERE id=%s', (total, user_id))
+        order_ids = []
+        bonus_total = Decimal('0')
         for account in accounts:
-            bonus=(Decimal(str(account['price']))*bonus_pct/100).quantize(Decimal('0.00000001')) if referrer in balances else Decimal('0')
-            bonus_total+=bonus
-            await cur.execute("UPDATE accounts SET status='sold' WHERE id=%s",(account['id'],))
-            await cur.execute('INSERT INTO purchases (user_id,account_id,date,currency,paid_amount,referrer_id,referral_bonus) VALUES (%s,%s,%s,%s,%s,%s,%s)',
-                              (user_id,account['id'],datetime.now(ZoneInfo('Europe/Moscow')).strftime('%Y-%m-%d %H:%M:%S'),'RUB',prices[account['id']],referrer if referrer in balances else None,bonus))
+            bonus = (Decimal(str(account['price'])) * bonus_pct / 100).quantize(Decimal('0.00000001')) if referrer in balances else Decimal('0')
+            bonus_total += bonus
+            await cur.execute("UPDATE accounts SET status='sold' WHERE id=%s", (account['id'],))
+            await cur.execute('INSERT INTO purchases (user_id,account_id,date,currency,paid_amount,referrer_id,referral_bonus) VALUES (%s,%s,%s,%s,%s,%s,%s)', (user_id, account['id'], datetime.now(ZoneInfo('Europe/Moscow')).strftime('%Y-%m-%d %H:%M:%S'), 'RUB', prices[account['id']], referrer if referrer in balances else None, bonus))
             purchase_id = cur.lastrowid
-            await quality.snapshot(cur,purchase_id)
+            await quality.snapshot(cur, purchase_id)
             order_ids.append(purchase_id)
         if referrer in balances:
-            await cur.execute('UPDATE users SET balance=balance+%s WHERE id=%s',(bonus_total,referrer))
-        await cur.execute('DELETE FROM shopping_cart WHERE user_id=%s AND account_id IN ('+placeholders+')',(user_id,*ids))
-        await cur.execute('DELETE FROM account_reservations WHERE account_id IN ('+placeholders+')',tuple(ids))
-        return {'order_ids':order_ids,'paid_amount':str(total),'balance':str(balances[user_id]-total)}
+            await cur.execute('UPDATE users SET balance=balance+%s WHERE id=%s', (bonus_total, referrer))
+        await cur.execute('DELETE FROM shopping_cart WHERE user_id=%s AND account_id IN (' + placeholders + ')', (user_id, *ids))
+        await cur.execute('DELETE FROM account_reservations WHERE account_id IN (' + placeholders + ')', tuple(ids))
+        return {'order_ids': order_ids, 'paid_amount': str(total), 'balance': str(balances[user_id] - total)}

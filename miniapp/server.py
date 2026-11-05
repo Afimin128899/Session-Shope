@@ -18,6 +18,8 @@ from miniapp.auth import AuthError, validate_init_data
 from miniapp import storage
 from utils.order_status import order_status
 from utils.version import BOT_VERSION
+from utils.i18n import LANGUAGE, language, tr
+from database.shop_control import public_status
 
 STATIC = Path(__file__).parent / 'static'
 TOKEN = web.AppKey('token', str)
@@ -25,6 +27,17 @@ BOT = web.AppKey('bot', object)
 BOT_USERNAME = web.AppKey('bot_username', str)
 LIMITS = web.AppKey('limits', OrderedDict)
 logger = logging.getLogger(__name__)
+
+
+@web.middleware
+async def locale_context(request, handler):
+    token = LANGUAGE.set('ru')
+    try:
+        result = await handler(request)
+        result.headers['Content-Language'] = LANGUAGE.get()
+        return result
+    finally:
+        LANGUAGE.reset(token)
 
 
 def response(value, status=200):
@@ -42,19 +55,15 @@ async def security(request, handler):
         result = response({'error': str(exc), 'code': exc.code}, 409)
     except (ValueError, InvalidOperation, json.JSONDecodeError) as exc:
         if request.path.startswith('/api/admin/'):
-            result=response({'error':str(exc) or 'Проверьте поля формы.','code':'invalid_request'},400)
+            result = response({'error': str(exc) or tr('Проверьте поля формы.'), 'code': 'invalid_request'}, 400)
         else:
-            result = response({'error': 'Проверьте параметры запроса.', 'code': 'invalid_request'}, 400)
+            result = response({'error': tr('Проверьте параметры запроса.'), 'code': 'invalid_request'}, 400)
     except web.HTTPException as exc:
-        result = response({'error': 'Запрос недоступен.', 'code': 'http_error'}, exc.status)
+        result = response({'error': tr('Запрос недоступен.'), 'code': 'http_error'}, exc.status)
     except Exception as exc:
         logger.error('Mini App request failed: %s [%s]', request.path, type(exc).__name__)
-        result = response({'error': 'Сервис временно недоступен. Попробуйте позже.', 'code': 'unavailable'}, 503)
-    result.headers.update({
-        'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer',
-        'Cache-Control': 'no-store',
-        'Content-Security-Policy': "default-src 'self'; script-src 'self' https://telegram.org; style-src 'self'; img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors https://web.telegram.org https://*.telegram.org",
-    })
+        result = response({'error': tr('Сервис временно недоступен. Попробуйте позже.'), 'code': 'unavailable'}, 503)
+    result.headers.update({'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer', 'Cache-Control': 'no-store', 'Content-Security-Policy': "default-src 'self'; script-src 'self' https://telegram.org; style-src 'self'; img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors https://web.telegram.org https://*.telegram.org"})
     return result
 
 
@@ -84,32 +93,35 @@ async def authenticate(request, handler):
     request['user'] = user
     if request.path.startswith('/api/demo/'):
         if user['id'] not in config.ADMIN_IDS:
-            return response({'error':'Тестовый режим доступен только администратору.','code':'forbidden'},403)
-        if limited(request.app,user['id'],False):
-            return response({'error':'Подождите перед повтором.','code':'rate_limited'},429)
+            return response({'error': tr('Тестовый режим доступен только администратору.'), 'code': 'forbidden'}, 403)
+        if limited(request.app, user['id'], False):
+            return response({'error': tr('Подождите перед повтором.'), 'code': 'rate_limited'}, 429)
         return await handler(request)
+    profile = await db.get_user(user['id'])
+    LANGUAGE.set(language(profile.get('language') if profile else 'ru'))
+    request['language'] = LANGUAGE.get()
     if user['id'] not in config.ADMIN_IDS:
         STORE.exit(user['id'])
-    if STORE.active(user['id']) and request.method not in {'GET','HEAD'}:
-        return response({'error':'Сначала завершите тестовый режим. Рабочие операции отключены.','code':'test_mode'},409)
-
-    if request.path.startswith('/api/admin/') or request.path=='/api/admin':
+    if STORE.active(user['id']) and request.method not in {'GET', 'HEAD'}:
+        return response({'error': tr('Сначала завершите тестовый режим. Рабочие операции отключены.'), 'code': 'test_mode'}, 409)
+    if request.path.startswith('/api/admin/') or request.path == '/api/admin':
         if user['id'] not in config.ADMIN_IDS:
-            return response({'error':'Доступ только администратору.','code':'forbidden'},403)
-    if limited(request.app, user['id'], request.method == 'POST' and (request.path in {'/api/purchase', '/api/cart/checkout', '/api/invoices', '/api/promo/preview', '/api/promo/redeem', '/api/reviews','/api/rewards/claim'} or request.path.endswith('/warranty-claim'))):
-        return response({'error': 'Слишком много запросов. Подождите минуту.', 'code': 'rate_limited'}, 429)
+            return response({'error': tr('Доступ только администратору.'), 'code': 'forbidden'}, 403)
+    if limited(request.app, user['id'], request.method == 'POST' and (request.path in {'/api/purchase', '/api/cart/checkout', '/api/invoices', '/api/promo/preview', '/api/promo/redeem', '/api/reviews', '/api/rewards/claim'} or request.path.endswith('/warranty-claim'))):
+        return response({'error': tr('Слишком много запросов. Подождите минуту.'), 'code': 'rate_limited'}, 429)
     settings = await storage.access_settings()
+    request['shop_status'] = public_status(settings)
     admin = user['id'] in config.ADMIN_IDS
-    if not admin and settings.get('maintenance_mode') == '1':
-        return response({'error': 'Идут технические работы. Попробуйте позже.', 'code': 'maintenance'}, 503)
-    if not admin and settings.get('sub_channel_enabled') == '1':
+    if not admin and settings.get('maintenance_mode') == '1' and (request.path not in {'/api/status', '/api/preferences/language'}):
+        return response({'error': tr('🛠 Идут технические работы. Попробуйте позже.'), 'code': 'maintenance', 'shop_status': request['shop_status']}, 503)
+    if not admin and settings.get('sub_channel_enabled') == '1' and (request.path not in {'/api/status', '/api/preferences/language'}):
         channel = settings.get('sub_channel_id')
         bot = request.app[BOT]
         if not channel or bot is None:
-            return response({'error': 'Проверка подписки временно недоступна.', 'code': 'unavailable'}, 503)
+            return response({'error': tr('Проверка подписки временно недоступна.'), 'code': 'unavailable'}, 503)
         member = await bot.get_chat_member(channel, user['id'])
-        if member.status not in {'creator', 'administrator', 'member'} and not getattr(member, 'is_member', False):
-            return response({'error': 'Сначала подпишитесь на канал в боте.', 'code': 'subscription_required'}, 403)
+        if member.status not in {'creator', 'administrator', 'member'} and (not getattr(member, 'is_member', False)):
+            return response({'error': tr('Сначала подпишитесь на канал в боте.'), 'code': 'subscription_required'}, 403)
     await db.create_user(user['id'], user['username'])
     return await handler(request)
 
@@ -131,7 +143,20 @@ def order_id(request):
 async def me(request):
     user = await db.get_user(request['user']['id'])
     return response({'user': request['user'], 'balance': str(user['balance']), 'balance_usdt': str(user['balance_usdt']),
+                     'language':language(user.get('language')), 'shop_status':request['shop_status'],
                      'bot_username': request.app[BOT_USERNAME], 'test_mode_active': STORE.active(request['user']['id']), 'version': BOT_VERSION, 'is_admin': request['user']['id'] in config.ADMIN_IDS})
+
+
+async def shop_status(request):
+    return response({'shop_status':request['shop_status'], 'language':request['language']})
+
+
+async def save_language(request):
+    from database.preferences import set_language
+    body=await json_body(request)
+    value=await set_language(request['user']['id'], body.get('language'))
+    LANGUAGE.set(value)
+    return response({'language':value})
 
 
 async def catalog(request):
@@ -182,16 +207,15 @@ async def orders(request):
 async def order_detail(request):
     row = await db.get_purchase_for_user(order_id(request), request['user']['id'])
     if not row:
-        return response({'error': 'Покупка не найдена.', 'code': 'not_found'}, 404)
+        return response({'error': tr('Покупка не найдена.'), 'code': 'not_found'}, 404)
     if row.get('status') == 'refunded':
         row['password'] = None
-    result = ({key: row.get(key) for key in ('id', 'account_id', 'telegram_user_id', 'number', 'password', 'paid_amount', 'currency', 'date', 'status', 'ticket_status')} |
-                    {'name': row.get('country', 'Аккаунт'), 'product_id': f"SBA-{row['account_id']:06d}" if row.get('account_id') else None, 'status_label': order_status(row)})
+    result = {key: row.get(key) for key in ('id', 'account_id', 'telegram_user_id', 'number', 'password', 'paid_amount', 'currency', 'date', 'status', 'ticket_status')} | {'name': row.get('country', tr('Аккаунт')), 'product_id': f"SBA-{row['account_id']:06d}" if row.get('account_id') else None, 'status_label': order_status(row)}
     result['warranty'] = quality.warranty(row)
     result['characteristics'] = json.loads(row.get('attributes_snapshot') or '{}')
     from database.spam_checks import public as spam_status
     result['characteristics']['spam_check'] = spam_status(result['characteristics'])
-    result['review'] = await quality.my_review(request['user']['id'],row['id'])
+    result['review'] = await quality.my_review(request['user']['id'], row['id'])
     return response(result)
 
 
@@ -286,17 +310,17 @@ async def create_invoice(request):
 
 
 async def invoice_status(request):
-    provider, invoice_id = request.match_info['provider'], request.match_info['invoice']
+    provider, invoice_id = (request.match_info['provider'], request.match_info['invoice'])
     if provider not in {*payments.PROVIDERS, 'stars'} or len(invoice_id) > 128:
         raise ValueError
     row = await commerce.invoice(provider, invoice_id, request['user']['id'])
     if not row:
-        return response({'error': 'Счёт не найден.', 'code': 'not_found'}, 404)
+        return response({'error': tr('Счёт не найден.'), 'code': 'not_found'}, 404)
     if provider == 'stars' and row['status'] == 'pending':
         from datetime import datetime, timezone
         if row['expires_at'] <= datetime.now(timezone.utc).replace(tzinfo=None):
-            await commerce.finish_invoice(provider,invoice_id,'expired')
-            row['status']='expired'
+            await commerce.finish_invoice(provider, invoice_id, 'expired')
+            row['status'] = 'expired'
     return response({key: row[key] for key in ('status', 'amount_rub', 'credited_amount')})
 
 
@@ -333,27 +357,29 @@ async def review_save(request):
 
 
 async def warranty_claim(request):
-    body=await json_body(request)
-    if not isinstance(body.get('body'),str): raise ValueError
+    body = await json_body(request)
+    if not isinstance(body.get('body'), str):
+        raise ValueError
     try:
-        ticket=await tickets.create_ticket(request['user']['id'],order_id(request),body['body'],warranty=True)
+        ticket = await tickets.create_ticket(request['user']['id'], order_id(request), body['body'], warranty=True)
     except ValueError as exc:
-        raise storage.CheckoutError(str(exc),'invalid_warranty') from None
+        raise storage.CheckoutError(str(exc), 'invalid_warranty') from None
     if request.app[BOT]:
         from handlers.tickets import notify
-        await notify(request.app[BOT],config.ADMIN_IDS,ticket,'Новое гарантийное обращение.')
-    return response({'ticket_id':ticket},201)
+        await notify(request.app[BOT], config.ADMIN_IDS, ticket, 'Новое гарантийное обращение.')
+    return response({'ticket_id': ticket}, 201)
 
 
 async def shop_info(request):
     from database.expansion import rules
-    return response({'wholesale':await rules(),'support_hours':await db.get_setting('support_hours','График поддержки пока не указан'),'response_time':await db.get_setting('support_eta','Поддержка отвечает в порядке очереди; точное время не установлено.')})
+    return response({'wholesale': await rules(), 'support_hours': await db.get_setting('support_hours', tr('График поддержки пока не указан')), 'response_time': await db.get_setting('support_eta', tr('Поддержка отвечает в порядке очереди; точное время не установлено.'))})
 
 
 async def product(request):
-    result=await storage.catalog(request['user']['id'],account_id=order_id(request))
-    item=next((i for i in result['items'] if i['id']==order_id(request)),None)
-    if not item: return response({'error':'Товар недоступен.'},404)
+    result = await storage.catalog(request['user']['id'], account_id=order_id(request))
+    item = next((i for i in result['items'] if i['id'] == order_id(request)), None)
+    if not item:
+        return response({'error': tr('Товар недоступен.')}, 404)
     return response(item)
 
 
@@ -377,13 +403,14 @@ async def index(request):
 
 
 def create_app(*, token=None, bot=None, bot_username=''):
-    app = web.Application(middlewares=[security, authenticate], client_max_size=8192)
+    app = web.Application(middlewares=[locale_context, security, authenticate], client_max_size=8192)
     app[TOKEN] = token if token is not None else config.BOT_TOKEN
     app[BOT] = bot
     app[BOT_USERNAME] = bot_username
     app[LIMITS] = OrderedDict()
     app.add_routes([
         web.get('/', index), web.get('/api/health', health),
+        web.get('/api/status',shop_status),web.post('/api/preferences/language',save_language),
         web.get('/api/rewards',reward_status),web.post('/api/rewards/claim',reward_claim),
         web.get('/api/shop-info',shop_info),web.get('/api/products/{id}',product),web.get('/api/me', me), web.get('/api/catalog', catalog), web.post('/api/purchase', purchase),
         web.get('/api/favorites', collection), web.post('/api/favorites', collection_update),

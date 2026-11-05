@@ -1,4 +1,5 @@
 """Durable, bounded SpamBot checks for unsold inventory, shared by all interfaces."""
+from utils.i18n import tr
 from datetime import datetime, timezone
 from uuid import uuid4
 
@@ -38,7 +39,7 @@ def public(row):
     running = row.get('spam_lease_until')
     if isinstance(running, str):
         running = datetime.fromisoformat(running)
-    return {'status': status, 'label': LABELS[status],
+    return {'status': status, 'label': tr(LABELS[status]),
             'checked_at': checked.replace(tzinfo=timezone.utc).isoformat() if checked else None,
             'running': bool(running and running.replace(tzinfo=timezone.utc) > datetime.now(timezone.utc))}
 
@@ -46,10 +47,10 @@ def public(row):
 def description(row):
     from zoneinfo import ZoneInfo
     check = public(row)
-    label = ('Проверяется… Последний результат: ' if check['running'] else '') + check['label']
+    label = (tr('Проверяется… Последний результат: ') if check['running'] else '') + check['label']
     if check['checked_at']:
         stamp = datetime.fromisoformat(check['checked_at']).astimezone(ZoneInfo('Europe/Moscow'))
-        label += f' · {stamp:%d.%m.%Y %H:%M} МСК'
+        label += tr(' · {0} МСК', f'{stamp:%d.%m.%Y %H:%M}')
     return label
 
 

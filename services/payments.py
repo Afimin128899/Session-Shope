@@ -1,4 +1,5 @@
 """Authenticated provider polling; every invoice is credited by the atomic DB path."""
+from utils.i18n import tr
 import asyncio
 from decimal import Decimal, InvalidOperation
 import logging
@@ -33,58 +34,58 @@ def parse_amount(value):
     try:
         if isinstance(value, bool) or len(str(value)) > 40:
             raise ValueError
-        amount=Decimal(str(value).strip().replace('\u00a0','').replace(' ','').replace(',','.'))
-        if not amount.is_finite() or not Decimal('10')<=amount<=Decimal('1000000') or amount!=amount.quantize(Decimal('.01')):
+        amount = Decimal(str(value).strip().replace('\xa0', '').replace(' ', '').replace(',', '.'))
+        if not amount.is_finite() or not Decimal('10') <= amount <= Decimal('1000000') or amount != amount.quantize(Decimal('.01')):
             raise ValueError
-    except (InvalidOperation,ValueError):
-        raise ValueError('Сумма должна быть от 10 до 1 000 000 ₽, до двух знаков после запятой.') from None
+    except (InvalidOperation, ValueError):
+        raise ValueError(tr('Сумма должна быть от 10 до 1 000 000 ₽, до двух знаков после запятой.')) from None
     return amount
 
 
 async def create_deposit(user_id, username, provider, amount):
-    amount=parse_amount(amount)
-    if provider not in PROVIDERS or not next(method['enabled'] for method in methods() if method['id']==provider):
-        raise ValueError('Этот платёжный сервис пока не настроен.')
-    payload=f'rub_topup:{user_id}:{amount:.2f}'
-    order_id=f'topup-{user_id}-{uuid4().hex}'
-    if provider=='crypto':
-        invoice=await cryptopay.create_invoice(float(amount),f'Пополнение на {amount:.2f} ₽',payload)
-        invoice_id=invoice.get('invoice_id') if invoice else None
-        url=invoice.get('bot_invoice_url') if invoice else None
-    elif provider=='xrocket':
-        invoice=await xrocket.create_invoice(await convert_rub_to_usdt(float(amount)),f'Пополнение на {amount:.2f} ₽',order_id,payload,user_id,username)
-        invoice_id=invoice.get('id') if invoice else None
-        url=((invoice.get('links') or {}).get('telegramBotLink') or invoice.get('link')) if invoice else None
+    amount = parse_amount(amount)
+    if provider not in PROVIDERS or not next((method['enabled'] for method in methods() if method['id'] == provider)):
+        raise ValueError(tr('Этот платёжный сервис пока не настроен.'))
+    payload = f'rub_topup:{user_id}:{amount:.2f}'
+    order_id = f'topup-{user_id}-{uuid4().hex}'
+    if provider == 'crypto':
+        invoice = await cryptopay.create_invoice(float(amount), f'Пополнение на {amount:.2f} ₽', payload)
+        invoice_id = invoice.get('invoice_id') if invoice else None
+        url = invoice.get('bot_invoice_url') if invoice else None
+    elif provider == 'xrocket':
+        invoice = await xrocket.create_invoice(await convert_rub_to_usdt(float(amount)), f'Пополнение на {amount:.2f} ₽', order_id, payload, user_id, username)
+        invoice_id = invoice.get('id') if invoice else None
+        url = (invoice.get('links') or {}).get('telegramBotLink') or invoice.get('link') if invoice else None
     else:
-        invoice=await lavepay.create_invoice(await convert_rub_to_usdt(float(amount)),f'Пополнение на {amount:.2f} ₽',order_id,payload)
-        invoice_id=invoice.get('id') if invoice else None
-        url=invoice.get('pay_url') if invoice else None
-    if not invoice_id or not isinstance(url,str) or urlsplit(url).scheme!='https' or not urlsplit(url).hostname or urlsplit(url).username or urlsplit(url).password or len(str(invoice_id))>128:
-        await _health(provider,False)
-        raise ValueError('Платёжный сервис не вернул корректный счёт. Попробуйте позже.')
-    await commerce.register_invoice(provider,str(invoice_id),user_id,amount)
-    await _health(provider,True)
-    return {'provider':provider,'invoice_id':str(invoice_id),'pay_url':url,'amount':str(amount)}
+        invoice = await lavepay.create_invoice(await convert_rub_to_usdt(float(amount)), f'Пополнение на {amount:.2f} ₽', order_id, payload)
+        invoice_id = invoice.get('id') if invoice else None
+        url = invoice.get('pay_url') if invoice else None
+    if not invoice_id or not isinstance(url, str) or urlsplit(url).scheme != 'https' or (not urlsplit(url).hostname) or urlsplit(url).username or urlsplit(url).password or (len(str(invoice_id)) > 128):
+        await _health(provider, False)
+        raise ValueError(tr('Платёжный сервис не вернул корректный счёт. Попробуйте позже.'))
+    await commerce.register_invoice(provider, str(invoice_id), user_id, amount)
+    await _health(provider, True)
+    return {'provider': provider, 'invoice_id': str(invoice_id), 'pay_url': url, 'amount': str(amount)}
 
 
 async def check_invoice(user_id, provider, invoice_id):
-    if provider not in PROVIDERS or not isinstance(invoice_id,str) or not 1<=len(invoice_id)<=128:
-        raise ValueError('Некорректный счёт.')
-    row=await commerce.invoice(provider,invoice_id,user_id)
+    if provider not in PROVIDERS or not isinstance(invoice_id, str) or (not 1 <= len(invoice_id) <= 128):
+        raise ValueError(tr('Некорректный счёт.'))
+    row = await commerce.invoice(provider, invoice_id, user_id)
     if not row:
-        raise ValueError('Счёт не найден в ваших платежах. Если вы уже оплатили старый счёт, обратитесь в поддержку.')
-    if row['status'] in {'credited','expired'}:
-        return {'status':row['status'],'credited':None}
-    result=await PROVIDERS[provider].get_invoice(invoice_id)
-    if not isinstance(result,dict) or result.get('_xrocket_error'):
-        await _health(provider,False)
-        raise ValueError('Сервис пока не подтвердил статус. Повторите проверку позже.')
-    credited=await settle_invoice(row,result)
-    await _health(provider,True)
+        raise ValueError(tr('Счёт не найден в ваших платежах. Если вы уже оплатили старый счёт, обратитесь в поддержку.'))
+    if row['status'] in {'credited', 'expired'}:
+        return {'status': row['status'], 'credited': None}
+    result = await PROVIDERS[provider].get_invoice(invoice_id)
+    if not isinstance(result, dict) or result.get('_xrocket_error'):
+        await _health(provider, False)
+        raise ValueError(tr('Сервис пока не подтвердил статус. Повторите проверку позже.'))
+    credited = await settle_invoice(row, result)
+    await _health(provider, True)
     if credited:
-        return {'status':'credited','credited':credited}
-    current=await commerce.invoice(provider,invoice_id,user_id)
-    return {'status':current['status'] if current else 'pending','credited':None}
+        return {'status': 'credited', 'credited': credited}
+    current = await commerce.invoice(provider, invoice_id, user_id)
+    return {'status': current['status'] if current else 'pending', 'credited': None}
 
 
 async def settle_invoice(row, invoice):
@@ -133,7 +134,8 @@ async def check_pending(bot):
             await _health(row["provider"],True)
             if credited:
                 try:
-                    await bot.send_message(row['user_id'],f'✅ Оплата подтверждена автоматически. На баланс зачислено {credited[0]:.2f} ₽.')
+                    from utils.notification_language import send_translated
+                    await send_translated(bot,row['user_id'],'✅ Оплата подтверждена автоматически. На баланс зачислено {0} ₽.',f'{credited[0]:.2f}')
                 except Exception:
                     logger.warning('Payment receipt notification not delivered')
         except Exception:

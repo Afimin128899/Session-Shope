@@ -1,0 +1,75 @@
+"""Inventory review and sales controls shared by every checkout entry point."""
+from utils.i18n import tr
+from html import escape
+
+from database.admin_tools import _transaction, _record
+
+DEFAULT_REASON = 'Обновляем магазин и проверяем работу сервисов.'
+DEFAULT_SALES_REASON = 'Обновляем ассортимент. Покупки снова откроются после проверки.'
+
+
+async def init_schema(cur, database):
+    for table, fields in {
+        'accounts': [('review_reason', 'VARCHAR(500) DEFAULT NULL'),
+                     ('review_admin_id', 'BIGINT DEFAULT NULL'), ('review_started_at', 'DATETIME DEFAULT NULL')],
+        'users': [('language', "VARCHAR(2) NOT NULL DEFAULT 'ru'")],
+    }.items():
+        for field, definition in fields:
+            await cur.execute('SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=%s AND TABLE_NAME=%s AND COLUMN_NAME=%s', (database, table, field))
+            if not await cur.fetchone():
+                await cur.execute(f'ALTER TABLE {table} ADD COLUMN {field} {definition}')
+    for key, value in [('sales_paused', '0'), ('sales_pause_reason', DEFAULT_SALES_REASON),
+                       ('maintenance_reason', DEFAULT_REASON), ('maintenance_eta', 'Время завершения пока уточняется.')]:
+        await cur.execute('INSERT IGNORE INTO settings(`key`,`value`) VALUES(%s,%s)', (key, value))
+
+
+async def set_review(admin, account, enabled, reason):
+    if type(account) is not int or account <= 0 or type(enabled) is not bool:
+        raise ValueError(tr('Некорректный товар.'))
+    if not isinstance(reason, str) or not 3 <= len(reason.strip()) <= 500:
+        raise ValueError(tr('Укажите причину: 3–500 символов.'))
+    reason = reason.strip()
+    async with _transaction() as cur:
+        await cur.execute('SELECT id,status,review_reason FROM accounts WHERE id=%s FOR UPDATE', (account,))
+        row = await cur.fetchone()
+        expected, target = ('available', 'review') if enabled else ('review', 'available')
+        if not row or row['status'] != expected:
+            raise ValueError(tr('Статус товара уже изменился. Обновите карточку.'))
+        await cur.execute('SELECT id FROM purchases WHERE account_id=%s LIMIT 1', (account,))
+        if await cur.fetchone():
+            raise ValueError(tr('Проданный аккаунт нельзя отправить на проверку или вернуть в продажу.'))
+        await cur.execute('DELETE FROM account_reservations WHERE account_id=%s', (account,))
+        await cur.execute('DELETE FROM shopping_cart WHERE account_id=%s', (account,))
+        await cur.execute('UPDATE accounts SET status=%s,review_reason=%s,review_admin_id=%s,\n            review_started_at=CASE WHEN %s THEN UTC_TIMESTAMP() ELSE NULL END,\n            spam_token=NULL,spam_lease_until=NULL,spam_next_check_at=UTC_TIMESTAMP()\n            WHERE id=%s', (target, reason if enabled else None, admin if enabled else None, enabled, account))
+        await _record(cur, admin, 'account_review' if enabled else 'account_release', 'account', account, {'before': expected, 'after': target, 'reason': reason, 'previous_reason': row.get('review_reason')})
+        return target
+
+
+async def check_sales(cur, *, tuple_cursor=False):
+    """Lock the switch after inventory, before balances. The admin toggle waits for buyers.
+
+    Shared locks allow unrelated purchases concurrently. Pausing obtains an exclusive
+    lock on the same setting: after the toggle commits no checkout can debit a wallet.
+    Do not bypass for administrators; the isolated demo store is independent.
+    """
+    await cur.execute("SELECT `value` FROM settings WHERE `key`='sales_paused' LOCK IN SHARE MODE")
+    row = await cur.fetchone()
+    value = (row[0] if tuple_cursor else row.get('value')) if row else '0'
+    if value == '1':
+        from miniapp.storage import CheckoutError
+        raise CheckoutError(tr('⏸ Продажи временно приостановлены. Покупки, коды входа и поддержка доступны.'), 'sales_paused')
+
+
+def public_status(settings):
+    defaults = {'maintenance_reason': DEFAULT_REASON, 'maintenance_eta': 'Время завершения пока уточняется.', 'sales_pause_reason': DEFAULT_SALES_REASON}
+    def notice(key):
+        value = settings.get(key) or defaults[key]
+        # Translate only our built-in notices. Operator-written text stays intact.
+        return tr(value) if value == defaults[key] else value
+    return {'maintenance': settings.get('maintenance_mode') == '1', 'sales_paused': settings.get('sales_paused') == '1',
+            'reason': notice('maintenance_reason'), 'eta': notice('maintenance_eta'), 'sales_reason': notice('sales_pause_reason')}
+
+
+def maintenance_message(settings):
+    state = public_status(settings)
+    return tr('🛠 <b>Технические работы</b>\n\n⚙️ {0}\n\n🕒 <b>Ориентир:</b> {1}\n\n💳 Уже подтверждённые оплаты обрабатываются автоматически.\n🔄 Нажмите «Проверить статус», чтобы узнать о возобновлении работы.', f"{escape(state['reason'])}", f"{escape(state['eta'])}")

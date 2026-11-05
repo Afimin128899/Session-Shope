@@ -9,7 +9,7 @@ ROOT = Path(__file__).resolve().parent.parent
 SECTIONS = (
     'home', 'catalog', 'profile', 'wallet', 'orders', 'support', 'bonus',
     'promo', 'referrals', 'info', 'reviews', 'stock', 'admin', 'inventory',
-    'users', 'stats', 'settings', 'broadcast', 'audit', 'demo',
+    'users', 'stats', 'settings', 'broadcast', 'audit', 'demo', 'maintenance',
 )
 
 # Exact actions take precedence over prefixes, e.g. buy_acc versus buy_<category>.
@@ -107,11 +107,14 @@ def banner_for(section):
     if section not in SECTIONS:
         return None
     path = ROOT / 'assets' / ('welcome.png' if section == 'home' else f'banners/{section}.png')
+    from utils.i18n import LANGUAGE
+    if LANGUAGE.get() == 'en':
+        path = ROOT / 'miniapp/static/sband.png'
     try:
         stat = path.stat()
     except OSError:
         return None
-    return Banner(section, path, (stat.st_mtime_ns, stat.st_size))
+    return Banner('brand_en' if LANGUAGE.get() == 'en' else section, path, (stat.st_mtime_ns, stat.st_size))
 
 
 def _key(message, banner):

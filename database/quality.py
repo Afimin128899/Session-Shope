@@ -1,4 +1,5 @@
 """Purchase assurances and verified-owner reviews, shared by bot and Mini App."""
+from utils.i18n import tr
 from datetime import date, datetime, timezone
 from zoneinfo import ZoneInfo
 import aiomysql
@@ -44,6 +45,8 @@ async def init_schema(cur, database):
     await import_schema(cur)
     from database.spam_checks import init_schema as spam_schema
     await spam_schema(cur, database)
+    from database.shop_control import init_schema as control_schema
+    await control_schema(cur, database)
 
 
 async def snapshot(cur, purchase_id):
@@ -61,54 +64,49 @@ async def snapshot(cur, purchase_id):
 
 def warranty(row):
     until = row.get('warranty_until')
-    if isinstance(until,str): until = datetime.fromisoformat(until)
+    if isinstance(until, str):
+        until = datetime.fromisoformat(until)
     hours = row.get('warranty_hours')
-    active = bool(until and until.replace(tzinfo=timezone.utc)>datetime.now(timezone.utc) and row.get('status')!='refunded')
-    return {'hours':hours,'until':until.replace(tzinfo=timezone.utc).isoformat() if until else None,
-            'active':active,'policy':row.get('warranty_policy') or '',
-            'label':'Возврат оформлен' if row.get('status')=='refunded' else 'Срок не сохранён' if hours is None else 'Без гарантии' if hours==0 else 'Действует' if active else 'Срок истёк'}
+    active = bool(until and until.replace(tzinfo=timezone.utc) > datetime.now(timezone.utc) and (row.get('status') != 'refunded'))
+    return {'hours': hours, 'until': until.replace(tzinfo=timezone.utc).isoformat() if until else None, 'active': active, 'policy': tr(POLICY) if row.get('warranty_policy') == POLICY else row.get('warranty_policy') or '', 'label': tr('Возврат оформлен') if row.get('status') == 'refunded' else tr('Срок не сохранён') if hours is None else tr('Без гарантии') if hours == 0 else tr('Действует') if active else tr('Срок истёк')}
 
 
 def characteristics(row):
     from database.spam_checks import public as spam_status
-    registered=row.get('registration_date')
-    return {'registration_date':str(registered) if registered else None,
-            'is_premium':None if row.get('is_premium') is None else bool(row['is_premium']),
-            'note':row.get('features_note') or '', 'checked_at':str(row['attributes_checked_at']) if row.get('attributes_checked_at') else None,
-            'two_fa':'Пароль указан' if row.get('password') not in (None,'','-') else 'Пароль не указан',
-            'warranty_hours':row.get('warranty_hours'), 'spam_check':spam_status(row)}
+    registered = row.get('registration_date')
+    return {'registration_date': str(registered) if registered else None, 'is_premium': None if row.get('is_premium') is None else bool(row['is_premium']), 'note': row.get('features_note') or '', 'checked_at': str(row['attributes_checked_at']) if row.get('attributes_checked_at') else None, 'two_fa': tr('Пароль указан') if row.get('password') not in (None, '', '-') else tr('Пароль не указан'), 'warranty_hours': row.get('warranty_hours'), 'spam_check': spam_status(row)}
 
 
 async def edit_characteristics(admin_id, account_id, *, hours, registered, premium, note):
-    if type(hours) is not int or not 0<=hours<=8760 or (premium is not None and type(premium) is not bool) or len(note)>500:
-        raise ValueError('Гарантия: 0–8760 часов. Описание: до 500 символов.')
+    if type(hours) is not int or not 0 <= hours <= 8760 or (premium is not None and type(premium) is not bool) or (len(note) > 500):
+        raise ValueError(tr('Гарантия: 0–8760 часов. Описание: до 500 символов.'))
     if registered:
-        registered=date.fromisoformat(registered)
-        if not date(2013,8,1)<=registered<=datetime.now(ZoneInfo('Europe/Moscow')).date():
-            raise ValueError('Проверьте дату регистрации.')
+        registered = date.fromisoformat(registered)
+        if not date(2013, 8, 1) <= registered <= datetime.now(ZoneInfo('Europe/Moscow')).date():
+            raise ValueError(tr('Проверьте дату регистрации.'))
     async with _transaction() as cur:
-        await cur.execute('SELECT id FROM accounts WHERE id=%s FOR UPDATE',(account_id,))
-        if not await cur.fetchone(): raise ValueError('Аккаунт не найден.')
-        await cur.execute('UPDATE accounts SET warranty_hours=%s,registration_date=%s,is_premium=%s,features_note=%s,attributes_checked_at=UTC_TIMESTAMP() WHERE id=%s', (hours,registered,premium,note.strip(),account_id))
-        await _record(cur,admin_id,'account_features','account',account_id,{'warranty_hours':hours,'registration_date':str(registered) if registered else None,'is_premium':premium})
+        await cur.execute('SELECT id FROM accounts WHERE id=%s FOR UPDATE', (account_id,))
+        if not await cur.fetchone():
+            raise ValueError(tr('Аккаунт не найден.'))
+        await cur.execute('UPDATE accounts SET warranty_hours=%s,registration_date=%s,is_premium=%s,features_note=%s,attributes_checked_at=UTC_TIMESTAMP() WHERE id=%s', (hours, registered, premium, note.strip(), account_id))
+        await _record(cur, admin_id, 'account_features', 'account', account_id, {'warranty_hours': hours, 'registration_date': str(registered) if registered else None, 'is_premium': premium})
 
 
 async def save_review(user_id, purchase_id, rating, body):
-    if type(rating) is not int or not 1<=rating<=5 or not isinstance(body,str) or not 1<=len(body.strip())<=500:
-        raise ValueError('Оценка: 1–5. Отзыв: 1–500 символов.')
-    body=body.strip()
+    if type(rating) is not int or not 1 <= rating <= 5 or (not isinstance(body, str)) or (not 1 <= len(body.strip()) <= 500):
+        raise ValueError(tr('Оценка: 1–5. Отзыв: 1–500 символов.'))
+    body = body.strip()
     async with _transaction() as cur:
-        await cur.execute('SELECT p.id,p.status,a.number,a.password FROM purchases p JOIN accounts a ON a.id=p.account_id WHERE p.id=%s AND p.user_id=%s FOR UPDATE',(purchase_id,user_id))
-        row=await cur.fetchone()
-        if not row: raise ValueError('Покупка не найдена.')
-        password=row.get('password')
-        digits=''.join(c for c in body if c.isdigit())
-        phone=''.join(c for c in (row.get('number') or '') if c.isdigit())
-        if (password and len(password)>=4 and password in body) or (len(phone)>=8 and phone in digits):
-            raise ValueError('Не публикуйте номер или пароль аккаунта в отзыве.')
-        await cur.execute('''INSERT INTO purchase_reviews(purchase_id,user_id,rating,body,created_at,updated_at)
-            VALUES(%s,%s,%s,%s,UTC_TIMESTAMP(),UTC_TIMESTAMP())
-            ON DUPLICATE KEY UPDATE rating=VALUES(rating),body=VALUES(body),updated_at=UTC_TIMESTAMP()''',(purchase_id,user_id,rating,body))
+        await cur.execute('SELECT p.id,p.status,a.number,a.password FROM purchases p JOIN accounts a ON a.id=p.account_id WHERE p.id=%s AND p.user_id=%s FOR UPDATE', (purchase_id, user_id))
+        row = await cur.fetchone()
+        if not row:
+            raise ValueError(tr('Покупка не найдена.'))
+        password = row.get('password')
+        digits = ''.join((c for c in body if c.isdigit()))
+        phone = ''.join((c for c in row.get('number') or '' if c.isdigit()))
+        if password and len(password) >= 4 and (password in body) or (len(phone) >= 8 and phone in digits):
+            raise ValueError(tr('Не публикуйте номер или пароль аккаунта в отзыве.'))
+        await cur.execute('INSERT INTO purchase_reviews(purchase_id,user_id,rating,body,created_at,updated_at)\n            VALUES(%s,%s,%s,%s,UTC_TIMESTAMP(),UTC_TIMESTAMP())\n            ON DUPLICATE KEY UPDATE rating=VALUES(rating),body=VALUES(body),updated_at=UTC_TIMESTAMP()', (purchase_id, user_id, rating, body))
 
 
 async def my_review(user_id,purchase_id):

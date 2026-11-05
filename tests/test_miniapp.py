@@ -145,6 +145,12 @@ class CheckoutTests(unittest.IsolatedAsyncioTestCase):
         patcher = patch.object(admin_tools, '_get_pool', return_value=pool)
         patcher.start(); self.addCleanup(patcher.stop)
 
+        # Sales switch locking and rejection are covered in test_shop_control.
+        # These tests isolate the existing price, balance and order transaction.
+        from database import shop_control
+        sales = patch.object(shop_control, 'check_sales', AsyncMock())
+        sales.start(); self.addCleanup(sales.stop)
+
     async def test_changed_price_rolls_back_without_charging(self):
         self.cur.fetchone.side_effect = [{'id': 1, 'price': 200, 'country': 'us'}, None, None]
         with self.assertRaisesRegex(storage.CheckoutError, 'Цена изменилась'):

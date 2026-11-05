@@ -1,4 +1,5 @@
 """Exactly-once Telegram Stars ledger: one Star credits exactly 1.20 RUB."""
+from utils.i18n import tr
 import hashlib
 import re
 from decimal import Decimal
@@ -20,34 +21,34 @@ def parse_count(value):
     if isinstance(value, str):
         value = value.strip()
         if not value.isascii() or not value.isdecimal() or len(value) > 5:
-            raise ValueError('Введите целое количество звёзд от 1 до 10 000.')
+            raise ValueError(tr('Введите целое количество звёзд от 1 до 10 000.'))
         value = int(value)
     if type(value) is not int or not 1 <= value <= MAX_STARS:
-        raise ValueError('Введите целое количество звёзд от 1 до 10 000.')
+        raise ValueError(tr('Введите целое количество звёзд от 1 до 10 000.'))
     return value
 
 
 def invoice_id(payload):
     if not isinstance(payload, str) or not payload.startswith(PAYLOAD_PREFIX):
-        raise ValueError('Неизвестный счёт Stars.')
+        raise ValueError(tr('Неизвестный счёт Stars.'))
     return _invoice_id(payload[len(PAYLOAD_PREFIX):])
 
 
 def _invoice_id(value):
     if not isinstance(value, str) or not _ID.fullmatch(value):
-        raise ValueError('Неизвестный счёт Stars.')
+        raise ValueError(tr('Неизвестный счёт Stars.'))
     return value
 
 
 def _user_id(value):
     if type(value) is not int or not 0 < value <= 9223372036854775807:
-        raise ValueError('Некорректный плательщик.')
+        raise ValueError(tr('Некорректный плательщик.'))
     return value
 
 
 def _charge_id(value):
-    if not isinstance(value, str) or not 1 <= len(value) <= 255 or any(not 33 <= ord(c) <= 126 for c in value):
-        raise ValueError('Некорректный номер платежа Telegram.')
+    if not isinstance(value, str) or not 1 <= len(value) <= 255 or any((not 33 <= ord(c) <= 126 for c in value)):
+        raise ValueError(tr('Некорректный номер платежа Telegram.'))
     return value
 
 
@@ -78,24 +79,24 @@ async def register_invoice(user_id, stars):
 
 def _validate_invoice(row, user_id, stars):
     if not row or row['user_id'] != user_id or row.get('stars_count') != stars:
-        raise ValueError('Счёт Stars не принадлежит плательщику или сумма не совпадает.')
+        raise ValueError(tr('Счёт Stars не принадлежит плательщику или сумма не совпадает.'))
     amount = stars * STARS_RATE
     if Decimal(str(row['amount_rub'])) != amount:
-        raise ValueError('Не удалось подтвердить курс счёта Stars.')
+        raise ValueError(tr('Не удалось подтвердить курс счёта Stars.'))
     return amount
 
 
 async def check_precheckout(user_id, payload, currency, total_amount):
-    identity, user_id = invoice_id(payload), _user_id(user_id)
+    identity, user_id = (invoice_id(payload), _user_id(user_id))
     if currency != 'XTR' or type(total_amount) is not int:
-        raise ValueError('Валюта или сумма Stars не совпадает со счётом.')
+        raise ValueError(tr('Валюта или сумма Stars не совпадает со счётом.'))
     stars = parse_count(total_amount)
     async with _transaction() as cur:
         await cur.execute("SELECT *,expires_at<=UTC_TIMESTAMP() AS expired FROM payment_invoices WHERE provider='stars' AND invoice_id=%s FOR UPDATE", (identity,))
         row = await cur.fetchone()
         _validate_invoice(row, user_id, stars)
         if row['expired'] or row['status'] != 'pending':
-            raise ValueError('Счёт уже оплачен, возвращён или истёк. Создайте новый счёт.')
+            raise ValueError(tr('Счёт уже оплачен, возвращён или истёк. Создайте новый счёт.'))
     return {'invoice_id': identity, 'stars': stars, 'amount': str(stars * STARS_RATE)}
 
 
@@ -108,8 +109,8 @@ async def charge_info(charge_id):
 
 
 def _validate_charge(row, identity, user_id, stars):
-    if row and (row['invoice_id'] not in (None, identity) or row['user_id'] != user_id or row['stars'] != stars or Decimal(str(row['amount_rub'])) != stars * STARS_RATE):
-        raise ValueError('Платёж Telegram уже привязан к другому счёту.')
+    if row and (row['invoice_id'] not in (None, identity) or row['user_id'] != user_id or row['stars'] != stars or (Decimal(str(row['amount_rub'])) != stars * STARS_RATE)):
+        raise ValueError(tr('Платёж Telegram уже привязан к другому счёту.'))
 
 
 async def _invoice(cur, identity):
@@ -121,14 +122,13 @@ async def _balance(cur, user_id, delta, charge_id, method):
     await cur.execute('SELECT balance FROM users WHERE id=%s FOR UPDATE', (user_id,))
     row = await cur.fetchone()
     if not row:
-        raise ValueError('Плательщик не найден.')
+        raise ValueError(tr('Плательщик не найден.'))
     after = Decimal(str(row['balance'])) + delta
     if not -BALANCE_LIMIT <= after <= BALANCE_LIMIT:
-        raise ValueError('Сумма превышает допустимый размер баланса.')
+        raise ValueError(tr('Сумма превышает допустимый размер баланса.'))
     marker = method + '_' + hashlib.sha256(charge_id.encode('ascii')).hexdigest()
     await cur.execute('INSERT INTO used_transactions(comment) VALUES(%s)', (marker,))
     await cur.execute('UPDATE users SET balance=%s WHERE id=%s', (after, user_id))
-    # Signed refund entries keep the existing sum of payment_logs equal to net cash-in.
     await cur.execute("INSERT INTO payment_logs(user_id,amount,currency,method,reference) VALUES(%s,%s,'RUB',%s,%s)", (user_id, delta, method, charge_id))
 
 
@@ -165,7 +165,7 @@ async def credit_payment(user_id, invoice_id, stars, charge_id):
 
 
 async def refund_payment(invoice_id, stars, charge_id, user_id=None):
-    stars, charge_id = parse_count(stars), _charge_id(charge_id)
+    stars, charge_id = (parse_count(stars), _charge_id(charge_id))
     if invoice_id is None:
         known = await charge_info(charge_id)
         if not known or not known['invoice_id']:
@@ -175,10 +175,10 @@ async def refund_payment(invoice_id, stars, charge_id, user_id=None):
     async with _transaction() as cur:
         invoice = await _invoice(cur, identity)
         if not invoice:
-            raise ValueError('Счёт возврата Stars не найден.')
+            raise ValueError(tr('Счёт возврата Stars не найден.'))
         owner = invoice['user_id']
         if user_id is not None and _user_id(user_id) != owner:
-            raise ValueError('Получатель возврата не совпадает со счётом.')
+            raise ValueError(tr('Получатель возврата не совпадает со счётом.'))
         amount = _validate_invoice(invoice, owner, stars)
         await cur.execute('SELECT * FROM star_payments WHERE charge_id=%s FOR UPDATE', (charge_id,))
         payment = await cur.fetchone()
@@ -192,9 +192,7 @@ async def refund_payment(invoice_id, stars, charge_id, user_id=None):
             await cur.execute('UPDATE star_payments SET refunded_seen=1,credited_amount=0,updated_at=UTC_TIMESTAMP() WHERE charge_id=%s', (charge_id,))
         else:
             credited = Decimal('0')
-            await cur.execute('''INSERT INTO star_payments
-                (charge_id,invoice_id,user_id,stars,amount_rub,refunded_seen,created_at,updated_at)
-                VALUES(%s,%s,%s,%s,%s,1,UTC_TIMESTAMP(),UTC_TIMESTAMP())''', (charge_id, identity, owner, stars, amount))
+            await cur.execute('INSERT INTO star_payments\n                (charge_id,invoice_id,user_id,stars,amount_rub,refunded_seen,created_at,updated_at)\n                VALUES(%s,%s,%s,%s,%s,1,UTC_TIMESTAMP(),UTC_TIMESTAMP())', (charge_id, identity, owner, stars, amount))
         await _summarize(cur, identity)
         return credited or None
 

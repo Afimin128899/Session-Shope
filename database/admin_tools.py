@@ -2,6 +2,7 @@
 
 Authorization is checked by handlers. This module never logs account credentials.
 """
+from utils.i18n import tr
 import json
 from contextlib import asynccontextmanager
 from decimal import Decimal, InvalidOperation
@@ -36,63 +37,61 @@ def _decimal(value, places, maximum):
     try:
         value = Decimal(str(value))
         if not value.is_finite() or abs(value) > Decimal(maximum):
-            raise ValueError('Сумма выходит за допустимые пределы.')
+            raise ValueError(tr('Сумма выходит за допустимые пределы.'))
         rounded = value.quantize(Decimal(places))
         if rounded != value:
-            raise ValueError('Слишком много знаков после запятой.')
+            raise ValueError(tr('Слишком много знаков после запятой.'))
         return rounded
     except InvalidOperation as exc:
-        raise ValueError('Введите корректное число.') from exc
+        raise ValueError(tr('Введите корректное число.')) from exc
 
 
 async def change_balance(admin_id, user_id, amount, currency, mode, request_key=None):
     if currency not in {'RUB', 'USDT'} or mode not in {'add', 'set'}:
-        raise ValueError('Некорректная операция с балансом.')
+        raise ValueError(tr('Некорректная операция с балансом.'))
     amount = _decimal(amount, '0.00000001', '9999999999.99999999')
     column = 'balance_usdt' if currency == 'USDT' else 'balance'
     async with _transaction() as cur:
         if request_key:
             import re
-            if not re.fullmatch(r'[0-9a-f]{32}',request_key): raise ValueError('Некорректный номер операции.')
+            if not re.fullmatch('[0-9a-f]{32}', request_key):
+                raise ValueError(tr('Некорректный номер операции.'))
             try:
-                await cur.execute('INSERT INTO admin_web_actions VALUES(%s,%s,UTC_TIMESTAMP())',(request_key,admin_id))
+                await cur.execute('INSERT INTO admin_web_actions VALUES(%s,%s,UTC_TIMESTAMP())', (request_key, admin_id))
             except aiomysql.IntegrityError as exc:
-                if exc.args[0]==1062: raise ValueError('Эта операция уже выполнена. Обновите баланс.') from None
+                if exc.args[0] == 1062:
+                    raise ValueError(tr('Эта операция уже выполнена. Обновите баланс.')) from None
                 raise
         await cur.execute(f'SELECT {column} AS balance FROM users WHERE id = %s FOR UPDATE', (user_id,))
         user = await cur.fetchone()
         if not user:
-            raise ValueError('Пользователь не найден.')
+            raise ValueError(tr('Пользователь не найден.'))
         before = Decimal(str(user['balance']))
         after = before + amount if mode == 'add' else amount
         if not Decimal('0') <= after <= Decimal('9999999999.99999999'):
-            raise ValueError('Итоговый баланс не может быть отрицательным или превышать лимит.')
+            raise ValueError(tr('Итоговый баланс не может быть отрицательным или превышать лимит.'))
         await cur.execute(f'UPDATE users SET {column} = %s WHERE id = %s', (after, user_id))
-        await _record(cur, admin_id, 'balance_' + mode, 'user', user_id, {
-            'currency': currency, 'before': str(before), 'after': str(after),
-        })
+        await _record(cur, admin_id, 'balance_' + mode, 'user', user_id, {'currency': currency, 'before': str(before), 'after': str(after)})
 
 
 async def change_account_price(admin_id, account_id, price):
     price = _decimal(price, '0.01', '99999999.99')
     if price <= 0:
-        raise ValueError('Цена должна быть больше нуля.')
+        raise ValueError(tr('Цена должна быть больше нуля.'))
     async with _transaction() as cur:
         await cur.execute('SELECT price FROM accounts WHERE id = %s FOR UPDATE', (account_id,))
         row = await cur.fetchone()
         if row is None:
             return False
         await cur.execute('UPDATE accounts SET compare_price = CASE WHEN price>%s THEN GREATEST(price,COALESCE(compare_price,0)) WHEN compare_price>%s THEN compare_price ELSE NULL END,price=%s WHERE id=%s', (price, price, price, account_id))
-        await _record(cur, admin_id, 'account_price', 'account', account_id, {
-            'before': str(row['price']), 'after': str(price),
-        })
+        await _record(cur, admin_id, 'account_price', 'account', account_id, {'before': str(row['price']), 'after': str(price)})
         return True
 
 
 async def change_category_price(admin_id, slug, price):
     price = _decimal(price, '0.01', '99999999.99')
     if price <= 0:
-        raise ValueError('Цена должна быть больше нуля.')
+        raise ValueError(tr('Цена должна быть больше нуля.'))
     async with _transaction() as cur:
         await cur.execute('SELECT price FROM accounts WHERE country = %s FOR UPDATE', (slug,))
         rows = await cur.fetchall()
@@ -101,10 +100,7 @@ async def change_category_price(admin_id, slug, price):
         prices = sorted({str(row['price']) for row in rows})
         await cur.execute('UPDATE accounts SET compare_price = CASE WHEN price>%s THEN GREATEST(price,COALESCE(compare_price,0)) WHEN compare_price>%s THEN compare_price ELSE NULL END,price=%s WHERE country=%s', (price, price, price, slug))
         updated = cur.rowcount
-        await _record(cur, admin_id, 'category_price', 'category', slug, {
-            'before': prices[:20], 'distinct_prices': len(prices),
-            'after': str(price), 'matched': len(rows), 'updated': updated,
-        })
+        await _record(cur, admin_id, 'category_price', 'category', slug, {'before': prices[:20], 'distinct_prices': len(prices), 'after': str(price), 'matched': len(rows), 'updated': updated})
         return updated
 
 
@@ -114,17 +110,14 @@ async def remove_account(admin_id, account_id):
         row = await cur.fetchone()
         if row is None:
             return False
-        # Retain existing deletion semantics, without storing sessions or passwords.
         try:
             await cur.execute('DELETE FROM purchases WHERE account_id = %s', (account_id,))
         except aiomysql.IntegrityError as exc:
             if exc.args[0] == 1451:
-                raise ValueError('Нельзя удалить товар: история поддержки и возвратов должна сохраниться.') from exc
+                raise ValueError(tr('Нельзя удалить товар: история поддержки и возвратов должна сохраниться.')) from exc
             raise
         await cur.execute('DELETE FROM accounts WHERE id = %s', (account_id,))
-        await _record(cur, admin_id, 'account_delete', 'account', account_id, {
-            'category': row['country'], 'price': str(row['price']), 'status': row['status'],
-        })
+        await _record(cur, admin_id, 'account_delete', 'account', account_id, {'category': row['country'], 'price': str(row['price']), 'status': row['status']})
         return True
 
 

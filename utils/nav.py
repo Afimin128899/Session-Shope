@@ -1,4 +1,5 @@
 """Telegram navigation that keeps the previous screen if replacement delivery fails."""
+from utils.i18n import tr
 import asyncio
 import logging
 
@@ -84,16 +85,13 @@ async def edit_message_safe(call: CallbackQuery, text: str, reply_markup=None, p
 
 async def edit_main(call: CallbackQuery) -> None:
     await ensure_user(call.from_user.id, call.from_user.username)
-    await edit_message_safe(call, '<b>Главное меню магазина</b>\n\nВыберите раздел ниже.', reply_markup=await main_menu(call.from_user.id), section='home')
+    await edit_message_safe(call, tr('<b>Главное меню магазина</b>\n\nВыберите раздел ниже.'), reply_markup=await main_menu(call.from_user.id), section='home')
 
 
-async def edit_balance(call: CallbackQuery, currency: str = 'USDT') -> None:
+async def edit_balance(call: CallbackQuery, currency: str='USDT') -> None:
     await ensure_user(call.from_user.id, call.from_user.username)
     user = await get_user(call.from_user.id)
     balance = float(user['balance']) if user and 'balance' in user else 0.0
-    text = f'<b>Мой кошелёк</b>\n\nБаланс: <b>{balance:.2f} ₽</b>\n\nПополнение подтверждается автоматически платёжным сервисом.'
-    kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text='Пополнить баланс', callback_data='topup_balance', icon_custom_emoji_id=EMOJI_WALLET)],
-        [InlineKeyboardButton(text='Мой профиль', callback_data='my_profile', icon_custom_emoji_id=EMOJI_BACK)],
-    ])
+    text = tr('<b>Мой кошелёк</b>\n\nБаланс: <b>{0} ₽</b>\n\nПополнение подтверждается автоматически платёжным сервисом.', f'{balance:.2f}')
+    kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text=tr('Пополнить баланс'), callback_data='topup_balance', icon_custom_emoji_id=EMOJI_WALLET)], [InlineKeyboardButton(text=tr('Мой профиль'), callback_data='my_profile', icon_custom_emoji_id=EMOJI_BACK)]])
     await edit_message_safe(call, text, reply_markup=kb, section='wallet')

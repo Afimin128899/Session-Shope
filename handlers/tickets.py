@@ -1,4 +1,5 @@
 """Persistent conversations shared by customers and the support team."""
+from utils.i18n import tr
 import logging
 from datetime import timezone
 from html import escape
@@ -28,10 +29,10 @@ class TicketInput(StatesGroup):
 
 def identifier(value):
     if not value.isascii() or not value.isdigit() or len(value) > 19:
-        raise ValueError('Некорректный номер обращения.')
+        raise ValueError(tr('Некорректный номер обращения.'))
     number = int(value)
     if not 0 < number <= 9223372036854775807:
-        raise ValueError('Некорректный номер обращения.')
+        raise ValueError(tr('Некорректный номер обращения.'))
     return number
 
 
@@ -44,18 +45,16 @@ def button(text, data):
 
 
 def order_back(order_id):
-    return InlineKeyboardMarkup(inline_keyboard=[button('Назад к заказу', f'open_purchase:{order_id}')])
+    return InlineKeyboardMarkup(inline_keyboard=[button(tr('Назад к заказу'), f'open_purchase:{order_id}')])
 
 
 async def notify(bot, recipients, ticket_id, text):
     for recipient in set(recipients):
         try:
-            await bot.send_message(
-                recipient, f'{text}\nОбращение #{ticket_id}.',
-                reply_markup=InlineKeyboardMarkup(inline_keyboard=[button('Открыть обращение', f'tk:{ticket_id}:0')]),
-            )
+            from utils.notification_language import recipient_language
+            async with recipient_language(recipient):
+                await bot.send_message(recipient, tr('{0}\nОбращение #{1}.', tr(text), ticket_id), reply_markup=InlineKeyboardMarkup(inline_keyboard=[button(tr('Открыть обращение'), f'tk:{ticket_id}:0')]))
         except Exception:
-            # Messages remain in the inbox even when Telegram cannot deliver an alert.
             logger.warning('Ticket alert delivery failed for recipient %s', recipient)
 
 
@@ -64,36 +63,33 @@ async def display_ticket(call, ticket_id, before_id=0):
     owner_id = None if admin else call.from_user.id
     ticket = await store.get_ticket(ticket_id, owner_id)
     if not ticket:
-        await answer_safe(call, 'Обращение не найдено.', show_alert=True)
+        await answer_safe(call, tr('Обращение не найдено.'), show_alert=True)
         return
     messages = await store.history(ticket_id, owner_id, before_id)
-    text = (
-        f"🛟 <b>Обращение #{ticket['id']} · заказ #{ticket['purchase_id']}</b>\n"
-        f"Статус: <b>{TICKET_STATUSES.get(ticket['status'], 'Неизвестен')}</b>\n\n"
-    )
+    text = tr('🛟 <b>Обращение #{0} · заказ #{1}</b>\nСтатус: <b>{2}</b>\n\n', f"{ticket['id']}", f"{ticket['purchase_id']}", f"{tr(TICKET_STATUSES.get(ticket['status'], tr('Неизвестен')))}")
     if ticket.get('warranty_claimed_at'):
-        text += '🛡 Гарантийное обращение: принято в пределах срока.\n\n'
+        text += tr('🛡 Гарантийное обращение: принято в пределах срока.\n\n')
     if messages:
         item = messages[0]
-        author = {'admin': 'Поддержка', 'user': 'Покупатель', 'system': 'Система'}[item['author_role']]
+        author = {'admin': tr('Поддержка'), 'user': tr('Покупатель'), 'system': tr('Система')}[item['author_role']]
         created = item['created_at'].replace(tzinfo=timezone.utc).astimezone(ZoneInfo('Europe/Moscow'))
-        text += f'<b>{author} · {created:%d.%m.%Y %H:%M} МСК</b>\n{escape(item["body"])}'
+        text += tr('<b>{0} · {1} МСК</b>\n{2}', f'{author}', f'{created:%d.%m.%Y %H:%M}', f"{escape(item['body'])}")
     else:
-        text += 'Сообщений на этой странице нет.'
-    reply_label = 'Открыть снова и написать' if ticket['status'] == 'closed' else 'Ответить'
+        text += tr('Сообщений на этой странице нет.')
+    reply_label = tr('Открыть снова и написать') if ticket['status'] == 'closed' else tr('Ответить')
     rows = [button(reply_label, f'tk_reply:{ticket_id}')]
     if messages and messages[0].get('photo_id'):
-        rows.insert(0,button('Открыть скриншот',f'tk_photo:{messages[0]["id"]}'))
+        rows.insert(0, button(tr('Открыть скриншот'), f"tk_photo:{messages[0]['id']}"))
     if len(messages) > 1:
-        rows.append(button('Предыдущее сообщение', f'tk:{ticket_id}:{messages[0]["id"]}'))
-    rows.append(button('К последнему сообщению / Обновить', f'tk:{ticket_id}:0'))
+        rows.append(button(tr('Предыдущее сообщение'), f"tk:{ticket_id}:{messages[0]['id']}"))
+    rows.append(button(tr('К последнему сообщению / Обновить'), f'tk:{ticket_id}:0'))
     if admin:
         if ticket['status'] != 'closed':
-            rows.append(button('Закрыть обращение', f'tk_close:{ticket_id}'))
-        rows.append(button('К обращениям', 'tk_admin:active:0'))
+            rows.append(button(tr('Закрыть обращение'), f'tk_close:{ticket_id}'))
+        rows.append(button(tr('К обращениям'), 'tk_admin:active:0'))
     else:
-        rows.append(button('Назад к заказу', f'open_purchase:{ticket["purchase_id"]}'))
-        rows.append(button('Мои обращения', 'tk_user:0'))
+        rows.append(button(tr('Назад к заказу'), f"open_purchase:{ticket['purchase_id']}"))
+        rows.append(button(tr('Мои обращения'), 'tk_user:0'))
     await edit_message_safe(call, text, reply_markup=InlineKeyboardMarkup(inline_keyboard=rows))
 
 
@@ -106,7 +102,7 @@ async def purchase_help(call, state):
         return
     order = await get_purchase_for_user(order_id, call.from_user.id)
     if not order:
-        await answer_safe(call, 'Покупка не найдена.', show_alert=True)
+        await answer_safe(call, tr('Покупка не найдена.'), show_alert=True)
         return
     await state.clear()
     ticket = await store.ticket_for_order(order_id, call.from_user.id)
@@ -115,13 +111,7 @@ async def purchase_help(call, state):
     else:
         await state.update_data(ticket_order_id=order_id)
         await state.set_state(TicketInput.new)
-        await edit_message_safe(
-            call,
-            f'🛟 <b>Помощь по заказу #{order_id}</b>\n\n'
-            'Опишите проблему текстом (до 500 символов). Переписка сохранится в боте. '
-            'Не отправляйте пароли, коды входа и данные сессий.',
-            reply_markup=order_back(order_id),
-        )
+        await edit_message_safe(call, tr('🛟 <b>Помощь по заказу #{0}</b>\n\nОпишите проблему текстом (до 500 символов). Переписка сохранится в боте. Не отправляйте пароли, коды входа и данные сессий.', f'{order_id}'), reply_markup=order_back(order_id))
     await answer_safe(call)
 
 
@@ -132,7 +122,7 @@ async def open_ticket(call, state):
         ticket_id = identifier(value)
         before_id = identifier(before) if before != '0' else 0
     except ValueError:
-        await answer_safe(call, 'Некорректный номер обращения.', show_alert=True)
+        await answer_safe(call, tr('Некорректный номер обращения.'), show_alert=True)
         return
     await state.clear()
     await display_ticket(call, ticket_id, before_id)
@@ -149,17 +139,12 @@ async def start_reply(call, state):
     admin = is_admin(call.from_user.id)
     ticket = await store.get_ticket(ticket_id, None if admin else call.from_user.id)
     if not ticket:
-        await answer_safe(call, 'Обращение не найдено.', show_alert=True)
+        await answer_safe(call, tr('Обращение не найдено.'), show_alert=True)
         return
     await state.clear()
     await state.update_data(ticket_id=ticket_id)
     await state.set_state(TicketInput.reply)
-    await edit_message_safe(
-        call,
-        f'Введите ответ по обращению #{ticket_id} (до 500 символов).\n'
-        'Если обращение закрыто, сообщение откроет его снова. Не отправляйте пароли и коды входа.',
-        reply_markup=InlineKeyboardMarkup(inline_keyboard=[button('Отмена', f'tk:{ticket_id}:0')]),
-    )
+    await edit_message_safe(call, tr('Введите ответ по обращению #{0} (до 500 символов).\nЕсли обращение закрыто, сообщение откроет его снова. Не отправляйте пароли и коды входа.', f'{ticket_id}'), reply_markup=InlineKeyboardMarkup(inline_keyboard=[button(tr('Отмена'), f'tk:{ticket_id}:0')]))
     await answer_safe(call)
 
 
@@ -169,20 +154,17 @@ async def submit_ticket(message, state):
         data = await state.get_data()
         order_id = data.get('ticket_order_id')
         if order_id is None:
-            raise ValueError('Выберите заказ в разделе «Мои покупки».')
-        ticket_id = await store.create_ticket(message.from_user.id, order_id, message.text or getattr(message,'caption',None) or ('Скриншот проблемы' if getattr(message,'photo',None) else ''), **({'photo':message.photo[-1].file_id} if getattr(message,'photo',None) else {}))
+            raise ValueError(tr('Выберите заказ в разделе «Мои покупки».'))
+        ticket_id = await store.create_ticket(message.from_user.id, order_id, message.text or getattr(message, 'caption', None) or (tr('Скриншот проблемы') if getattr(message, 'photo', None) else ''), **{'photo': message.photo[-1].file_id} if getattr(message, 'photo', None) else {})
     except ValueError as exc:
         await message.answer(escape(str(exc)))
         return
     except Exception:
         logger.exception('Failed to save support message for user %s', message.from_user.id)
-        await message.answer('Не удалось сохранить сообщение. Попробуйте отправить его ещё раз позже.')
+        await message.answer(tr('Не удалось сохранить сообщение. Попробуйте отправить его ещё раз позже.'))
         return
     await state.clear()
-    await message.answer(
-        f'✅ Обращение #{ticket_id} сохранено. Поддержка ответит здесь, в боте.',
-        reply_markup=InlineKeyboardMarkup(inline_keyboard=[button('Открыть обращение', f'tk:{ticket_id}:0')]),
-    )
+    await message.answer(tr('✅ Обращение #{0} сохранено. Поддержка ответит здесь, в боте.', f'{ticket_id}'), reply_markup=InlineKeyboardMarkup(inline_keyboard=[button(tr('Открыть обращение'), f'tk:{ticket_id}:0')]))
     await notify(message.bot, ADMIN_IDS, ticket_id, 'Новое сообщение покупателя.')
 
 
@@ -193,28 +175,24 @@ async def submit_reply(message, state):
         data = await state.get_data()
         ticket_id = data.get('ticket_id')
         if ticket_id is None:
-            raise ValueError('Откройте обращение заново.')
-        user_id = await store.reply(ticket_id, message.from_user.id, message.text or getattr(message,'caption',None) or ('Скриншот проблемы' if getattr(message,'photo',None) else ''), admin=admin, **({'photo':message.photo[-1].file_id} if getattr(message,'photo',None) else {}))
+            raise ValueError(tr('Откройте обращение заново.'))
+        user_id = await store.reply(ticket_id, message.from_user.id, message.text or getattr(message, 'caption', None) or (tr('Скриншот проблемы') if getattr(message, 'photo', None) else ''), admin=admin, **{'photo': message.photo[-1].file_id} if getattr(message, 'photo', None) else {})
     except ValueError as exc:
         await message.answer(escape(str(exc)))
         return
     except Exception:
         logger.exception('Failed to save support message for user %s', message.from_user.id)
-        await message.answer('Не удалось сохранить сообщение. Попробуйте отправить его ещё раз позже.')
+        await message.answer(tr('Не удалось сохранить сообщение. Попробуйте отправить его ещё раз позже.'))
         return
     await state.clear()
-    await message.answer(
-        '✅ Сообщение сохранено.',
-        reply_markup=InlineKeyboardMarkup(inline_keyboard=[button('К переписке', f'tk:{ticket_id}:0')]),
-    )
-    await notify(message.bot, [user_id] if admin else ADMIN_IDS, ticket_id,
-                 'Поддержка ответила на ваше обращение.' if admin else 'Новое сообщение покупателя.')
+    await message.answer(tr('✅ Сообщение сохранено.'), reply_markup=InlineKeyboardMarkup(inline_keyboard=[button(tr('К переписке'), f'tk:{ticket_id}:0')]))
+    await notify(message.bot, [user_id] if admin else ADMIN_IDS, ticket_id, tr('Поддержка ответила на ваше обращение.') if admin else tr('Новое сообщение покупателя.'))
 
 
 @ticket_router.callback_query(F.data.startswith('tk_close:'))
 async def close_ticket(call, state):
     if not is_admin(call.from_user.id):
-        await answer_safe(call, 'Доступ запрещён.', show_alert=True)
+        await answer_safe(call, tr('Доступ запрещён.'), show_alert=True)
         return
     try:
         ticket_id = identifier(call.data.split(':', 1)[1])
@@ -224,7 +202,7 @@ async def close_ticket(call, state):
         return
     await state.clear()
     await display_ticket(call, ticket_id)
-    await answer_safe(call, 'Обращение закрыто.')
+    await answer_safe(call, tr('Обращение закрыто.'))
     if user_id is not None:
         await notify(call.bot, [user_id], ticket_id, 'Поддержка закрыла ваше обращение.')
 
@@ -234,8 +212,8 @@ async def show_inbox(call, state):
     try:
         parts = call.data.split(':')
         admin = parts[0] == 'tk_admin'
-        if admin and not is_admin(call.from_user.id):
-            await answer_safe(call, 'Доступ запрещён.', show_alert=True)
+        if admin and (not is_admin(call.from_user.id)):
+            await answer_safe(call, tr('Доступ запрещён.'), show_alert=True)
             return
         if admin:
             _, mode, value = parts
@@ -250,24 +228,21 @@ async def show_inbox(call, state):
         if page > 10000:
             raise ValueError
     except ValueError:
-        await answer_safe(call, 'Некорректная страница.', show_alert=True)
+        await answer_safe(call, tr('Некорректная страница.'), show_alert=True)
         return
     entries = await store.inbox(None if admin else call.from_user.id, mode == 'closed', page)
     await state.clear()
-    rows = [button(f"#{t['id']} · заказ #{t['purchase_id']} · {TICKET_STATUSES.get(t['status'], '')}",
-                   f"tk:{t['id']}:0") for t in entries[:5]]
+    rows = [button(tr('#{0} · заказ #{1} · {2}', f"{t['id']}", f"{t['purchase_id']}", f"{tr(TICKET_STATUSES.get(t['status'], ''))}"), f"tk:{t['id']}:0") for t in entries[:5]]
     prefix = f'tk_admin:{mode}' if admin else 'tk_user'
     if page:
-        rows.append(button('← Назад', f'{prefix}:{page - 1}'))
+        rows.append(button(tr('← Назад'), f'{prefix}:{page - 1}'))
     if len(entries) > 5:
-        rows.append(button('Далее →', f'{prefix}:{page + 1}'))
+        rows.append(button(tr('Далее →'), f'{prefix}:{page + 1}'))
     if admin:
-        rows.append(button('Закрытые' if mode == 'active' else 'Активные',
-                           'tk_admin:closed:0' if mode == 'active' else 'tk_admin:active:0'))
-    rows.append(button('В админ-панель' if admin else 'Мой профиль', 'admin_home' if admin else 'my_profile'))
-    title = 'Обращения покупателей' if admin else 'Мои обращения'
-    await edit_message_safe(call, f'🛟 <b>{title}</b>\n\n' + ('Выберите обращение.' if entries else 'Обращений пока нет.'),
-                            reply_markup=InlineKeyboardMarkup(inline_keyboard=rows))
+        rows.append(button(tr('Закрытые') if mode == 'active' else tr('Активные'), 'tk_admin:closed:0' if mode == 'active' else 'tk_admin:active:0'))
+    rows.append(button(tr('В админ-панель') if admin else tr('Мой профиль'), 'admin_home' if admin else 'my_profile'))
+    title = tr('Обращения покупателей') if admin else tr('Мои обращения')
+    await edit_message_safe(call, f'🛟 <b>{title}</b>\n\n' + (tr('Выберите обращение.') if entries else tr('Обращений пока нет.')), reply_markup=InlineKeyboardMarkup(inline_keyboard=rows))
     await answer_safe(call)
 
 
@@ -275,11 +250,17 @@ async def show_inbox(call, state):
 async def view_photo(call):
     from database.db import _get_pool
     import aiomysql
-    try: message=identifier(call.data.split(':')[1])
-    except ValueError: await call.answer('Некорректный ID');return
+    try:
+        message = identifier(call.data.split(':')[1])
+    except ValueError:
+        await call.answer(tr('Некорректный ID'))
+        return
     async with _get_pool().acquire() as conn:
         async with conn.cursor(aiomysql.DictCursor) as cur:
-            await cur.execute('SELECT m.photo_id FROM support_messages m JOIN support_tickets t ON t.id=m.ticket_id WHERE m.id=%s'+('' if is_admin(call.from_user.id) else ' AND t.user_id=%s'),(message,) if is_admin(call.from_user.id) else (message,call.from_user.id))
-            row=await cur.fetchone()
-    if not row or not row['photo_id']: await call.answer('Вложение недоступно',show_alert=True);return
-    await call.message.answer_photo(row['photo_id']);await call.answer()
+            await cur.execute('SELECT m.photo_id FROM support_messages m JOIN support_tickets t ON t.id=m.ticket_id WHERE m.id=%s' + ('' if is_admin(call.from_user.id) else ' AND t.user_id=%s'), (message,) if is_admin(call.from_user.id) else (message, call.from_user.id))
+            row = await cur.fetchone()
+    if not row or not row['photo_id']:
+        await call.answer(tr('Вложение недоступно'), show_alert=True)
+        return
+    await call.message.answer_photo(row['photo_id'])
+    await call.answer()

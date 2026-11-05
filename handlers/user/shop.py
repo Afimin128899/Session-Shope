@@ -1,4 +1,6 @@
 """Paged Telegram storefront with server-held quotes and shared checkout."""
+from utils.notification_language import send_translated
+from utils.i18n import tr
 import asyncio
 from html import escape
 import logging
@@ -43,17 +45,14 @@ async def open_shop(call: CallbackQuery, state: FSMContext):
     rows = []
     for cat in categories:
         emoji = cat.get('emoji') or ''
-        label = f"{cat['name'][:35]} · от {cat['min_price']:.2f} ₽ · {cat['count']} шт."
-        rows.append([InlineKeyboardButton(
-            text=label if emoji.isdigit() else f'{emoji} {label}'.strip(),
-            callback_data=f"buy_{cat['slug']}", icon_custom_emoji_id=emoji if emoji.isdigit() else None,
-        )])
+        label = tr('{0} · от {1} ₽ · {2} шт.', f"{cat['name'][:35]}", f"{cat['min_price']:.2f}", f"{cat['count']}")
+        rows.append([InlineKeyboardButton(text=label if emoji.isdigit() else f'{emoji} {label}'.strip(), callback_data=f"buy_{cat['slug']}", icon_custom_emoji_id=emoji if emoji.isdigit() else None)])
     rows += pagination(page, total, bot_store.PAGE_SIZE, 'shop_page')
-    rows.append(button('Уведомить о поступлении', 'stock_menu', 'notifications'))
-    rows.append(button('В главное меню', 'back_main', 'back'))
-    text = '<b>Каталог аккаунтов</b>\n\nВыберите категорию. Цены учитывают вашу реферальную скидку.'
+    rows.append(button(tr('Уведомить о поступлении'), 'stock_menu', 'notifications'))
+    rows.append(button(tr('В главное меню'), 'back_main', 'back'))
+    text = tr('<b>Каталог аккаунтов</b>\n\nВыберите категорию. Цены учитывают вашу реферальную скидку.')
     if not categories:
-        text = '<b>Каталог аккаунтов</b>\n\nСейчас свободных аккаунтов нет. Можно подписаться на поступление.'
+        text = tr('<b>Каталог аккаунтов</b>\n\nСейчас свободных аккаунтов нет. Можно подписаться на поступление.')
     await edit_message_safe(call, text, reply_markup=InlineKeyboardMarkup(inline_keyboard=rows))
     await answer_safe(call)
 
@@ -69,20 +68,20 @@ async def select_product(call: CallbackQuery):
             _, sku, raw_page = call.data.split(':')
             page = page_index(raw_page)
         else:
-            sku, page = call.data[4:], 0
+            sku, page = (call.data[4:], 0)
         if not sku or len(sku) > 40:
-            raise ValueError('Категория недоступна.')
+            raise ValueError(tr('Категория недоступна.'))
         cat = await get_category(sku)
         if not cat or not cat['is_active']:
-            raise ValueError('Категория больше недоступна. Обновите каталог.')
+            raise ValueError(tr('Категория больше недоступна. Обновите каталог.'))
     except ValueError as exc:
         await answer_safe(call, str(exc), show_alert=True)
         return
     accounts, total, page = await bot_store.products(call.from_user.id, sku, page)
     rows = [button(f"SBA-{a['id']:06d} · {mask_phone(a['number'])} · {a['price']:.2f} ₽", f"buy_acc:{a['id']}") for a in accounts]
     rows += pagination(page, total, bot_store.PAGE_SIZE, f'items_page:{sku}')
-    rows += [button('Все категории', 'back_buy', 'back')]
-    text = f"<b>{escape(cat['name'])}</b>\n\nСвободно: {total} шт.\nВыберите аккаунт, чтобы проверить цену и гарантию."
+    rows += [button(tr('Все категории'), 'back_buy', 'back')]
+    text = tr('<b>{0}</b>\n\nСвободно: {1} шт.\nВыберите аккаунт, чтобы проверить цену и гарантию.', f"{escape(cat['name'])}", f'{total}')
     await edit_message_safe(call, text, reply_markup=InlineKeyboardMarkup(inline_keyboard=rows))
     await answer_safe(call)
 
@@ -90,40 +89,25 @@ async def select_product(call: CallbackQuery):
 async def show_product(call, state, account_id, promo_code=None):
     item = await bot_store.product(call.from_user.id, account_id)
     if not item:
-        await answer_safe(call, 'Аккаунт уже куплен, скрыт или зарезервирован. Обновите каталог.', show_alert=True)
+        await answer_safe(call, tr('Аккаунт уже куплен, скрыт или зарезервирован. Обновите каталог.'), show_alert=True)
         return
-    promo = await coupons.preview(call.from_user.id,promo_code) if promo_code else None
+    promo = await coupons.preview(call.from_user.id, promo_code) if promo_code else None
     if promo and promo['kind'] != 'discount':
-        raise ValueError('Балансовый промокод активируется в профиле.')
+        raise ValueError(tr('Балансовый промокод активируется в профиле.'))
     from decimal import Decimal
     from miniapp.storage import money
-    pay_price = money(item['price']*(1-Decimal(str(promo['value']))/100)) if promo else item['price']
+    pay_price = money(item['price'] * (1 - Decimal(str(promo['value'])) / 100)) if promo else item['price']
     token = secrets.token_urlsafe(6)
     spam = spam_checks.public(item)
     await state.clear()
-    await state.update_data(purchase_quote={
-        'id': account_id, 'price': str(item['price']), 'warranty_hours': item['warranty_hours'],
-        'spam_status': spam['status'], 'promo_code':promo['code'] if promo else None, 'pay_price':str(pay_price),
-        'token': token, 'expires': time.time() + 600,
-    })
-    hours = 'Не указана' if item['warranty_hours'] is None else f"{item['warranty_hours']} ч"
-    text = (
-        '<b>Подтверждение покупки</b>\n\n'
-        f"Категория: <b>{escape(item['name'])}</b>\nТовар: <code>SBA-{account_id:06d}</code>\n"
-        f"Telegram ID: <code>{item['telegram_user_id'] or 'Не сохранён'}</code>\n"
-        f"Гарантия: {hours}\nРегистрация: {escape(str(item['registration_date'] or 'Не указана'))}\n"
-        f"Premium: {'Не проверено' if item['is_premium'] is None else 'Да' if item['is_premium'] else 'Нет'}\n"
-        f"Спамблок: {escape(spam_checks.description(item))}\n"
-        f"Номер: <code>{escape(mask_phone(item['number']))}</code>\nК оплате: <b>{pay_price:.2f} ₽</b>\n\n"
-        'После оплаты номер и данные входа появятся в покупках. После входа смените пароль и привяжите свою почту. '
-        'Оптовая скидка применяется при оплате корзины в Mini App.'
-    )
-    rows = [button('Обновить проверку', f'buy_acc:{account_id}', 'refresh') if spam['running'] else button(f"Купить за {pay_price:.2f} ₽", f'confirm_buy_acc:{account_id}:{token}', 'confirm'),
-            button('Назад к категории', f"buy_{item['country']}", 'back')]
-    rows.insert(1,button('Изменить промокод' if promo else 'Ввести промокод',f'purchase_promo:{account_id}','reviews'))
+    await state.update_data(purchase_quote={'id': account_id, 'price': str(item['price']), 'warranty_hours': item['warranty_hours'], 'spam_status': spam['status'], 'promo_code': promo['code'] if promo else None, 'pay_price': str(pay_price), 'token': token, 'expires': time.time() + 600})
+    hours = tr('Не указана') if item['warranty_hours'] is None else tr('{0} ч', f"{item['warranty_hours']}")
+    text = tr('<b>Подтверждение покупки</b>\n\nКатегория: <b>{0}</b>\nТовар: <code>SBA-{1}</code>\nTelegram ID: <code>{2}</code>\nГарантия: {3}\nРегистрация: {4}\nPremium: {5}\nСпамблок: {6}\nНомер: <code>{7}</code>\nК оплате: <b>{8} ₽</b>\n\nПосле оплаты номер и данные входа появятся в покупках. После входа смените пароль и привяжите свою почту. Оптовая скидка применяется при оплате корзины в Mini App.', f"{escape(item['name'])}", f'{account_id:06d}', f"{item['telegram_user_id'] or tr('Не сохранён')}", f'{hours}', f"{escape(str(item['registration_date'] or tr('Не указана')))}", f"{(tr('Не проверено') if item['is_premium'] is None else tr('Да') if item['is_premium'] else tr('Нет'))}", f'{escape(spam_checks.description(item))}', f"{escape(mask_phone(item['number']))}", f'{pay_price:.2f}')
+    rows = [button(tr('Обновить проверку'), f'buy_acc:{account_id}', 'refresh') if spam['running'] else button(tr('Купить за {0} ₽', f'{pay_price:.2f}'), f'confirm_buy_acc:{account_id}:{token}', 'confirm'), button(tr('Назад к категории'), f"buy_{item['country']}", 'back')]
+    rows.insert(1, button(tr('Изменить промокод') if promo else tr('Ввести промокод'), f'purchase_promo:{account_id}', 'reviews'))
     if promo:
-        text += f"\n\nПромокод {escape(promo['code'])}: скидка {promo['value']}%."
-        rows.insert(2,button('Убрать промокод',f'buy_acc:{account_id}','cancel'))
+        text += tr('\n\nПромокод {0}: скидка {1}%.', f"{escape(promo['code'])}", f"{promo['value']}")
+        rows.insert(2, button(tr('Убрать промокод'), f'buy_acc:{account_id}', 'cancel'))
     await edit_message_safe(call, text, reply_markup=InlineKeyboardMarkup(inline_keyboard=rows))
     await answer_safe(call)
 
@@ -133,40 +117,39 @@ async def select_specific_account(call: CallbackQuery, state: FSMContext):
     try:
         account_id = positive_id(call.data.split(':')[1])
     except (ValueError, IndexError):
-        await answer_safe(call, 'Некорректный товар. Откройте каталог заново.', show_alert=True)
+        await answer_safe(call, tr('Некорректный товар. Откройте каталог заново.'), show_alert=True)
         return
     await show_product(call, state, account_id)
 
 
 @shop_router.callback_query(F.data.startswith('confirm_buy:') | F.data.startswith('confirm_buy_acc:'))
 async def confirm_purchase(call: CallbackQuery, state: FSMContext):
-    # Old messages never silently purchase a newly priced or different account.
     parts = call.data.split(':')
     if parts[0] == 'confirm_buy':
         rows, _, _ = await bot_store.products(call.from_user.id, parts[1] if len(parts) > 1 else '')
         if rows:
             await show_product(call, state, rows[0]['id'])
         else:
-            await answer_safe(call, 'Обновите каталог: аккаунт недоступен.', show_alert=True)
+            await answer_safe(call, tr('Обновите каталог: аккаунт недоступен.'), show_alert=True)
         return
     try:
         account_id = positive_id(parts[1])
     except (ValueError, IndexError):
-        await answer_safe(call, 'Некорректный товар.', show_alert=True)
+        await answer_safe(call, tr('Некорректный товар.'), show_alert=True)
         return
     async with single_action(call.from_user.id, 'purchase') as acquired:
         if not acquired:
-            await answer_safe(call, 'Покупка уже обрабатывается. Подождите.', show_alert=True)
+            await answer_safe(call, tr('Покупка уже обрабатывается. Подождите.'), show_alert=True)
             return
         quote = (await state.get_data()).get('purchase_quote') or {}
-        if len(parts) != 3 or quote.get('id') != account_id or quote.get('token') != parts[2] or quote.get('expires', 0) <= time.time():
+        if len(parts) != 3 or quote.get('id') != account_id or quote.get('token') != parts[2] or (quote.get('expires', 0) <= time.time()):
             await show_product(call, state, account_id)
             return
         try:
             from decimal import Decimal
-            terms = {'spam_status':quote['spam_status']} if 'spam_status' in quote else {}
+            terms = {'spam_status': quote['spam_status']} if 'spam_status' in quote else {}
             if quote.get('promo_code'):
-                terms.update(promo_code=quote['promo_code'],expected_total=Decimal(quote['pay_price']))
+                terms.update(promo_code=quote['promo_code'], expected_total=Decimal(quote['pay_price']))
             result = await checkout(call.from_user.id, account_id, Decimal(quote['price']), warranty_hours=quote['warranty_hours'], **terms)
         except CheckoutError as exc:
             await answer_safe(call, str(exc), show_alert=True)
@@ -176,20 +159,14 @@ async def confirm_purchase(call: CallbackQuery, state: FSMContext):
         await state.update_data(purchase_quote=None)
         order = await get_purchase_for_user(result['id'], call.from_user.id)
         if not order or order['status'] == 'refunded':
-            await answer_safe(call, 'Откройте «Мои покупки», чтобы проверить статус заказа.', show_alert=True)
+            await answer_safe(call, tr('Откройте «Мои покупки», чтобы проверить статус заказа.'), show_alert=True)
             return
-        text = (
-            f"✅ <b>Покупка #{result['id']} оформлена!</b>\n\n"
-            f"Номер: <code>{escape(order['number'])}</code>\n"
-            f"Пароль 2FA: <code>{escape(order.get('password') or 'Не установлен')}</code>\n"
-            f"Списано: <b>{result['paid_amount']} ₽</b>\nБаланс после покупки: <b>{result['balance']} ₽</b>\n\n"
-            'Введите номер в Telegram и запросите код кнопкой ниже.'
-        )
+        text = tr('✅ <b>Покупка #{0} оформлена!</b>\n\nНомер: <code>{1}</code>\nПароль 2FA: <code>{2}</code>\nСписано: <b>{3} ₽</b>\nБаланс после покупки: <b>{4} ₽</b>\n\nВведите номер в Telegram и запросите код кнопкой ниже.', f"{result['id']}", f"{escape(order['number'])}", f"{escape(order.get('password') or tr('Не установлен'))}", f"{result['paid_amount']}", f"{result['balance']}")
         await edit_message_safe(call, text, reply_markup=await after_purchase_menu(result['id']))
-        await answer_safe(call, 'Покупка оформлена!')
+        await answer_safe(call, tr('Покупка оформлена!'))
         for admin_id in set(ADMIN_IDS):
             try:
-                await call.bot.send_message(admin_id, f"🛍 Заказ #{result['id']} · покупатель {call.from_user.id} · {result['paid_amount']} ₽")
+                await send_translated(call.bot, admin_id, '🛍 Заказ #{0} · покупатель {1} · {2} ₽', f"{result['id']}", f'{call.from_user.id}', f"{result['paid_amount']}")
             except Exception:
                 logger.warning('Sale notification delivery failed')
 
@@ -199,17 +176,17 @@ async def deliver_login_code(call: CallbackQuery):
     try:
         purchase_id = positive_id(call.data.split(':')[1])
     except (ValueError, IndexError):
-        await answer_safe(call, 'Некорректный заказ.', show_alert=True)
+        await answer_safe(call, tr('Некорректный заказ.'), show_alert=True)
         return
     async with single_action(call.from_user.id, f'code:{purchase_id}') as acquired:
         if not acquired:
-            await answer_safe(call, 'Код уже запрашивается. Подождите.', show_alert=True)
+            await answer_safe(call, tr('Код уже запрашивается. Подождите.'), show_alert=True)
             return
         order = await get_purchase_for_user(purchase_id, call.from_user.id)
-        if not order or order['status'] != 'issued' or not order.get('data') or order['data'] == bot_store.DELETED_SESSION:
-            await answer_safe(call, 'Заказ недоступен для получения кода. Откройте «Мои покупки».', show_alert=True)
+        if not order or order['status'] != 'issued' or (not order.get('data')) or (order['data'] == bot_store.DELETED_SESSION):
+            await answer_safe(call, tr('Заказ недоступен для получения кода. Откройте «Мои покупки».'), show_alert=True)
             return
-        await answer_safe(call, 'Запрашиваем код…')
+        await answer_safe(call, tr('Запрашиваем код…'))
         from services.telethon_code import try_fetch_login_code
         try:
             code = await asyncio.wait_for(try_fetch_login_code(order['data'], order['number']), timeout=30)
@@ -217,18 +194,14 @@ async def deliver_login_code(call: CallbackQuery):
             code = None
         current = await get_purchase_for_user(purchase_id, call.from_user.id)
         if not current or current['status'] != 'issued' or current.get('data') != order['data']:
-            await answer_safe(call, 'Состояние заказа изменилось. Откройте покупку заново.', show_alert=True)
+            await answer_safe(call, tr('Состояние заказа изменилось. Откройте покупку заново.'), show_alert=True)
             return
         if code == 'SESSION_NOT_AUTHORIZED':
-            await answer_safe(call, 'Сессия неактивна. Откройте обращение по заказу в поддержку.', show_alert=True)
+            await answer_safe(call, tr('Сессия неактивна. Откройте обращение по заказу в поддержку.'), show_alert=True)
         elif code:
-            await edit_message_safe(call,
-                f"<b>Код входа · заказ #{purchase_id}</b>\n\nНомер: <code>{escape(current['number'])}</code>\n"
-                f"Код: <code>{escape(code)}</code>\nПароль 2FA: <code>{escape(current.get('password') or 'Не установлен')}</code>\n\n"
-                'Не передавайте код другим людям. После входа смените пароль и привяжите почту.',
-                reply_markup=await after_purchase_menu(purchase_id))
+            await edit_message_safe(call, tr('<b>Код входа · заказ #{0}</b>\n\nНомер: <code>{1}</code>\nКод: <code>{2}</code>\nПароль 2FA: <code>{3}</code>\n\nНе передавайте код другим людям. После входа смените пароль и привяжите почту.', f'{purchase_id}', f"{escape(current['number'])}", f'{escape(code)}', f"{escape(current.get('password') or tr('Не установлен'))}"), reply_markup=await after_purchase_menu(purchase_id))
         else:
-            await answer_safe(call, 'Код пока не пришёл. Введите номер в Telegram и повторите через 10 секунд.', show_alert=True)
+            await answer_safe(call, tr('Код пока не пришёл. Введите номер в Telegram и повторите через 10 секунд.'), show_alert=True)
 
 
 class PurchasePromo(StatesGroup):
@@ -238,34 +211,39 @@ class PurchasePromo(StatesGroup):
 @shop_router.callback_query(F.data.startswith('purchase_promo:'))
 async def ask_purchase_promo(call, state):
     try:
-        account_id=positive_id(call.data.split(':')[1])
-    except (ValueError,IndexError):
-        await answer_safe(call,'Некорректный товар.',show_alert=True);return
+        account_id = positive_id(call.data.split(':')[1])
+    except (ValueError, IndexError):
+        await answer_safe(call, tr('Некорректный товар.'), show_alert=True)
+        return
     await state.clear()
     await state.update_data(promo_account_id=account_id)
     await state.set_state(PurchasePromo.waiting)
-    await edit_message_safe(call,'Введите промокод. Итоговая сумма появится до подтверждения покупки.',reply_markup=InlineKeyboardMarkup(inline_keyboard=[button('Отмена',f'buy_acc:{account_id}','cancel')]))
+    await edit_message_safe(call, tr('Введите промокод. Итоговая сумма появится до подтверждения покупки.'), reply_markup=InlineKeyboardMarkup(inline_keyboard=[button(tr('Отмена'), f'buy_acc:{account_id}', 'cancel')]))
     await answer_safe(call)
 
 
 @shop_router.message(PurchasePromo.waiting,F.text & ~F.text.startswith('/'))
 async def enter_purchase_promo(message: Message, state: FSMContext):
-    account_id=(await state.get_data()).get('promo_account_id')
+    account_id = (await state.get_data()).get('promo_account_id')
     if not account_id:
-        await state.clear();await message.answer('Откройте товар заново.');return
-    async with single_action(message.from_user.id,'purchase_promo') as acquired:
-        if not acquired: return
+        await state.clear()
+        await message.answer(tr('Откройте товар заново.'))
+        return
+    async with single_action(message.from_user.id, 'purchase_promo') as acquired:
+        if not acquired:
+            return
         try:
-            promo=await coupons.preview(message.from_user.id,message.text)
-            if promo['kind']=='balance':
-                amount=await coupons.redeem_balance(message.from_user.id,promo['code'])
-                await message.answer(f'Промокод активирован. На баланс зачислено {amount:.2f} ₽.')
-                promo=None
+            promo = await coupons.preview(message.from_user.id, message.text)
+            if promo['kind'] == 'balance':
+                amount = await coupons.redeem_balance(message.from_user.id, promo['code'])
+                await message.answer(tr('Промокод активирован. На баланс зачислено {0} ₽.', f'{amount:.2f}'))
+                promo = None
             from types import SimpleNamespace
-            screen=await message.answer('Проверяем условия покупки…')
-            async def acknowledge(*args,**kwargs):
+            screen = await message.answer(tr('Проверяем условия покупки…'))
+
+            async def acknowledge(*args, **kwargs):
                 return None
-            call=SimpleNamespace(message=screen,from_user=message.from_user,answer=acknowledge,data=f'buy_acc:{account_id}')
-            await show_product(call,state,account_id,promo['code'] if promo else None)
+            call = SimpleNamespace(message=screen, from_user=message.from_user, answer=acknowledge, data=f'buy_acc:{account_id}')
+            await show_product(call, state, account_id, promo['code'] if promo else None)
         except ValueError as exc:
-            await message.answer(str(exc)+' Введите другой код или /cancel.')
+            await message.answer(str(exc) + tr(' Введите другой код или /cancel.'))

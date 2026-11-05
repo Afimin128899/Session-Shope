@@ -1,4 +1,5 @@
 """Transactional support conversation storage. User operations enforce ownership."""
+from utils.i18n import tr
 import aiomysql
 
 from database.db import _get_pool
@@ -10,7 +11,7 @@ MAX_MESSAGE_LENGTH = 500
 def validate_body(body):
     body = body.strip()
     if not body or len(body) > MAX_MESSAGE_LENGTH:
-        raise ValueError('Введите сообщение от 1 до 500 символов.')
+        raise ValueError(tr('Введите сообщение от 1 до 500 символов.'))
     return body
 
 
@@ -35,28 +36,23 @@ async def ticket_for_order(purchase_id, user_id):
 async def create_ticket(user_id, purchase_id, body, warranty=False, photo=None):
     body = validate_body(body)
     async with _transaction() as cur:
-        # Serializes concurrent submissions for a single order.
-        fields = "id,status,warranty_until>UTC_TIMESTAMP() AS warranty_active" if warranty else 'id'
-        await cur.execute('SELECT '+fields+' FROM purchases WHERE id = %s AND user_id = %s FOR UPDATE', (purchase_id, user_id))
+        fields = 'id,status,warranty_until>UTC_TIMESTAMP() AS warranty_active' if warranty else 'id'
+        await cur.execute('SELECT ' + fields + ' FROM purchases WHERE id = %s AND user_id = %s FOR UPDATE', (purchase_id, user_id))
         order = await cur.fetchone()
         if order is None:
-            raise ValueError('Покупка не найдена.')
-        if warranty and (not order.get('warranty_active') or order['status']=='refunded'):
-            raise ValueError('Гарантия не действует. Обычная поддержка по заказу доступна в боте.')
+            raise ValueError(tr('Покупка не найдена.'))
+        if warranty and (not order.get('warranty_active') or order['status'] == 'refunded'):
+            raise ValueError(tr('Гарантия не действует. Обычная поддержка по заказу доступна в боте.'))
         await cur.execute('SELECT id FROM support_tickets WHERE purchase_id = %s FOR UPDATE', (purchase_id,))
         ticket = await cur.fetchone()
         if ticket:
             ticket_id = ticket['id']
             await cur.execute("UPDATE support_tickets SET status = 'open', updated_at = UTC_TIMESTAMP() WHERE id = %s", (ticket_id,))
         else:
-            await cur.execute(
-                'INSERT INTO support_tickets (purchase_id, user_id, status, created_at, updated_at) '
-                "VALUES (%s, %s, 'open', UTC_TIMESTAMP(), UTC_TIMESTAMP())",
-                (purchase_id, user_id),
-            )
+            await cur.execute("INSERT INTO support_tickets (purchase_id, user_id, status, created_at, updated_at) VALUES (%s, %s, 'open', UTC_TIMESTAMP(), UTC_TIMESTAMP())", (purchase_id, user_id))
             ticket_id = cur.lastrowid
         if warranty:
-            await cur.execute('UPDATE support_tickets SET warranty_claimed_at=COALESCE(warranty_claimed_at,UTC_TIMESTAMP()) WHERE id=%s',(ticket_id,))
+            await cur.execute('UPDATE support_tickets SET warranty_claimed_at=COALESCE(warranty_claimed_at,UTC_TIMESTAMP()) WHERE id=%s', (ticket_id,))
         await _message(cur, ticket_id, user_id, 'user', body, photo)
         return ticket_id
 
@@ -111,17 +107,12 @@ async def inbox(user_id=None, closed=False, page=0):
 async def reply(ticket_id, author_id, body, admin=False, photo=None):
     body = validate_body(body)
     async with _transaction() as cur:
-        await cur.execute(
-            'SELECT id, user_id FROM support_tickets WHERE id = %s' +
-            ('' if admin else ' AND user_id = %s') + ' FOR UPDATE',
-            (ticket_id,) if admin else (ticket_id, author_id),
-        )
+        await cur.execute('SELECT id, user_id FROM support_tickets WHERE id = %s' + ('' if admin else ' AND user_id = %s') + ' FOR UPDATE', (ticket_id,) if admin else (ticket_id, author_id))
         ticket = await cur.fetchone()
         if ticket is None:
-            raise ValueError('Обращение не найдено.')
+            raise ValueError(tr('Обращение не найдено.'))
         await _message(cur, ticket_id, author_id, 'admin' if admin else 'user', body, photo)
-        await cur.execute('UPDATE support_tickets SET status = %s, updated_at = UTC_TIMESTAMP() WHERE id = %s',
-                          ('waiting_user' if admin else 'open', ticket_id))
+        await cur.execute('UPDATE support_tickets SET status = %s, updated_at = UTC_TIMESTAMP() WHERE id = %s', ('waiting_user' if admin else 'open', ticket_id))
         if admin:
             await _record(cur, author_id, 'ticket_reply', 'ticket', ticket_id, {'recipient_id': ticket['user_id']})
         return ticket['user_id']
@@ -132,7 +123,7 @@ async def close_ticket(ticket_id, admin_id):
         await cur.execute('SELECT user_id, status FROM support_tickets WHERE id = %s FOR UPDATE', (ticket_id,))
         ticket = await cur.fetchone()
         if ticket is None:
-            raise ValueError('Обращение не найдено.')
+            raise ValueError(tr('Обращение не найдено.'))
         if ticket['status'] == 'closed':
             return None
         await cur.execute("UPDATE support_tickets SET status = 'closed', updated_at = UTC_TIMESTAMP() WHERE id = %s", (ticket_id,))

@@ -1,4 +1,5 @@
 """Preview and confirm broadcasts, send in bounded batches, allow stopping."""
+from utils.i18n import tr
 import asyncio
 from datetime import datetime
 import secrets
@@ -35,10 +36,10 @@ def _markup_from_spec(spec):
     if spec == '-':
         return None
     label, separator, url = spec.partition('|')
-    label, url = label.strip(), url.strip()
+    label, url = (label.strip(), url.strip())
     parsed = urlsplit(url)
-    if not separator or not 1 <= len(label) <= 64 or len(url) > 2048 or parsed.scheme not in {'https', 'http'} or not parsed.hostname or parsed.username or parsed.password:
-        raise ValueError('Введите Подпись|https://ссылка (подпись до 64 символов) или - без кнопки.')
+    if not separator or not 1 <= len(label) <= 64 or len(url) > 2048 or (parsed.scheme not in {'https', 'http'}) or (not parsed.hostname) or parsed.username or parsed.password:
+        raise ValueError(tr('Введите Подпись|https://ссылка (подпись до 64 символов) или - без кнопки.'))
     return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text=label, url=url)]])
 
 
@@ -58,12 +59,11 @@ async def broadcast_start(call: CallbackQuery, state: FSMContext):
         await answer_safe(call)
         return
     if call.from_user.id in _jobs:
-        await answer_safe(call, 'Рассылка уже выполняется. Дождитесь окончания или нажмите «Остановить».', show_alert=True)
+        await answer_safe(call, tr('Рассылка уже выполняется. Дождитесь окончания или нажмите «Остановить».'), show_alert=True)
         return
     await state.clear()
     await state.set_state(BroadcastState.waiting_content)
-    await edit_message_safe(call, 'Отправьте текст или фото с подписью. Перед отправкой будет предпросмотр и подтверждение. Отмена: /cancel.',
-        reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text='Отмена', callback_data='admin_home')]]))
+    await edit_message_safe(call, tr('Отправьте текст или фото с подписью. Перед отправкой будет предпросмотр и подтверждение. Отмена: /cancel.'), reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text=tr('Отмена'), callback_data='admin_home')]]))
     await answer_safe(call)
 
 
@@ -71,12 +71,12 @@ async def broadcast_start(call: CallbackQuery, state: FSMContext):
 async def broadcast_got_content(message: Message, state: FSMContext):
     if not is_admin(message.from_user.id):
         return
-    if not message.text and not message.photo:
-        await message.answer('Нужен текст или фото. Отмена: /cancel.')
+    if not message.text and (not message.photo):
+        await message.answer(tr('Нужен текст или фото. Отмена: /cancel.'))
         return
     await state.update_data(bc_source_chat=message.chat.id, bc_source_msg=message.message_id)
     await state.set_state(BroadcastState.waiting_button)
-    await message.answer('Кнопка: <code>Подпись|https://ссылка</code>\nИли <code>-</code> без кнопки.')
+    await message.answer(tr('Кнопка: <code>Подпись|https://ссылка</code>\nИли <code>-</code> без кнопки.'))
 
 
 @broadcast_router.message(BroadcastState.waiting_button, F.text)
@@ -94,21 +94,17 @@ async def broadcast_preview(message: Message, state: FSMContext, bot: Bot):
     token = secrets.token_urlsafe(6)
     await state.update_data(bc_spec=message.text, bc_token=token)
     await state.set_state(BroadcastState.waiting_confirm)
-    await message.answer(f'Это предпросмотр. Пользователей сейчас: {count}. Отправить рассылку?',
-        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text='Подтвердить отправку', callback_data='bc_send:' + token)],
-            [InlineKeyboardButton(text='Отмена', callback_data='admin_home')],
-        ]))
+    await message.answer(tr('Это предпросмотр. Пользователей сейчас: {0}. Отправить рассылку?', f'{count}'), reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text=tr('Подтвердить отправку'), callback_data='bc_send:' + token)], [InlineKeyboardButton(text=tr('Отмена'), callback_data='admin_home')]]))
 
 
 @broadcast_router.callback_query(F.data.startswith('bc_stop:'))
 async def stop_broadcast(call: CallbackQuery):
     job = _jobs.get(call.from_user.id)
-    if is_admin(call.from_user.id) and job and job['token'] == call.data.split(':', 1)[1]:
+    if is_admin(call.from_user.id) and job and (job['token'] == call.data.split(':', 1)[1]):
         job['stop'] = True
-        await answer_safe(call, 'Остановим после текущей отправки.')
+        await answer_safe(call, tr('Остановим после текущей отправки.'))
     else:
-        await answer_safe(call, 'Рассылка уже закончилась или недоступна.')
+        await answer_safe(call, tr('Рассылка уже закончилась или недоступна.'))
 
 
 @broadcast_router.callback_query(F.data.startswith('bc_send:'))
@@ -118,11 +114,11 @@ async def broadcast_run(call: CallbackQuery, state: FSMContext, bot: Bot):
         return
     async with single_action(call.from_user.id, 'broadcast') as acquired:
         if not acquired:
-            await answer_safe(call, 'Рассылка уже выполняется.')
+            await answer_safe(call, tr('Рассылка уже выполняется.'))
             return
         data = await state.get_data()
         if not data.get('bc_token') or data['bc_token'] != call.data.split(':', 1)[1]:
-            await answer_safe(call, 'Подтверждение устарело. Создайте рассылку заново.', show_alert=True)
+            await answer_safe(call, tr('Подтверждение устарело. Создайте рассылку заново.'), show_alert=True)
             return
         markup = _markup_from_spec(data['bc_spec'])
         total, ceiling = await recipients()
@@ -131,10 +127,8 @@ async def broadcast_run(call: CallbackQuery, state: FSMContext, bot: Bot):
         _jobs[call.from_user.id] = job
         ok = failed = after = 0
         try:
-            await answer_safe(call, 'Рассылка началась.')
-            await call.message.answer(f'Рассылка началась. Получателей: {total}.', reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
-                InlineKeyboardButton(text='Остановить рассылку', callback_data='bc_stop:' + job['token']),
-            ]]))
+            await answer_safe(call, tr('Рассылка началась.'))
+            await call.message.answer(tr('Рассылка началась. Получателей: {0}.', f'{total}'), reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text=tr('Остановить рассылку'), callback_data='bc_stop:' + job['token'])]]))
             while not job['stop']:
                 batch = await recipients(after, ceiling)
                 if not batch:
@@ -158,9 +152,7 @@ async def broadcast_run(call: CallbackQuery, state: FSMContext, bot: Bot):
                     except Exception:
                         failed += 1
                     await asyncio.sleep(0.05)
-            await log_broadcast(call.from_user.id, datetime.now(ZoneInfo('Europe/Moscow')).strftime('%Y-%m-%d %H:%M:%S'), total, ok, failed,
-                                ('Остановлена' if job['stop'] else 'Завершена') + ': ' + data['bc_spec'][:160])
-            await call.message.answer(f"Рассылка {'остановлена' if job['stop'] else 'завершена'}.\nДоставлено: {ok}\nОшибок: {failed}\nНе отправлено: {max(0,total-ok-failed)}",
-                reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text='В админ-панель', callback_data='admin_home')]]))
+            await log_broadcast(call.from_user.id, datetime.now(ZoneInfo('Europe/Moscow')).strftime('%Y-%m-%d %H:%M:%S'), total, ok, failed, (tr('Остановлена') if job['stop'] else tr('Завершена')) + ': ' + data['bc_spec'][:160])
+            await call.message.answer(tr('Рассылка {0}.\nДоставлено: {1}\nОшибок: {2}\nНе отправлено: {3}', f"{(tr('остановлена') if job['stop'] else tr('завершена'))}", f'{ok}', f'{failed}', f'{max(0, total - ok - failed)}'), reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text=tr('В админ-панель'), callback_data='admin_home')]]))
         finally:
             _jobs.pop(call.from_user.id, None)

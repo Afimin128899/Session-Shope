@@ -1,4 +1,5 @@
 """Build a Telegram support draft containing only the order reference."""
+from utils.i18n import tr
 import re
 from urllib.parse import urlencode, urlsplit
 
@@ -11,8 +12,6 @@ def purchase_support_url(contact: str, purchase_id: int) -> str | None:
             return None
         contact = parsed.path.strip('/')
     username = contact.lstrip('@')
-    if not re.fullmatch(r'[A-Za-z][A-Za-z0-9_]{4,31}', username):
+    if not re.fullmatch('[A-Za-z][A-Za-z0-9_]{4,31}', username):
         return None
-    return f'https://t.me/{username}?' + urlencode({
-        'text': f'Здравствуйте! Есть проблема с заказом #{purchase_id}.\nОписание проблемы: ',
-    })
+    return f'https://t.me/{username}?' + urlencode({'text': tr('Здравствуйте! Есть проблема с заказом #{0}.\nОписание проблемы: ', f'{purchase_id}')})

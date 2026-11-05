@@ -1,4 +1,5 @@
 """Native Stars invoices and disk-backed replay of trusted Telegram receipts."""
+from utils.i18n import tr
 import asyncio
 from contextlib import suppress
 import hashlib
@@ -14,17 +15,19 @@ logger=logging.getLogger(__name__)
 
 
 def fields(row):
-    return dict(title='Пополнение Sband ACCS',description=f"{row['stars']} ⭐ → {row['amount']} ₽. Курс: 1 ⭐ = 1,20 ₽.",payload='sband_stars:'+row['invoice_id'],currency='XTR',provider_token='',prices=[LabeledPrice(label='Пополнение баланса',amount=row['stars'])])
+    return dict(title=tr('Пополнение Sband ACCS'),description=tr('{0} ⭐ → {1} ₽. Курс: 1 ⭐ = 1,20 ₽.', row['stars'],row['amount']),payload='sband_stars:'+row['invoice_id'],currency='XTR',provider_token='',prices=[LabeledPrice(label=tr('Пополнение баланса'),amount=row['stars'])])
 
 
-async def create_invoice(bot,user_id,count):
-    if bot is None: raise ValueError('Откройте оплату в Telegram-боте.')
-    row=await ledger.register_invoice(user_id,ledger.parse_count(count))
-    url=await bot.create_invoice_link(**fields(row))
+async def create_invoice(bot, user_id, count):
+    if bot is None:
+        raise ValueError(tr('Откройте оплату в Telegram-боте.'))
+    row = await ledger.register_invoice(user_id, ledger.parse_count(count))
+    url = await bot.create_invoice_link(**fields(row))
     from urllib.parse import urlsplit
-    parsed=urlsplit(url)
-    if parsed.scheme!='https' or parsed.hostname not in {'t.me','telegram.me'} or parsed.username or parsed.password: raise ValueError('Telegram не вернул ссылку на оплату.')
-    return {'provider':'stars','invoice_id':row['invoice_id'],'pay_url':url,'amount':row['amount'],'stars':row['stars'],'rate':'1.20','currency':'XTR'}
+    parsed = urlsplit(url)
+    if parsed.scheme != 'https' or parsed.hostname not in {'t.me', 'telegram.me'} or parsed.username or parsed.password:
+        raise ValueError(tr('Telegram не вернул ссылку на оплату.'))
+    return {'provider': 'stars', 'invoice_id': row['invoice_id'], 'pay_url': url, 'amount': row['amount'], 'stars': row['stars'], 'rate': '1.20', 'currency': 'XTR'}
 
 
 async def send_invoice(bot,user_id,count):
@@ -78,7 +81,8 @@ async def replay(bot):
             logger.warning('Stars receipt replay deferred')
             continue
         if amount is not None and event['kind']=='paid':
-            with suppress(Exception): await bot.send_message(event['user_id'],f'⭐ Зачислено {amount:.2f} ₽.')
+            from utils.notification_language import send_translated
+            with suppress(Exception): await send_translated(bot,event['user_id'],'⭐ Зачислено {0} ₽.',f'{amount:.2f}')
 
 
 async def stars_worker(bot):
