@@ -43,8 +43,8 @@ async def send_sub_prompt(event: CallbackQuery | Message, bot: Bot):
         url = f'https://t.me/{ch}'
     text = tr("<tg-emoji emoji-id='{0}'>📢</tg-emoji> <b>Обязательная подписка</b>\n\nДля доступа к боту необходимо подписаться на наш официальный канал!\n\n<blockquote><tg-emoji emoji-id='{1}'>📍</tg-emoji> <b>Ссылка на наш канал:</b>\n{2}</blockquote>\n\n<i>После подписки нажмите кнопку <b>«<tg-emoji emoji-id='{3}'>✅</tg-emoji> Я подписался»</b> ниже 👇</i>", f'{EMOJI_MEGA}', f'{EMOJI_PIN}', f'{escape(url)}', f'{EMOJI_CHECK}')
     kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text=tr('Подписаться на канал'), url=url, icon_custom_emoji_id=EMOJI_MEGA)], [InlineKeyboardButton(text=tr('Я подписался'), callback_data='check_sub_status', icon_custom_emoji_id=EMOJI_CHECK)]])
-    from utils.legal import document_rows
-    kb.inline_keyboard.extend(document_rows())
+    from utils.legal import information_button
+    kb.inline_keyboard.append([information_button()])
     if isinstance(event, CallbackQuery):
         await edit_message_safe(event, text, reply_markup=kb)
         await answer_safe(event)

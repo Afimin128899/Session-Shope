@@ -12,8 +12,8 @@ def maintenance_keyboard() -> InlineKeyboardMarkup:
     import re
     if re.fullmatch('@?[A-Za-z0-9_]{5,32}', SUPPORT_USERNAME or ''):
         rows.append([InlineKeyboardButton(text=tr('💬 Поддержка'), url='https://t.me/' + SUPPORT_USERNAME.lstrip('@'))])
-    from utils.legal import document_rows
-    rows.extend(document_rows())
+    from utils.legal import information_button
+    rows.append([information_button()])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
@@ -36,7 +36,7 @@ class MaintenanceMiddleware(BaseMiddleware):
         from utils.payment_events import is_payment_event
         if is_payment_event(event):
             return await handler(event, data)
-        if isinstance(event, CallbackQuery) and (event.data == 'language' or (event.data or '').startswith('language:')):
+        if isinstance(event, CallbackQuery) and (event.data in {'language', 'info_menu'} or (event.data or '').startswith('language:')):
             return await handler(event, data)
         if isinstance(event, Message) and (event.text or '').split('@')[0].strip() == '/language':
             return await handler(event, data)

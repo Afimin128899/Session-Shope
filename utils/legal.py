@@ -13,3 +13,7 @@ def document_rows():
     return [[InlineKeyboardButton(text=tr('Политика конфиденциальности'), url=PRIVACY_URL, icon_custom_emoji_id=icon_for('info'))],
             [InlineKeyboardButton(text=tr('Пользовательское соглашение'), url=AGREEMENT_URL, icon_custom_emoji_id=icon_for('info'))],
             [InlineKeyboardButton(text=tr('Цены и поддержка'), url=ABOUT_URL, icon_custom_emoji_id=icon_for('support'))]]
+
+
+def information_button():
+    return InlineKeyboardButton(text=tr('Информация'), callback_data='info_menu', icon_custom_emoji_id=icon_for('info'))

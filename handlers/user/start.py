@@ -6,7 +6,7 @@ from aiogram.types import CallbackQuery, Message, InlineKeyboardButton, InlineKe
 
 from database.db import create_user_with_referrer, is_new_user, get_setting, update_user_username
 
-from keyboards.user_kb import main_menu, back_to_main_menu
+from keyboards.user_kb import main_menu, information_menu
 from utils import constants as c
 from utils.nav import edit_message_safe, answer_safe
 from utils.section_banners import answer_screen
@@ -70,7 +70,7 @@ async def callback_back_main(call: CallbackQuery, state=None):
 @start_router.callback_query(F.data == "info_menu")
 async def show_info(call: CallbackQuery):
     info_text = c.info_text()
-    await edit_message_safe(call, info_text, reply_markup=back_to_main_menu())
+    await edit_message_safe(call, info_text, reply_markup=information_menu())
     await answer_safe(call)
 
 
