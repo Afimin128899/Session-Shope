@@ -7,7 +7,7 @@
   const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const num = v => new Intl.NumberFormat(window.SbandI18n.locale, { maximumFractionDigits: 2 }).format(Number(v || 0));
   const rub = v => num(v) + ' ₽';
-  const spamLabel = check => check?.running ? SbandT("Проверяется…") : (check?.label || SbandT("Не проверен"));
+  const spamLabel = check => check?.running ? SbandT('Проверяется…') : check?.status === 'clear' ? SbandT('Нет спамблока') : check?.status === 'limited' ? SbandT('Есть спамблок') : (check?.label || SbandT('Не проверен'));
   const spamTime = check => check?.checked_at ? new Date(check.checked_at).toLocaleString(window.SbandI18n.locale,{timeZone:'Europe/Moscow'})+SbandT(" МСК") : SbandT("Пока не проверялся");
   const flags = { us: '🇺🇸', ru: '🇷🇺', kz: '🇰🇿', ua: '🇺🇦', gb: '🇬🇧', de: '🇩🇪', fr: '🇫🇷', in: '🇮🇳', tr: '🇹🇷', uz: '🇺🇿', nl: '🇳🇱', ca: '🇨🇦', pl: '🇵🇱', br: '🇧🇷' };
   let toastTimer, searchTimer;
@@ -57,7 +57,7 @@
     $('#sync-state').textContent=SbandT("🛠 Технические работы");notice();
   }
   function render() {
-    $('#catalog-grid').innerHTML = state.items.map(item => SbandT("<article class=\"account-card\"><div class=\"card-head\"><span class=\"flag\" aria-hidden=\"true\">{0}</span><div class=\"card-head-right\">{1}<button class=\"heart {2}\" data-favorite=\"{3}\" aria-label=\"{4}\" aria-pressed=\"{5}\">{6}</button></div></div><h3>{7}</h3><span class=\"stock-tag {8}\">{9}</span><button class=\"feature-link\" data-features=\"{10}\">Характеристики {11}</button><div class=\"card-phone\">{12}</div><div class=\"spam-line {13}\" title=\"{14}\">Спамблок: {15}</div><div class=\"ids\"><div><span>Товар</span><b>{16}</b></div><div><span>Telegram ID</span><b>{17}</b></div></div><div class=\"card-bottom\"><div>{18}<span class=\"card-price\">{19}<small>₽</small></span></div><button class=\"buy-button {20}\" data-add=\"{21}\" {22} aria-label=\"{23} {24}\">{25}</button></div>{26}</article>",flags[item.category] || '✳',item.characteristics?.is_premium ? '<span class="premium-badge">Premium</span>' : '',item.favorite ? 'selected' : '',item.id,item.favorite ? SbandT("Убрать из избранного") : SbandT("В избранное"),item.favorite,item.favorite ? '♥' : '♡',esc(item.name),item.available ? '' : 'unavailable',item.available ? SbandT("В наличии") : SbandT("Недоступен"),item.id,item.characteristics?.warranty_hours ? '· '+item.characteristics.warranty_hours+SbandT(" ч гарантии") : '↗',esc(item.phone),item.characteristics?.spam_check?.status === 'limited' ? 'spam-limited' : '',esc(spamTime(item.characteristics?.spam_check)),esc(spamLabel(item.characteristics?.spam_check)),esc(item.product_id),esc(item.telegram_user_id || SbandT("Не сохранён")),Number(item.discount)>0 ? `<span class="old-price"><s>${rub(item.original_price)}</s><span class="discount-badge">−${num(item.discount)}%</span></span>` : '',num(item.price),item.in_cart ? 'added' : '',item.id,!item.available || state.me?.shop_status?.sales_paused ? 'disabled' : '',item.in_cart ? SbandT("Обновить резерв") : SbandT("В корзину"),esc(item.name),item.in_cart ? '✓' : '+',item.in_cart ? SbandT("<div class=\"reserve\" data-until=\"{0}\"></div><button class=\"remove-button\" data-remove=\"{1}\">Убрать из корзины</button>",esc(item.reserved_until || ''),item.id) : '')).join('');
+    $('#catalog-grid').innerHTML = state.items.map(item => SbandT("<article class=\"account-card\"><div class=\"card-head\"><span class=\"flag\" aria-hidden=\"true\">{0}</span><div class=\"card-head-right\">{1}<button class=\"heart {2}\" data-favorite=\"{3}\" aria-label=\"{4}\" aria-pressed=\"{5}\">{6}</button></div></div><h3>{7}</h3><span class=\"stock-tag {8}\">{9}</span><button class=\"feature-link\" data-features=\"{10}\">Характеристики {11}</button><div class=\"card-phone\">{12}</div><div class=\"spam-line {13}\" data-spam-status=\"{10}\" aria-live=\"polite\" title=\"{14}\">Спамблок: {15}</div><div class=\"ids\"><div><span>Товар</span><b>{16}</b></div><div><span>Telegram ID</span><b>{17}</b></div></div><div class=\"card-bottom\"><div>{18}<span class=\"card-price\">{19}<small>₽</small></span></div><button class=\"buy-button {20}\" data-add=\"{21}\" {22} aria-label=\"{23} {24}\">{25}</button></div>{26}</article>",flags[item.category] || '✳',item.characteristics?.is_premium ? '<span class="premium-badge">Premium</span>' : '',item.favorite ? 'selected' : '',item.id,item.favorite ? SbandT("Убрать из избранного") : SbandT("В избранное"),item.favorite,item.favorite ? '♥' : '♡',esc(item.name),item.available ? '' : 'unavailable',item.available ? SbandT("В наличии") : SbandT("Недоступен"),item.id,item.characteristics?.warranty_hours ? '· '+item.characteristics.warranty_hours+SbandT(" ч гарантии") : '↗',esc(item.phone),item.characteristics?.spam_check?.status === 'limited' ? 'spam-limited' : '',esc(spamTime(item.characteristics?.spam_check)),esc(spamLabel(item.characteristics?.spam_check)),esc(item.product_id),esc(item.telegram_user_id || SbandT("Не сохранён")),Number(item.discount)>0 ? `<span class="old-price"><s>${rub(item.original_price)}</s><span class="discount-badge">−${num(item.discount)}%</span></span>` : '',num(item.price),item.in_cart ? 'added' : '',item.id,!item.available || state.me?.shop_status?.sales_paused ? 'disabled' : '',item.in_cart ? SbandT("Обновить резерв") : SbandT("В корзину"),esc(item.name),item.in_cart ? '✓' : '+',item.in_cart ? SbandT("<div class=\"reserve\" data-until=\"{0}\"></div><button class=\"remove-button\" data-remove=\"{1}\">Убрать из корзины</button>",esc(item.reserved_until || ''),item.id) : '')).join('');
     $('#catalog-empty').hidden = state.items.length > 0;
     const empty = state.tab === 'cart' ? [SbandT("Корзина пока пуста"), SbandT("Добавь аккаунт — он будет зарезервирован на 5 минут.")] : state.tab === 'favorites' ? [SbandT("Сохрани то, что нравится"), SbandT("Нажми ♡ в каталоге. О снижении цены сообщим в боте.")] : [SbandT("Пока ничего не найдено"), SbandT("Попробуй изменить фильтры или загляни позже.")];
     $('#empty-title').textContent = empty[0]; $('#empty-copy').textContent = empty[1];
@@ -353,6 +353,60 @@
       if ($('#verify-invoice')) $('#verify-invoice').disabled = true;
     }
   }
+  async function showReferrals() {
+    const revision = ++state.dialogRevision;
+    try {
+      const data = await api('referrals');
+      if (revision !== state.dialogRevision) return;
+      const s = data.settings;
+      const username = /^[A-Za-z0-9_]{5,32}$/.test(data.bot_username || '') ? data.bot_username : null;
+      const link = username ? 'https://t.me/' + username + '?start=ref_' + state.me.user.id : '';
+      modal(SbandT('<h2 id="dialog-title">Реферальная программа</h2><p>Приглашай новых пользователей по своей ссылке. Награды поступают на твой баланс.</p><div class="info"><span>За нового реферала</span><b>{0}</b></div><div class="info"><span>С его пополнений</span><b>{1}%</b></div><div class="info"><span>С его покупок</span><b>{2}%</b></div><div class="info"><span>Скидка приглашённому</span><b>{3}%</b></div><div class="info"><span>Приглашено</span><b>{4}</b></div><div class="info"><span>Начислено с учётом возвратов</span><b>{5}</b></div><p>Проценты начисляются от фактически оплаченной суммы, без бонусных зачислений. При возврате оплаты соответствующая награда отменяется.</p><label for="referral-link">Твоя ссылка</label><input id="referral-link" readonly value="{6}"><button id="copy-referral" class="primary-button">Скопировать ссылку</button>',rub(s.signup_bonus),num(s.deposit_pct),num(s.bonus_pct),num(s.discount_pct),data.count,rub(data.earned),esc(link)));
+      const daily = data.daily;
+      const rows = items => items.map(item=>'<div class="info referral-person"><span>'+esc(item.username?'@'+item.username:SbandT('Пользователь'))+'</span><code>'+esc(item.id)+'</code></div>').join('');
+      $('#dialog-content').insertAdjacentHTML('beforeend',SbandT('<h3>Дневной лимит</h3><p>По Москве: {0}. Начислено сегодня: {1}. Осталось: {2}.</p><p>Фактическая награда ограничена дневным остатком. Возвраты не восстанавливают лимит.</p>',rub(daily.limit),rub(daily.issued),rub(daily.remaining))+(daily.blocked?SbandT('<p class="dialog-error">Реферальные начисления заблокированы администратором.</p>'):'')+SbandT('<h3>Мои рефералы</h3><div id="referral-users">{0}</div><button class="secondary-button" id="more-referral-users">Ещё рефералы</button>',rows(data.items)||SbandT('Рефералов пока нет.')));
+      let referralPage = 0;
+      $('#more-referral-users').hidden = !data.has_more;
+      $('#more-referral-users').onclick = async () => { const button=$('#more-referral-users'),list=$('#referral-users');button.disabled=true;try{const next=await api('referrals?page='+(referralPage+1));if(!list.isConnected)return;referralPage++;list.insertAdjacentHTML('beforeend',rows(next.items));button.hidden=!next.has_more;}catch(e){if(list.isConnected)toast(e.message);}finally{button.disabled=false;} };
+      $('#copy-referral').disabled = !link;
+      $('#copy-referral').onclick = async () => {
+        try { await navigator.clipboard.writeText(link); toast(SbandT('Ссылка скопирована')); }
+        catch (_) { $('#referral-link').focus(); $('#referral-link').select(); toast(SbandT('Выдели и скопируй ссылку')); }
+      };
+    } catch (e) { error(e); }
+  }
+  let spamRefreshing = false;
+  async function refreshSpam() {
+    if (!state.ready || state.busy || state.refreshing || spamRefreshing || document.hidden || $('#purchase-dialog').open || document.body.classList.contains('admin-mode') || !['catalog','favorites','cart'].includes(state.tab)) return;
+    const visible = [...document.querySelectorAll('[data-spam-status]')].filter(el => { const b = el.getBoundingClientRect(); return b.bottom > 0 && b.top < innerHeight; }).slice(0,50);
+    if (!visible.length) return;
+    const revision = state.revision;
+    spamRefreshing = true;
+    try {
+      const data = await api('spam-status?ids=' + visible.map(el=>el.dataset.spamStatus).join(','));
+      if (!state.ready || state.busy || state.refreshing || revision !== state.revision || $('#purchase-dialog').open) return;
+      const checks = new Map(data.items.map(item=>[item.id,item]));
+      for (const el of visible) {
+        if (!el.isConnected) continue;
+        const item = state.items.find(item=>item.id===Number(el.dataset.spamStatus)), update = checks.get(Number(el.dataset.spamStatus));
+        if (!item) continue;
+        item.available = !!update?.available;
+        if (update) {
+          item.characteristics = {...item.characteristics,spam_check:update.spam_check};
+          el.textContent = SbandT('Спамблок: ') + spamLabel(update.spam_check);
+          el.title = spamTime(update.spam_check);
+          el.classList.toggle('spam-limited',update.spam_check.status==='limited');
+          el.classList.toggle('spam-clear',update.spam_check.status==='clear'&&!update.spam_check.running);
+        }
+        const card = el.closest('.account-card'), buy = card.querySelector('[data-add]'), stock = card.querySelector('.stock-tag');
+        buy.disabled = !item.available || !!state.me?.shop_status?.sales_paused;
+        stock.textContent = item.available ? SbandT('В наличии') : SbandT('Недоступен');
+        stock.classList.toggle('unavailable',!item.available);
+      }
+      countdown();
+    } catch (_) { /* Retain the last verified result; a network error is never a clear status. */ }
+    finally { spamRefreshing = false; }
+  }
   async function synchronize() {
     if (!state.ready || state.busy || state.refreshing || document.hidden || document.body.classList.contains('admin-mode')) return;
     state.refreshing = true;
@@ -380,6 +434,7 @@
     if (button.hasAttribute('data-reviews')) showReviews();
     if (button.hasAttribute('data-balance-promo')) balancePromo();
     if (button.hasAttribute('data-wheel')) wheel();
+    if (button.hasAttribute('data-referrals')) showReferrals();
     if (button.dataset.order) showOrder(Number(button.dataset.order));
     if (button.hasAttribute('data-topup')) topup();
     if (button.hasAttribute('data-category')) { state.category = button.dataset.category; loadMarket().catch(error); }
@@ -407,5 +462,5 @@
   $('#refresh').onclick = () => loadMarket().then(() => notice()).catch(error); $('#refresh-orders').onclick = () => loadOrders().catch(error); $('#retry-login').onclick = initialize;
   document.addEventListener('visibilitychange', () => { if (!document.hidden) synchronize(); }); window.addEventListener('online', synchronize);
   window.addEventListener('offline', () => notice(SbandT("Нет соединения. Подключись к интернету, чтобы обновить данные.")));
-  setInterval(countdown, 1000); setInterval(synchronize, 15000); initialize();
+  setInterval(countdown, 1000); setInterval(synchronize, 15000); setInterval(refreshSpam, 5000); initialize();
 })();

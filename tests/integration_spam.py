@@ -28,7 +28,7 @@ async def main():
             ids=[]
             for i in range(5):
                 await cur.execute("INSERT INTO accounts(country,number,price,data,telegram_user_id,warranty_hours,status) VALUES('spam_test',%s,100,%s,%s,24,%s)",
-                                  (f'+7999000{i:04}','FIXTURE_SESSION_PRIVATE_'+str(i)*200,9000+i,'sold' if i==4 else 'available'))
+                                  (f'+1555000{i:04}','FIXTURE_SESSION_PRIVATE_'+str(i)*200,9000+i,'sold' if i==4 else 'available'))
                 ids.append(cur.lastrowid)
         print('PASS: additive spam schema can be applied repeatedly')
         await commerce.add_to_cart(42,ids[0])

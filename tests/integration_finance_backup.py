@@ -36,12 +36,12 @@ async def main():
             await cur.execute('INSERT INTO users (id,balance,balance_usdt) VALUES (42,1000,0),(43,0,0),(44,100,0)')
             await cur.execute('INSERT INTO referrals (referral_id,referrer_id) VALUES (42,43)')
             await cur.execute('UPDATE referral_settings SET discount_pct=5,bonus_pct=5 WHERE id=1')
-            await cur.execute("INSERT INTO accounts (country,number,password,price,data) VALUES ('us','fixture-one','fixture-password',19.99,'PRIVATE_SESSION_FIXTURE')")
+            await cur.execute("INSERT INTO accounts (country,number,password,price,data) VALUES ('us','+15551234567','fixture-password',19.99,'PRIVATE_SESSION_FIXTURE')")
             account = cur.lastrowid
         purchase = await checkout(42, account, Decimal('18.99'))
         order_id = purchase['id']
         order = await db.get_purchase_for_user(order_id, 42)
-        assert order['referral_bonus'] == Decimal('0.9995') and order['referrer_id'] == 43
+        assert order['referral_bonus'] == Decimal('0.9495') and order['referrer_id'] == 43
         await tickets.create_ticket(42, order_id, 'Fixture issue')
         async with connection.cursor() as cur:
             await cur.execute('UPDATE users SET balance=0 WHERE id=43')
@@ -49,7 +49,7 @@ async def main():
                                        refunds.refund_order(8, order_id, 'Concurrent retry'))
         assert sum(result is not None for result in results) == 1
         assert (await db.get_user(42))['balance'] == 1000
-        assert (await db.get_user(43))['balance'] == Decimal('-0.9995')
+        assert (await db.get_user(43))['balance'] == Decimal('-0.9495')
         async with connection.cursor() as cur:
             await cur.execute('SELECT COUNT(*) FROM order_refunds WHERE purchase_id=%s', (order_id,))
             assert (await cur.fetchone())[0] == 1

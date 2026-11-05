@@ -39,6 +39,10 @@ class PaymentTransactionTests(unittest.IsolatedAsyncioTestCase):
         self.pool.acquire.return_value.__aenter__.return_value = self.conn
         self.patch = patch.object(db, '_get_pool', return_value=self.pool)
         self.patch.start()
+        from database import referrals
+        for name in ('lock_participants','credit_deposit','reverse_deposit'):
+            reward_patch=patch.object(referrals,name,AsyncMock(return_value=None))
+            reward_patch.start();self.addCleanup(reward_patch.stop)
         self.addCleanup(self.patch.stop)
 
     async def test_first_deposit_bonus_and_payment_log_commit_together(self):

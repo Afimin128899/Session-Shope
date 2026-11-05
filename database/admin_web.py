@@ -101,14 +101,21 @@ async def save_category(admin, body):
 async def settings():
     allowed=('wholesale_min_total','wholesale_pct','refund_approval_threshold','low_stock_limit','support_hours','support_eta','maintenance_mode','sales_paused','sales_pause_reason','maintenance_reason','maintenance_eta')
     result={r['key']:r['value'] for r in await rows('SELECT `key`,`value` FROM settings WHERE `key` IN ('+','.join(['%s']*len(allowed))+')',allowed)}
+    from database import referrals
+    values = await referrals.settings()
+    result.update({key: str(values[field]) for key, field in referrals.SETTING_FIELDS.items()})
     return result
 
 
 async def save_settings(admin, body):
     from decimal import Decimal
     allowed = {'wholesale_min_total': (1, 10000), 'wholesale_pct': (0, 50), 'refund_approval_threshold': (0, 10000), 'low_stock_limit': (0, 10000)}
+    from database import referrals
+    referral_values = referrals.validate_settings({k:v for k,v in body.items() if k in referrals.SETTING_FIELDS})
     values = {}
     for key, value in body.items():
+        if key in referrals.SETTING_FIELDS:
+            continue
         if key in allowed:
             amount = _decimal(value, '0.01', '99999999')
             if not Decimal(str(allowed[key][0])) <= amount <= Decimal(str(allowed[key][1])) or (key == 'low_stock_limit' and amount != int(amount)):
@@ -120,12 +127,15 @@ async def save_settings(admin, body):
             values[key] = value
         else:
             raise ValueError(tr('Неизвестная настройка.'))
-    if not values:
+    if not values and not referral_values:
         raise ValueError(tr('Нет изменений.'))
     async with _transaction() as cur:
         for key, value in sorted(values.items()):
             await cur.execute('INSERT INTO settings(`key`,`value`) VALUES(%s,%s) ON DUPLICATE KEY UPDATE `value`=VALUES(`value`)', (key, value))
-        await _record(cur, admin, 'web_settings', 'settings', 'shop', values)
+        if referral_values:
+            await referrals.save_settings(cur, admin, referral_values)
+        if values:
+            await _record(cur, admin, 'web_settings', 'settings', 'shop', values)
 
 
 async def create_balance_promo(admin, code, value, limit):

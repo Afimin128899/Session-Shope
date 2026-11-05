@@ -16,10 +16,12 @@ start_router = Router()
 
 @start_router.message(CommandStart())
 async def cmd_start(message: Message, command, state=None):
+    from utils.referral_link import pending
+    saved_referrer = await pending(state)
     if state is not None:
         await state.clear()
     args = command.args
-    referrer_id = None
+    referrer_id = saved_referrer
     if args and args.startswith('ref_'):
         try:
             referrer_id = int(args[4:])
@@ -59,6 +61,8 @@ async def cmd_start(message: Message, command, state=None):
 @start_router.callback_query(F.data == "back_main")
 async def callback_back_main(call: CallbackQuery, state=None):
     if state is not None:
+        from utils.referral_link import complete
+        await complete(call.from_user, state)
         await state.clear()
     await update_user_username(call.from_user.id, call.from_user.username)
     user_name = escape(call.from_user.first_name or tr('Гость'))
@@ -75,11 +79,13 @@ async def show_info(call: CallbackQuery):
 
 
 @start_router.callback_query(F.data == "check_sub_status")
-async def check_sub_status_callback(call: CallbackQuery):
+async def check_sub_status_callback(call: CallbackQuery, state=None):
     from utils.sub_check import is_user_subscribed
     from utils.nav import edit_main
     subscribed = await is_user_subscribed(call.bot, call.from_user.id)
     if subscribed:
+        from utils.referral_link import complete
+        await complete(call.from_user, state)
         await answer_safe(call, tr('✅ Подписка подтверждена! Добро пожаловать.'), show_alert=True)
         await edit_main(call)
     else:

@@ -54,6 +54,23 @@ def description(row):
     return label
 
 
+async def catalog_status(user_id, ids):
+    """Small public-inventory projection; no sessions, tokens or other buyers' IDs."""
+    from database.db import _get_pool
+    import aiomysql
+    async with _get_pool().acquire() as conn:
+        async with conn.cursor(aiomysql.DictCursor) as cur:
+            await cur.execute("SELECT a.id,a.spam_status,a.spam_checked_at,a.spam_lease_until,"
+                              "NOT EXISTS(SELECT 1 FROM account_reservations r WHERE r.account_id=a.id AND r.user_id<>%s AND r.expires_at>UTC_TIMESTAMP()) AS reservable "
+                              "FROM accounts a JOIN categories c ON c.slug=a.country "
+                              "WHERE a.status='available' AND c.is_active=1 AND a.price>0 AND a.price<=10000 AND a.id IN (" + ','.join(['%s'] * len(ids)) + ')', (user_id, *ids))
+            result = []
+            for item in await cur.fetchall():
+                check = public(item)
+                result.append({'id': item['id'], 'spam_check': check, 'available': bool(item['reservable']) and not check['running']})
+            return result
+
+
 async def claim():
     async with _transaction() as cur:
         await cur.execute("SELECT a.id,a.data,a.number,a.telegram_user_id FROM accounts a WHERE a.status='available' "

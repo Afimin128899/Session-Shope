@@ -31,8 +31,24 @@ async def referral_info(call: CallbackQuery):
     count = await get_referral_count(call.from_user.id)
     bot_username = (await call.bot.me()).username
     ref_link = f'https://t.me/{bot_username}?start=ref_{call.from_user.id}'
-    text = tr("<tg-emoji emoji-id='{0}'>⭐️</tg-emoji> <b>Реферальная система</b>\n\n<b>Скидка приглашённым:</b> {1}%\n<b>Бонус рефереру:</b> {2}%\n<b>Количество рефералов:</b> {3}\n\n<b>Ваша реферальная ссылка:</b>\n<code>{4}</code>\n\n<i>Делитесь ссылкой с друзьями. При каждой покупке реферала вы получаете бонус!</i>", f'{EMOJI_STAR}', f"{settings['discount_pct']:.0f}", f"{settings['bonus_pct']:.0f}", f'{count}', f'{ref_link}')
+    text = tr("⭐️ <b>Реферальная программа</b>\n\nЗа нового пользователя: <b>{0} ₽</b>\nС его пополнений: <b>{1}%</b>\nС его покупок: <b>{2}%</b>\nСкидка приглашённому: <b>{3}%</b>\nПриглашено: <b>{4}</b>\n\n<b>Твоя ссылка:</b>\n<code>{5}</code>\n\nПроценты начисляются от фактически оплаченной суммы, без бонусных зачислений. Награда за нового пользователя выдаётся один раз.", f"{settings['signup_bonus']:.2f}", f"{settings['deposit_pct']:.2f}", f"{settings['bonus_pct']:.2f}", f"{settings['discount_pct']:.2f}", count, ref_link)
     label_back, emoji_back = await _btn_text('btn_back_profile', tr('« Назад'), c.BTN_ICON_BACK_SMILE)
-    kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text=label_back, callback_data='my_profile', icon_custom_emoji_id=emoji_back)]])
+    from utils.button_icons import icon_for
+    from database import referrals
+    daily = (await referrals.summary(call.from_user.id))['daily']
+    text += tr('\n\nЛимит в сутки по Москве: {0} ₽\nНачислено сегодня: {1} ₽\nОсталось: {2} ₽', daily['limit'], daily['issued'], daily['remaining'])
+    if daily['blocked']:
+        text += tr('\nРеферальные начисления заблокированы администратором.')
+    kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text=tr('Мои рефералы'), callback_data='referral_users:0', icon_custom_emoji_id=icon_for('users'))], [InlineKeyboardButton(text=label_back, callback_data='my_profile', icon_custom_emoji_id=emoji_back)]])
     await edit_message_safe(call, text, reply_markup=kb)
     await answer_safe(call)
+
+
+@profile_router.callback_query(F.data.startswith('referral_users:'))
+async def invited_users(call: CallbackQuery):
+    value = call.data.partition(':')[2]
+    if not value.isascii() or not value.isdigit() or not 0 <= int(value) <= 10000:
+        await answer_safe(call, tr('Некорректный параметр.'), show_alert=True)
+        return
+    from handlers.admin.referrals import render_invited
+    await render_invited(call, call.from_user.id, int(value))

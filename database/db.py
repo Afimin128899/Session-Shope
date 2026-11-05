@@ -152,6 +152,8 @@ async def init_db ():
                         )
                     ''')
                     await cur.execute('INSERT IGNORE INTO referral_settings (id) VALUES (1)')
+                    from database.referrals import init_schema as init_referral_schema
+                    await init_referral_schema(cur, DB_CONFIG['db'])
 
                     await cur.execute('''
                         CREATE TABLE IF NOT EXISTS button_labels (
@@ -464,6 +466,8 @@ async def credit_paid_deposit(
                         raise
                     await conn.rollback()
                     return None
+                from database import referrals
+                referrer = await referrals.lock_participants(cur, user_id)
                 await cur.execute(
                     "SELECT first_deposit_bonus_used FROM users WHERE id = %s FOR UPDATE",
                     (user_id,),
@@ -485,6 +489,7 @@ async def credit_paid_deposit(
                     "VALUES (%s, %s, %s, %s, %s)",
                     (user_id, amount, "RUB", f"{provider}_pay", str(invoice_id)),
                 )
+                await referrals.credit_deposit(cur, user_id, referrer, amount, provider, str(invoice_id))
             await conn.commit()
             return float(credited), float(bonus)
         except BaseException:
@@ -565,6 +570,13 @@ async def get_first_available_account_by_country (country :str ):
 
 
 async def buy_account(user_id: int, account_id: int, price: float, date_str: str, currency: str = "TON"):
+    if currency == 'RUB':
+        from miniapp.storage import checkout
+        from decimal import Decimal
+        try:
+            return (await checkout(user_id, account_id, Decimal(str(price))))['id']
+        except (ValueError, ArithmeticError):
+            return None
     async with _get_pool().acquire() as conn:
         await conn.autocommit(False)
         await conn.begin()
@@ -973,32 +985,8 @@ async def set_setting(key: str, value: str) -> None:
 # ── Referral DB functions ─────────────────────────────────────────────
 
 async def create_user_with_referrer(user_id: int, referrer_id: int | None, username: str | None = None) -> None:
-    clean_username = username.lstrip("@").strip() if username else None
-    async with _get_pool().acquire() as conn:
-        await conn.autocommit(False)
-        await conn.begin()
-        try:
-            async with conn.cursor() as cur:
-                await cur.execute(
-                    "INSERT INTO users (id, balance, balance_usdt, username) VALUES (%s, 0, 0, %s) "
-                    "ON DUPLICATE KEY UPDATE username = IF(%s IS NOT NULL AND %s != '', %s, username)",
-                    (user_id, clean_username, clean_username, clean_username, clean_username)
-                )
-                if referrer_id is not None and int(referrer_id) != int(user_id):
-                    await cur.execute("SELECT id FROM users WHERE id = %s", (referrer_id,))
-                    if await cur.fetchone():
-                        await cur.execute(
-                            "INSERT IGNORE INTO referrals (referral_id, referrer_id) VALUES (%s, %s)",
-                            (user_id, referrer_id),
-                        )
-                    else:
-                        logging.warning(f"[db] Referrer {referrer_id} does not exist. Skipping referral relationship.")
-            await conn.commit()
-        except Exception as e:
-            await conn.rollback()
-            logging.error(f"[db] create_user_with_referrer error: {e}")
-        finally:
-            await conn.autocommit(True)
+    from database.referrals import register_user
+    return await register_user(user_id, referrer_id, username)
 
 
 async def is_new_user(user_id: int) -> bool:
@@ -1025,13 +1013,8 @@ async def get_referral_count(user_id: int) -> int:
 
 
 async def get_referral_settings() -> dict:
-    async with _get_pool().acquire() as conn:
-        async with conn.cursor(aiomysql.DictCursor) as cur:
-            await cur.execute("SELECT discount_pct, bonus_pct FROM referral_settings WHERE id = 1")
-            row = await cur.fetchone()
-            if row:
-                return {"discount_pct": float(row["discount_pct"]), "bonus_pct": float(row["bonus_pct"])}
-            return {"discount_pct": 5.0, "bonus_pct": 5.0}
+    from database.referrals import settings
+    return {key: float(value) for key, value in (await settings()).items()}
 
 
 # ── Referral purchase ─────────────────────────────────────────────────
@@ -1041,13 +1024,21 @@ async def buy_account_with_referral(
     date_str: str, discount_pct: float, bonus_pct: float,
     referrer_id: int | None = None, currency: str = "USDT",
 ) -> int | None:
+    if currency == 'RUB':
+        from miniapp.storage import checkout
+        from decimal import Decimal, ROUND_HALF_UP
+        try:
+            quoted = (Decimal(str(price)) * (1 - Decimal(str(discount_pct)) / 100)).quantize(Decimal('.01'), rounding=ROUND_HALF_UP)
+            return (await checkout(user_id, account_id, quoted))['id']
+        except (ValueError, ArithmeticError):
+            return None
     async with _get_pool().acquire() as conn:
         await conn.autocommit(False)
         await conn.begin()
         try:
             async with conn.cursor() as cur:
                 effective_price = round(price * (1 - discount_pct / 100), 2 if currency == "RUB" else 8)
-                bonus_amount = round(price * bonus_pct / 100, 8)
+                bonus_amount = round(effective_price * bonus_pct / 100, 8)
 
                 await cur.execute(
                     "SELECT id, status FROM accounts WHERE id = %s AND status = 'available' AND (spam_lease_until IS NULL OR spam_lease_until<=UTC_TIMESTAMP()) FOR UPDATE",

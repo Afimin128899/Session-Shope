@@ -147,6 +147,28 @@ async def me(request):
                      'bot_username': request.app[BOT_USERNAME], 'test_mode_active': STORE.active(request['user']['id']), 'version': BOT_VERSION, 'is_admin': request['user']['id'] in config.ADMIN_IDS})
 
 
+async def referral_info(request):
+    from database import referrals
+    result = await referrals.summary(request['user']['id'])
+    result.update(await referrals.invited(request['user']['id'], page_number(request)))
+    result['bot_username'] = request.app[BOT_USERNAME]
+    return response(result)
+
+
+async def spam_statuses(request):
+    from database import spam_checks
+    raw = request.query.get('ids', '')
+    if len(raw) > 600:
+        raise ValueError
+    parts = raw.split(',')
+    if not 1 <= len(parts) <= 50 or any(not v.isascii() or not v.isdigit() or not 0 < int(v) <= 2147483647 for v in parts):
+        raise ValueError
+    ids = [int(v) for v in parts]
+    if len(set(ids)) != len(ids):
+        raise ValueError
+    return response({'items': await spam_checks.catalog_status(request['user']['id'], ids)})
+
+
 async def shop_status(request):
     return response({'shop_status':request['shop_status'], 'language':request['language']})
 
@@ -412,6 +434,7 @@ def create_app(*, token=None, bot=None, bot_username=''):
     app.add_routes([
         web.get('/about', about),
         web.get('/', index), web.get('/api/health', health),
+        web.get('/api/referrals',referral_info),web.get('/api/spam-status',spam_statuses),
         web.get('/api/status',shop_status),web.post('/api/preferences/language',save_language),
         web.get('/api/rewards',reward_status),web.post('/api/rewards/claim',reward_claim),
         web.get('/api/shop-info',shop_info),web.get('/api/products/{id}',product),web.get('/api/me', me), web.get('/api/catalog', catalog), web.post('/api/purchase', purchase),

@@ -2,7 +2,8 @@
 import asyncio
 import re
 
-from telethon.errors import FloodWaitError
+from telethon.errors import FloodWaitError, YouBlockedUserError, UserIsBlockedError
+from telethon.tl.functions.contacts import UnblockRequest
 
 from services.telethon_factory import create_client
 
@@ -46,7 +47,11 @@ async def _conversation(client, expected_id, expected_phone):
     if not getattr(peer, 'bot', False) or str(getattr(peer, 'username', '')).casefold() != 'spambot':
         return result('error', 'wrong_peer')
     async with client.conversation(peer, timeout=12, exclusive=True) as dialog:
-        sent = await dialog.send_message('/start')
+        try:
+            sent = await dialog.send_message('/start')
+        except (YouBlockedUserError, UserIsBlockedError):
+            await client(UnblockRequest(id=peer))
+            sent = await dialog.send_message('/start')
         reply = await dialog.get_response(sent)
         if reply.sender_id != peer.id or reply.id <= sent.id:
             return result('unknown', 'unrecognized')

@@ -20,6 +20,8 @@ logger = logging.getLogger(__name__)
 
 @commands_router.message(Command('cancel', 'menu'))
 async def cancel(message: Message, state: FSMContext):
+    from utils.referral_link import complete
+    await complete(message.from_user, state)
     await state.clear()
     from services.telethon_auth import remove_cached_client
     with suppress(Exception):

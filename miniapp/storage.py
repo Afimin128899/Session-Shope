@@ -168,8 +168,8 @@ async def checkout(user_id, account_id, quoted_price, *, warranty_hours=_UNSET, 
         order_id = cur.lastrowid
         await quality.snapshot(cur, order_id)
         if referrer in balances:
-            bonus = (base * bonus_pct / 100).quantize(Decimal('0.00000001'))
-            await cur.execute('UPDATE users SET balance = balance + %s WHERE id = %s', (bonus, referrer))
+            from database.referrals import credit_purchase
+            bonus = await credit_purchase(cur, user_id, referrer, actual_price, bonus_pct, order_id)
         await cur.execute('UPDATE purchases SET referrer_id = %s, referral_bonus = %s WHERE id = %s', (referrer if referrer in balances else None, bonus if referrer in balances else 0, order_id))
         await cur.execute('DELETE FROM shopping_cart WHERE user_id=%s AND account_id=%s', (user_id, account_id))
         await cur.execute('DELETE FROM account_reservations WHERE account_id=%s', (account_id,))
@@ -257,17 +257,18 @@ async def checkout_cart(user_id, requested, promo_code=None, expected_total=None
             await coupons.consume(cur, user_id, promo)
         await cur.execute('UPDATE users SET balance=balance-%s WHERE id=%s', (total, user_id))
         order_ids = []
-        bonus_total = Decimal('0')
         for account in accounts:
-            bonus = (Decimal(str(account['price'])) * bonus_pct / 100).quantize(Decimal('0.00000001')) if referrer in balances else Decimal('0')
-            bonus_total += bonus
+            bonus = Decimal('0')
             await cur.execute("UPDATE accounts SET status='sold' WHERE id=%s", (account['id'],))
             await cur.execute('INSERT INTO purchases (user_id,account_id,date,currency,paid_amount,referrer_id,referral_bonus) VALUES (%s,%s,%s,%s,%s,%s,%s)', (user_id, account['id'], datetime.now(ZoneInfo('Europe/Moscow')).strftime('%Y-%m-%d %H:%M:%S'), 'RUB', prices[account['id']], referrer if referrer in balances else None, bonus))
             purchase_id = cur.lastrowid
+            if referrer in balances:
+                from database.referrals import credit_purchase
+                bonus = await credit_purchase(cur, user_id, referrer, prices[account['id']], bonus_pct, purchase_id)
+                await cur.execute('UPDATE purchases SET referral_bonus=%s WHERE id=%s', (bonus, purchase_id))
             await quality.snapshot(cur, purchase_id)
             order_ids.append(purchase_id)
-        if referrer in balances:
-            await cur.execute('UPDATE users SET balance=balance+%s WHERE id=%s', (bonus_total, referrer))
+
         await cur.execute('DELETE FROM shopping_cart WHERE user_id=%s AND account_id IN (' + placeholders + ')', (user_id, *ids))
         await cur.execute('DELETE FROM account_reservations WHERE account_id IN (' + placeholders + ')', tuple(ids))
         return {'order_ids': order_ids, 'paid_amount': str(total), 'balance': str(balances[user_id] - total)}

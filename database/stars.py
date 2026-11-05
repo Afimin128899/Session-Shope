@@ -130,6 +130,8 @@ async def _invoice(cur, identity):
 
 
 async def _balance(cur, user_id, delta, charge_id, method):
+    from database import referrals
+    referrer = await referrals.lock_participants(cur, user_id, **({'reverse_provider':'stars','reference':charge_id} if delta < 0 else {}))
     await cur.execute('SELECT balance FROM users WHERE id=%s FOR UPDATE', (user_id,))
     row = await cur.fetchone()
     if not row:
@@ -141,6 +143,10 @@ async def _balance(cur, user_id, delta, charge_id, method):
     await cur.execute('INSERT INTO used_transactions(comment) VALUES(%s)', (marker,))
     await cur.execute('UPDATE users SET balance=%s WHERE id=%s', (after, user_id))
     await cur.execute("INSERT INTO payment_logs(user_id,amount,currency,method,reference) VALUES(%s,%s,'RUB',%s,%s)", (user_id, delta, method, charge_id))
+    if delta > 0:
+        await referrals.credit_deposit(cur, user_id, referrer, delta, 'stars', charge_id)
+    else:
+        await referrals.reverse_deposit(cur, user_id, 'stars', charge_id)
 
 
 async def _summarize(cur, identity):

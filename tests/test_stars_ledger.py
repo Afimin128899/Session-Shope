@@ -33,6 +33,10 @@ class LedgerTests(unittest.IsolatedAsyncioTestCase):
         pool=MagicMock();pool.acquire.return_value.__aenter__.return_value=self.conn
         patcher=patch.object(admin_tools,'_get_pool',return_value=pool)
         patcher.start();self.addCleanup(patcher.stop)
+        from database import referrals
+        for name in ('lock_participants','credit_deposit','reverse_deposit'):
+            reward_patch=patch.object(referrals,name,AsyncMock(return_value=None))
+            reward_patch.start();self.addCleanup(reward_patch.stop)
 
     async def test_credit_has_exact_rate_no_first_bonus_or_bonus_flag_consumption(self):
         self.cur.fetchone.side_effect=[INVOICE,None,{'balance':Decimal('3')},{'total':Decimal('120'),'refunded':0}]

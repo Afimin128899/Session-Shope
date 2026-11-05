@@ -41,6 +41,9 @@ class SubscriptionMiddleware(BaseMiddleware):
             if bot:
                 subscribed = await is_user_subscribed(bot, user.id)
                 if not subscribed:
+                    if isinstance(event, Message):
+                        from utils.referral_link import remember
+                        await remember(event, data.get('state'))
                     await send_sub_prompt(event, bot)
                     return None
 

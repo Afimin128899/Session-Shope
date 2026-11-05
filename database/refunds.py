@@ -47,6 +47,8 @@ async def refund_order(admin_id, purchase_id, reason):
         await cur.execute('INSERT INTO order_refunds (purchase_id, admin_id, user_id, amount, currency, reason, referral_reversed, legacy_referral, created_at) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,UTC_TIMESTAMP())', (purchase_id, admin_id, order['user_id'], amount, currency, reason, bonus, order['referral_bonus'] is None))
         for user, value in after.items():
             await cur.execute(f'UPDATE users SET {balance_col} = %s WHERE id = %s', (value, user))
+        from database.referrals import mark_purchase_reversed
+        await mark_purchase_reversed(cur, purchase_id)
         await cur.execute("UPDATE purchases SET status = 'refunded' WHERE id = %s", (purchase_id,))
         await cur.execute("UPDATE accounts SET status = 'refunded', data = '', password = NULL WHERE id = %s", (order['account_id'],))
         await cur.execute('SELECT id FROM support_tickets WHERE purchase_id = %s FOR UPDATE', (purchase_id,))
