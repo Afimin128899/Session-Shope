@@ -68,7 +68,7 @@ async def entry(call, state):
     await state.set_state(StarsInput.count)
     rows = [[InlineKeyboardButton(text=f'{n} ⭐ → {Decimal(n) * ledger.STARS_RATE:.2f} ₽', callback_data=f'stars_buy:{n}', icon_custom_emoji_id=icon_for('reviews'))] for n in (100, 250, 500, 1000)]
     rows.append([InlineKeyboardButton(text=tr('Назад'), callback_data='topup_balance', icon_custom_emoji_id=icon_for('back'))])
-    await edit_message_safe(call, tr('<b>Пополнение звёздами</b>\n\n1 ⭐ = 1,20 ₽ на баланс. Выберите вариант или введите целое количество от 1 до 8 333 ⭐ (не более 10 000 ₽). Отмена: /cancel.'), reply_markup=InlineKeyboardMarkup(inline_keyboard=rows))
+    await edit_message_safe(call, tr('<b>Пополнение звёздами</b>\n\n1 ⭐ = 1,20 ₽ на баланс. Выберите вариант или введите целое количество от 1 до 10 000 ⭐. Отмена: /cancel.'), reply_markup=InlineKeyboardMarkup(inline_keyboard=rows))
     await answer_safe(call)
 
 

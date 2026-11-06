@@ -6,7 +6,7 @@ from decimal import Decimal, InvalidOperation
 from utils.i18n import tr
 
 MAX_RUB = Decimal('10000.00')
-MAX_NEW_STARS = 8333  # 8,333 × 1.20 = 9,999.60 RUB; Stars are indivisible.
+MAX_NEW_STARS = 10000  # Native Stars count ceiling; the RUB 10,000 funding cap applies to SBP only.
 _BLOCKED = re.compile(r'(?<![\w])(?:ru|rus|russia|russian|rf|ua|ukr|ukraine|ukrainian|россия|российская|российские|российский|рф|украина|украины|украинские|україн[аи]|украинский)(?![\w])', re.I)
 
 

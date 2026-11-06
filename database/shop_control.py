@@ -18,7 +18,7 @@ async def init_schema(cur, database):
             await cur.execute('SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=%s AND TABLE_NAME=%s AND COLUMN_NAME=%s', (database, table, field))
             if not await cur.fetchone():
                 await cur.execute(f'ALTER TABLE {table} ADD COLUMN {field} {definition}')
-    for key, value in [('sales_paused', '0'), ('sales_pause_reason', DEFAULT_SALES_REASON),
+    for key, value in [('platega_stub', '1'), ('sales_paused', '0'), ('sales_pause_reason', DEFAULT_SALES_REASON),
                        ('maintenance_reason', DEFAULT_REASON), ('maintenance_eta', 'Время завершения пока уточняется.')]:
         await cur.execute('INSERT IGNORE INTO settings(`key`,`value`) VALUES(%s,%s)', (key, value))
 

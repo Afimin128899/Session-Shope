@@ -27,12 +27,13 @@ class PolicyValues(unittest.TestCase):
         self.assertEqual(policy.money('10000.00'),10000)
         for value in ['10000.01','1000000','Infinity','NaN',True,'-1','0','10.001']:
             with self.subTest(value=value),self.assertRaises(ValueError):policy.money(value)
-        for value in ['10000.01','1000000','9.99']:
-            with self.assertRaises(ValueError):payments.parse_amount(value)
+        for value in ['10000.01','1000000','0.99']:
+            with self.assertRaises(ValueError):payments.parse_amount(value,'platega')
 
-    def test_stars_floor_at_ruble_limit_does_not_reject_historical_receipts(self):
+    def test_stars_native_count_limit_is_independent_of_sbp_rubles(self):
         self.assertEqual(ledger.parse_new_count('8333')*ledger.STARS_RATE,Decimal('9999.60'))
-        with self.assertRaises(ValueError):ledger.parse_new_count(8334)
+        self.assertEqual(ledger.parse_new_count(10000)*ledger.STARS_RATE,Decimal('12000'))
+        with self.assertRaises(ValueError):ledger.parse_new_count(10001)
         self.assertEqual(ledger.parse_count(10000),10000)
 
     def test_phone_country_is_checked_independently_of_category(self):
@@ -54,6 +55,7 @@ class PlategaWire(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         p=patch.multiple(config,PLATEGA_MERCHANT_ID=MERCHANT,PLATEGA_SECRET='fixture-only-secret',create=True)
         p.start();self.addCleanup(p.stop)
+        stub=patch.object(db,'get_setting',AsyncMock(return_value='0'));stub.start();self.addCleanup(stub.stop)
 
     async def test_sbp_request_has_stable_telegram_metadata_and_no_email_form(self):
         _,session,factory=self.response(platega,{'transactionId':IDENTITY,'redirect':'https://app.platega.io/pay/fixture'})

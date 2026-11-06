@@ -32,6 +32,7 @@ from services.restock import restock_worker
 
 from handlers.admin.admin_panel import admin_router
 from handlers.admin.referrals import router as referral_admin_router
+from handlers.admin.sbp import router as sbp_admin_router
 from handlers.admin.tools import admin_tools_router
 from handlers.admin.demo import DEMO_ROUTER
 from utils.demo_guard import DemoGuard
@@ -105,7 +106,7 @@ async def main():
 
     dp.include_routers(
         stars_router, DEMO_ROUTER, language_router, commands_router, start_router, balance_router, shop_router, purchases_router, promo_router, profile_router, rewards_router,
-        admin_router, referral_admin_router, control_router, manage_router, broadcast_router, add_account_router, button_editor_router,
+        admin_router, referral_admin_router, sbp_admin_router, control_router, manage_router, broadcast_router, add_account_router, button_editor_router,
         cat_router, restock_router, admin_tools_router, spam_router, ticket_router, refund_router, quality_router, expansion_router, fallback_router,
     )
 

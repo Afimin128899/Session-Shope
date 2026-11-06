@@ -42,7 +42,7 @@ def identity(value):
 
 
 async def create_invoice(amount, description, payload, user_id):
-    amount = money(amount, minimum=Decimal('10'))
+    amount = money(amount, minimum=Decimal('1'))
     if type(user_id) is not int or not 0 < user_id <= 9223372036854775807:
         raise ValueError('Invalid Telegram payer')
     result = await _request('POST', '/transaction/process', {

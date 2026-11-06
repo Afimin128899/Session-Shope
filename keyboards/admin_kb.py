@@ -39,7 +39,7 @@ def get_admin_panel() -> InlineKeyboardMarkup:
 
 
 def get_settings_menu() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text=tr('Реферальные награды'), callback_data='admin_referral_settings', icon_custom_emoji_id=ICON_SETTINGS)], [InlineKeyboardButton(text=tr('Поддержка'), callback_data='admin_edit_setting:support_username', icon_custom_emoji_id=ICON_HELPER), InlineKeyboardButton(text=tr('Отзывы'), callback_data='admin_edit_setting:reviews_link', icon_custom_emoji_id=ICON_STATS)], [InlineKeyboardButton(text=tr('TON Кошелек'), callback_data='admin_edit_setting:tonkeeper_wallet', icon_custom_emoji_id=ICON_COIN)], [InlineKeyboardButton(text=tr('Назад'), callback_data='admin_home', icon_custom_emoji_id=ICON_BACK)]])
+    return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text=tr('Реферальные награды'), callback_data='admin_referral_settings', icon_custom_emoji_id=ICON_SETTINGS)], [InlineKeyboardButton(text=tr('СБП: заглушка оплаты'), callback_data='admin_sbp_settings', icon_custom_emoji_id=ICON_SETTINGS)], [InlineKeyboardButton(text=tr('Поддержка'), callback_data='admin_edit_setting:support_username', icon_custom_emoji_id=ICON_HELPER), InlineKeyboardButton(text=tr('Отзывы'), callback_data='admin_edit_setting:reviews_link', icon_custom_emoji_id=ICON_STATS)], [InlineKeyboardButton(text=tr('TON Кошелек'), callback_data='admin_edit_setting:tonkeeper_wallet', icon_custom_emoji_id=ICON_COIN)], [InlineKeyboardButton(text=tr('Назад'), callback_data='admin_home', icon_custom_emoji_id=ICON_BACK)]])
 
 
 def admin_reply_kb() -> InlineKeyboardMarkup:

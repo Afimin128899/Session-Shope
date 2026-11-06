@@ -1,6 +1,7 @@
 """Telegram payments use the same invoice registry and settlement as Mini App."""
 from utils.i18n import tr
 import logging
+import secrets
 from html import escape
 
 from aiogram import F, Router
@@ -21,6 +22,7 @@ logger = logging.getLogger(__name__)
 
 class LaveDepositState(StatesGroup):
     waiting_amount = State()
+    waiting_confirmation = State()
 
 
 def button(text, data, role='back'):
@@ -47,8 +49,8 @@ async def back_to_main(call: CallbackQuery, state: FSMContext):
 @balance_router.callback_query(F.data == 'topup_balance')
 async def topup_balance_menu(call: CallbackQuery, state: FSMContext):
     await state.clear()
-    methods = [method for method in payments.methods() if method['enabled']]
-    rows = [button(method['name'] + (' · 1 ⭐ = 1,20 ₽' if method['id'] == 'stars' else (' · ₽' if method['id'] == 'platega' else ' · USDT')), 'deposit_' + method['id'], 'money') for method in methods]
+    methods = [method for method in await payments.get_methods() if method['enabled']]
+    rows = [button(method['name'] + (' · 1 ⭐ = 1,20 ₽' if method['id'] == 'stars' else ('' if method['id'] == 'platega' else ' · USDT')), 'deposit_' + method['id'], 'money') for method in methods]
     rows.append(button(tr('Назад к балансу'), 'balance'))
     text = tr('<b>Пополнение баланса</b>\n\nСумма задаётся в рублях. Выберите способ оплаты.') if methods else tr('<b>Пополнение баланса</b>\n\nСервисы оплаты пока не настроены. Обратитесь в поддержку.')
     await edit_message_safe(call, text, reply_markup=InlineKeyboardMarkup(inline_keyboard=rows))
@@ -56,14 +58,14 @@ async def topup_balance_menu(call: CallbackQuery, state: FSMContext):
 
 
 async def _start_deposit(call, state, method):
-    configured = next((m for m in payments.methods() if m['id'] == method and m['enabled']), None)
+    configured = next((m for m in await payments.get_methods() if m['id'] == method and m['enabled']), None)
     if not configured:
         await answer_safe(call, tr('Этот способ оплаты пока не настроен.'), show_alert=True)
         return
     await state.clear()
     await state.set_state(LaveDepositState.waiting_amount)
     await state.update_data(payment_method=method)
-    await edit_message_safe(call, tr('<b>Пополнение через {0}</b>\n\nВведите сумму от 10 до 10 000 ₽. Например: <code>500</code> или <code>1000,50</code>.\n\nОтмена: /cancel', f"{configured['name']}"), reply_markup=InlineKeyboardMarkup(inline_keyboard=[button(tr('Назад'), 'topup_balance')]))
+    await edit_message_safe(call, tr('<b>Пополнение через {0}</b>\n\nВведите сумму от {1} до {2} ₽. Например: <code>500</code> или <code>1000,50</code>.\n\nОтмена: /cancel', configured['name'], str(configured['min']), '10 000' if method == 'platega' else '1 000 000'), reply_markup=InlineKeyboardMarkup(inline_keyboard=[button(tr('Назад'), 'topup_balance')]))
     await answer_safe(call)
 
 
@@ -74,10 +76,18 @@ async def deposit_entry(call: CallbackQuery, state: FSMContext):
 
 @balance_router.message(LaveDepositState.waiting_amount, F.text)
 async def process_lave_amount(message: Message, state: FSMContext):
+    data = await state.get_data()
+    method = data.get('payment_method')
     try:
-        amount = payments.parse_amount(message.text)
+        amount = payments.parse_amount(message.text, method)
     except ValueError as exc:
         await message.answer(str(exc))
+        return
+    if method == 'platega':
+        token = secrets.token_hex(8)
+        await state.set_state(LaveDepositState.waiting_confirmation)
+        await state.update_data(payment_amount=f'{amount:.2f}',payment_nonce=token)
+        await answer_screen(message, sbp_confirmation(amount), section='wallet', reply_markup=sbp_buttons(amount,token))
         return
     async with single_action(message.from_user.id, 'create_invoice') as acquired:
         if not acquired:
@@ -125,3 +135,42 @@ async def check_payment(call: CallbackQuery):
 
 
 check_lave_payment = check_xrocket_payment = check_crypto_payment = check_payment
+
+
+def sbp_confirmation(amount):
+    return tr('<b>Пополнение баланса в рублях</b>\n\nСпособ оплаты: <b>СБП</b>\nСумма пополнения: <b>{0} ₽</b>\nДопустимая сумма: от 1 до 10 000 ₽.\n\nНажмите «Оплатить», чтобы продолжить.', f'{amount:.2f}')
+
+
+def sbp_buttons(amount, token):
+    return InlineKeyboardMarkup(inline_keyboard=[button(tr('Оплатить {0} ₽', f'{amount:.2f}'), 'sbp_pay:' + token, 'money'),button(tr('Изменить сумму'), 'deposit_platega','edit'),button(tr('Назад'), 'topup_balance')])
+
+
+@balance_router.callback_query(F.data.startswith('sbp_pay:'))
+async def confirm_sbp(call: CallbackQuery, state: FSMContext):
+    data = await state.get_data()
+    token = data.get('payment_nonce')
+    if data.get('payment_method') != 'platega' or not isinstance(token, str) or not secrets.compare_digest(token,call.data.partition(':')[2]):
+        await answer_safe(call,tr('Кнопка устарела. Введите сумму заново.'),show_alert=True)
+        return
+    async with single_action(call.from_user.id,'create_invoice') as acquired:
+        if not acquired:
+            await answer_safe(call,tr('Счёт уже создаётся. Подождите.'))
+            return
+        try:
+            amount = payments.parse_amount(data.get('payment_amount'),'platega')
+            result = await payments.create_deposit(call.from_user.id,call.from_user.username,'platega',amount)
+        except payments.PaymentUnavailable as exc:
+            await edit_message_safe(call,sbp_confirmation(amount)+'\n\n'+str(exc),reply_markup=sbp_buttons(amount,token))
+            await answer_safe(call,str(exc),show_alert=True)
+            return
+        except ValueError as exc:
+            await answer_safe(call,str(exc),show_alert=True)
+            return
+        except Exception:
+            logger.error('SBP invoice creation failed')
+            await answer_safe(call,tr('Не удалось создать счёт. Попробуйте позже.'),show_alert=True)
+            return
+        await state.clear()
+        rows=[[InlineKeyboardButton(text=tr('Оплатить {0} ₽',f'{amount:.2f}'),url=result['pay_url'],icon_custom_emoji_id=icon_for('money'))],button(tr('Проверить оплату'),'platega_check:'+result['invoice_id'],'refresh'),button(tr('Вернуться к балансу'),'balance')]
+        await edit_message_safe(call,tr('<b>Оплата через СБП</b>\n\nСумма пополнения: <b>{0} ₽</b>\n\nБаланс обновится после подтверждения оплаты.',f'{amount:.2f}'),reply_markup=InlineKeyboardMarkup(inline_keyboard=rows))
+        await answer_safe(call)

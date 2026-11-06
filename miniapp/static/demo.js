@@ -38,8 +38,8 @@
   finally{busy=false;total();}
  }
  $('provider').onchange=()=>{
-  const stars=$('provider').value==='stars';$('amount-label').firstChild.textContent=stars?SbandT("Количество учебных звёзд (1 ⭐ = 1,20 ₽)"):SbandT("Сумма, ₽");
-  $('amount').min=stars?'1':'10';$('amount').max=stars?'8333':'10000';$('amount').step=stars?'1':'0.01';$('amount').value='100';
+  const stars=$('provider').value==='stars',sbp=$('provider').value==='platega';$('amount-label').firstChild.textContent=stars?SbandT("Количество учебных звёзд (1 ⭐ = 1,20 ₽)"):SbandT("Сумма, ₽");
+  $('amount').min=stars||sbp?'1':'10';$('amount').max=stars||sbp?'10000':'1000000';$('amount').step=stars?'1':'0.01';$('amount').value='100';
  };
  $('payment').onsubmit=event=>{event.preventDefault();const provider=$('provider').value;action(provider==='stars'?{action:'invoice',provider,stars:Number($('amount').value)}:{action:'invoice',provider,amount:$('amount').value});};
  $('promo').oninput=total;

@@ -11,14 +11,14 @@ def cash(value):
     return f'{Decimal(value)/100:.2f}'
 
 
-def amount(value):
+def amount(value,provider=None):
     try:
         if isinstance(value,bool) or len(str(value))>24: raise ValueError
         number=Decimal(str(value).replace(',','.'))
-        if not number.is_finite() or not Decimal(10)<=number<=Decimal(10000) or number!=number.quantize(Decimal('.01')): raise ValueError
+        if not number.is_finite() or not (Decimal(1) if provider=='platega' else Decimal(10))<=number<=(Decimal(10000) if provider=='platega' else Decimal(1000000)) or number!=number.quantize(Decimal('.01')): raise ValueError
         return int(number*100)
     except (ValueError,InvalidOperation):
-        raise ValueError('Учебное пополнение: 10–10 000 ₽, до двух знаков после запятой.') from None
+        raise ValueError('Учебная сумма СБП: 1–10 000 ₽.' if provider=='platega' else 'Учебное пополнение: 10–1 000 000 ₽, до двух знаков после запятой.') from None
 
 
 class DemoStore:
@@ -92,9 +92,9 @@ class DemoStore:
             if not isinstance(provider,str) or provider not in {'crypto','xrocket','lave','platega','stars'}:raise ValueError('Выберите учебный способ оплаты.')
             if provider=='stars':
                 count=body.get('stars')
-                if type(count)is not int or not 1<=count<=8333:raise ValueError('Звёзды: целое число 1–8333.')
+                if type(count)is not int or not 1<=count<=10000:raise ValueError('Звёзды: целое число 1–10000.')
                 total=count*120
-            else:total=amount(body.get('amount'))
+            else:total=amount(body.get('amount'),provider)
             if len(s['invoices'])>=100:raise ValueError('Сбросьте учебный сценарий: достигнут лимит счетов.')
             s['invoices'].append({'id':secrets.token_hex(8),'provider':provider,'amount':total,'paid':False})
             self._event(s,'Создан учебный счёт.')

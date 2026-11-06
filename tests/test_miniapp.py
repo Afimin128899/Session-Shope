@@ -53,6 +53,7 @@ class MiniAppAPITests(unittest.IsolatedAsyncioTestCase):
         self.patchers = [
             patch.object(storage, 'access_settings', AsyncMock(return_value={})),
             patch.object(db, 'create_user', AsyncMock()),
+            patch.object(db, 'get_setting', AsyncMock(return_value='1')),
             patch.object(server.quality, 'my_review', AsyncMock(return_value=None)),
             patch.object(db, 'get_user', AsyncMock(return_value={'balance': 500, 'balance_usdt': 0})),
         ]

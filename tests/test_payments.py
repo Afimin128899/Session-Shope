@@ -110,9 +110,10 @@ class PaymentHandlerTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_nan_input_never_creates_invoice(self):
         message = SimpleNamespace(text='nan', answer=AsyncMock())
-        state = SimpleNamespace(get_data=AsyncMock())
-        await balance.process_lave_amount(message, state)
-        state.get_data.assert_not_awaited()
+        state = SimpleNamespace(get_data=AsyncMock(return_value={'payment_method':'crypto'}))
+        with patch.object(balance.payments,'create_deposit',AsyncMock()) as create:
+            await balance.process_lave_amount(message, state)
+            create.assert_not_awaited()
         message.answer.assert_awaited_once()
 
     async def test_legacy_confirmation_opens_fresh_quote_without_debit(self):

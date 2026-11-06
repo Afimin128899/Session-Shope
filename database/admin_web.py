@@ -99,7 +99,7 @@ async def save_category(admin, body):
 
 
 async def settings():
-    allowed=('wholesale_min_total','wholesale_pct','refund_approval_threshold','low_stock_limit','support_hours','support_eta','maintenance_mode','sales_paused','sales_pause_reason','maintenance_reason','maintenance_eta')
+    allowed=('wholesale_min_total','wholesale_pct','refund_approval_threshold','low_stock_limit','support_hours','support_eta','maintenance_mode','sales_paused','sales_pause_reason','maintenance_reason','maintenance_eta','platega_stub')
     result={r['key']:r['value'] for r in await rows('SELECT `key`,`value` FROM settings WHERE `key` IN ('+','.join(['%s']*len(allowed))+')',allowed)}
     from database import referrals
     values = await referrals.settings()
@@ -123,7 +123,7 @@ async def save_settings(admin, body):
             values[key] = str(int(amount)) if key == 'low_stock_limit' else str(amount)
         elif key in {'support_hours', 'support_eta', 'sales_pause_reason', 'maintenance_reason', 'maintenance_eta'} and isinstance(value, str) and (1 <= len(value.strip()) <= 200):
             values[key] = value.strip()
-        elif key in {'maintenance_mode', 'sales_paused'} and value in ('0', '1'):
+        elif key in {'maintenance_mode', 'sales_paused', 'platega_stub'} and value in ('0', '1'):
             values[key] = value
         else:
             raise ValueError(tr('Неизвестная настройка.'))

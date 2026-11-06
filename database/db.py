@@ -439,9 +439,11 @@ async def credit_paid_deposit(
 
     try:
         amount = Decimal(str(amount))
-        # Settlement ceiling for already paid legacy invoices. New invoices are
-        # capped at RUB 10,000 in services.payments before any provider request.
-        if not amount.is_finite() or not Decimal("10") <= amount <= Decimal("1000000"):
+        # Preserve the pre-existing ceiling for paid legacy receipts. This is
+        # settlement only: NEW SBP invoices remain capped at RUB 10,000 in
+        # services.payments.parse_amount AND services.platega.create_invoice.
+        minimum = Decimal("1") if provider == "platega" else Decimal("10")
+        if not amount.is_finite() or not minimum <= amount <= Decimal("1000000"):
             raise ValueError("Invalid deposit amount")
         amount = amount.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
     except InvalidOperation as exc:

@@ -17,9 +17,21 @@ logger=logging.getLogger(__name__)
 PROVIDERS={'crypto':cryptopay,'xrocket':xrocket,'lave':lavepay,'platega':platega}
 
 
-def methods():
-    return [{'id':key,'name':name,'enabled':bool(getattr(config,variable,'')),'currency':'RUB','min':10,'max':10000} for key,name,variable in [
-        ('crypto','Crypto Pay','CRYPTO_PAY_TOKEN'),('xrocket','xRocket','XROCKET_API_KEY'),('lave','Laveshka (Lava Pay)','LAVE_PAY_API_KEY')]] + [{'id':'platega','name':tr('Platega · СБП'),'enabled':bool(getattr(config,'PLATEGA_MERCHANT_ID','') and getattr(config,'PLATEGA_SECRET','')),'currency':'RUB','min':10,'max':10000}] + [{'id':'stars','name':'Telegram Stars ⭐','enabled':bool(getattr(config,'BOT_TOKEN','')),'unit':'XTR','rate':'1.20','min':1,'max':MAX_NEW_STARS}]
+def methods(*, sbp_stub=False):
+    return [{'id':key,'name':name,'enabled':bool(getattr(config,variable,'')),'currency':'RUB','min':10,'max':1000000} for key,name,variable in [
+        ('crypto','Crypto Pay','CRYPTO_PAY_TOKEN'),('xrocket','xRocket','XROCKET_API_KEY'),('lave','Laveshka (Lava Pay)','LAVE_PAY_API_KEY')]] + [{'id':'platega','name':tr('СБП · Рубли'),'enabled':sbp_stub or bool(getattr(config,'PLATEGA_MERCHANT_ID','') and getattr(config,'PLATEGA_SECRET','')),'currency':'RUB','min':1,'max':10000,'stub':sbp_stub}] + [{'id':'stars','name':'Telegram Stars ⭐','enabled':bool(getattr(config,'BOT_TOKEN','')),'unit':'XTR','rate':'1.20','min':1,'max':MAX_NEW_STARS}]
+
+
+class PaymentUnavailable(ValueError):
+    code = 'payment_unavailable'
+
+
+async def sbp_stub_enabled():
+    return await db.get_setting('platega_stub', '1') == '1'
+
+
+async def get_methods():
+    return methods(sbp_stub=await sbp_stub_enabled())
 
 
 def invoice_payload(provider, invoice):
@@ -31,20 +43,23 @@ def invoice_payload(provider, invoice):
     return str(invoice.get('payload',''))
 
 
-def parse_amount(value):
+def parse_amount(value, provider=None):
+    minimum, maximum = (Decimal('1'), Decimal('10000')) if provider == 'platega' else (Decimal('10'), Decimal('1000000'))
     try:
         if isinstance(value, bool) or len(str(value)) > 40:
             raise ValueError
         amount = Decimal(str(value).strip().replace('\xa0', '').replace(' ', '').replace(',', '.'))
-        if not amount.is_finite() or not Decimal('10') <= amount <= Decimal('10000') or amount != amount.quantize(Decimal('.01')):
+        if not amount.is_finite() or not minimum <= amount <= maximum or amount != amount.quantize(Decimal('.01')):
             raise ValueError
     except (InvalidOperation, ValueError):
-        raise ValueError(tr('Сумма должна быть от 10 до 10 000 ₽, до двух знаков после запятой.')) from None
+        raise ValueError(tr('Сумма должна быть от {0} до {1} ₽, до двух знаков после запятой.', '1' if provider == 'platega' else '10', '10 000' if provider == 'platega' else '1 000 000')) from None
     return amount
 
 
 async def create_deposit(user_id, username, provider, amount):
-    amount = parse_amount(amount)
+    amount = parse_amount(amount, provider)
+    if provider == 'platega' and await sbp_stub_enabled():
+        raise PaymentUnavailable(tr('Оплата через СБП временно недоступна. Попробуйте позже или выберите другой способ оплаты.'))
     if provider not in PROVIDERS or not next((method['enabled'] for method in methods() if method['id'] == provider)):
         raise ValueError(tr('Этот платёжный сервис пока не настроен.'))
     payload = f'rub_topup:{user_id}:{amount:.2f}'

@@ -102,5 +102,5 @@ def info_text():
         return ("ℹ️ <b>About the store</b>\n\n💬 Contact support if you have a question or a problem with a purchase.\n\n"
                 "📄 <b>Documents</b>\nBy using this bot, you agree to the following documents:\n"
                 "• <a href='https://telegra.ph/POLZOVATELSKOE-SOGLASHENIE-SBAND-ACCS-11-05'>User agreement</a>\n"
-                "• <a href='https://telegra.ph/POLITIKA-KONFIDENCIALNOSTI-SBAND-ACCS-11-05-2'>Privacy policy</a>\n\nStore verification code: <code>mekbuda</code>\nMaximum top-up, item price and cart purchase: RUB 10,000. Stars: 1 ⭐ = RUB 1.20.")
-    return INFO_TEXT + '\n\nКод проверки магазина: <code>mekbuda</code>\nЛимит одной оплаты, товара и корзины — 10 000 ₽. Оплата Stars: 1 ⭐ = 1,20 ₽.'
+                "• <a href='https://telegra.ph/POLITIKA-KONFIDENCIALNOSTI-SBAND-ACCS-11-05-2'>Privacy policy</a>\n\nStore verification code: <code>mekbuda</code>\nSBP top-ups: RUB 1 to 10,000. Item and cart price: up to RUB 10,000. Stars: 1 ⭐ = RUB 1.20.")
+    return INFO_TEXT + '\n\nКод проверки магазина: <code>mekbuda</code>\nСБП: пополнение от 1 до 10 000 ₽. Цена товара и корзины — до 10 000 ₽. Оплата Stars: 1 ⭐ = 1,20 ₽.'

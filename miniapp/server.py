@@ -313,7 +313,7 @@ async def cart_checkout(request):
 
 
 async def payment_methods(request):
-    return response({'items': payments.methods()})
+    return response({'items': await payments.get_methods()})
 
 
 async def create_invoice(request):
@@ -327,7 +327,7 @@ async def create_invoice(request):
     try:
         result = await payments.create_deposit(request['user']['id'], request['user']['username'], body['provider'], body['amount'])
     except ValueError as exc:
-        raise storage.CheckoutError(str(exc)) from None
+        raise storage.CheckoutError(str(exc), getattr(exc, 'code', 'invoice_unavailable')) from None
     return response(result, 201)
 
 

@@ -264,11 +264,12 @@
       const data = await api('payment-methods'), methods = data.items.filter(m => m.enabled);
       if (dialogRevision !== state.dialogRevision) return;
       if (!methods.length) { modal(SbandT("<h2 id=\"dialog-title\">Пополнение баланса</h2><p>Платёжные сервисы пока не настроены. Обратись к администратору через Telegram-бота.</p><button class=\"primary-button\" data-bot>Открыть бота <svg class=\"arrow\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M6 18 18 6M6 6h12v12\"/></svg></button>")); return; }
-      modal(SbandT("<h2 id=\"dialog-title\">Пополнить баланс</h2><p>Баланс обновится после подтверждения оплаты.</p><label for=\"topup-method\">Способ оплаты</label><select id=\"topup-method\">{0}</select><label for=\"topup-amount\" id=\"topup-amount-label\">Сумма, ₽</label><input id=\"topup-amount\" type=\"number\" inputmode=\"decimal\" min=\"10\" max=\"10000\" step=\"0.01\" value=\"500\"><p id=\"topup-quote\" class=\"muted\" aria-live=\"polite\"></p><p id=\"dialog-error\" class=\"dialog-error\" role=\"alert\" hidden></p><button class=\"primary-button\" id=\"create-invoice\">Создать счёт <svg class=\"arrow\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M6 18 18 6M6 6h12v12\"/></svg></button>",methods.map(m => `<option value="${esc(m.id)}">${esc(m.name)}</option>`).join('')));
+      modal(SbandT("<h2 id=\"dialog-title\">Пополнить баланс</h2><p>Баланс обновится после подтверждения оплаты.</p><label for=\"topup-method\">Способ оплаты</label><select id=\"topup-method\">{0}</select><label for=\"topup-amount\" id=\"topup-amount-label\">Сумма, ₽</label><input id=\"topup-amount\" type=\"number\" inputmode=\"decimal\" min=\"10\" max=\"1000000\" step=\"0.01\" value=\"500\"><p id=\"topup-quote\" class=\"muted\" aria-live=\"polite\"></p><p id=\"dialog-error\" class=\"dialog-error\" role=\"alert\" hidden></p><button class=\"primary-button\" id=\"create-invoice\">Создать счёт <svg class=\"arrow\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M6 18 18 6M6 6h12v12\"/></svg></button>",methods.map(m => `<option value="${esc(m.id)}">${esc(m.name)}</option>`).join('')));
       const amountInput = $('#topup-amount'), methodInput = $('#topup-method'), createButton = $('#create-invoice');
       const remembered = { rub: '500', stars: '100' };
       let currentUnit = null;
-      const starCount = () => /^[0-9]{1,5}$/.test(amountInput.value) && Number(amountInput.value) >= 1 && Number(amountInput.value) <= 8333;
+      const selectedMethod = () => methods.find(method=>method.id===methodInput.value);
+      const starCount = () => /^[0-9]{1,5}$/.test(amountInput.value) && Number(amountInput.value) >= 1 && Number(amountInput.value) <= Number(selectedMethod().max);
       const updateQuote = () => {
         const stars = methodInput.value === 'stars', unit = stars ? 'stars' : 'rub';
         if (currentUnit !== unit) {
@@ -276,14 +277,15 @@
           amountInput.value = remembered[unit]; currentUnit = unit;
         }
         $('#topup-amount-label').textContent = stars ? SbandT("Количество звёзд, ⭐") : SbandT("Сумма, ₽");
-        amountInput.min = stars ? '1' : '10'; amountInput.max = stars ? '8333' : '10000'; amountInput.step = stars ? '1' : '0.01'; amountInput.inputMode = stars ? 'numeric' : 'decimal';
-        const valid = stars ? starCount() : amountInput.checkValidity() && Number(amountInput.value) >= 10 && Number(amountInput.value) <= 10000;
-        $('#topup-quote').textContent = stars ? (valid ? SbandT("{0} ⭐ → {1} ₽ на баланс. Курс: 1 ⭐ = 1,20 ₽.",num(amountInput.value),Number(amountInput.value * 120 / 100).toLocaleString(window.SbandI18n.locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })) : SbandT("Введите целое число от 1 до 8 333 ⭐.")) : SbandT("Сумма пополнения: от 10 до 10 000 ₽.");
+        amountInput.min = String(selectedMethod().min); amountInput.max = String(selectedMethod().max); amountInput.step = stars ? '1' : '0.01'; amountInput.inputMode = stars ? 'numeric' : 'decimal';
+        const valid = stars ? starCount() : amountInput.checkValidity() && Number(amountInput.value) >= Number(amountInput.min) && Number(amountInput.value) <= Number(amountInput.max);
+        $('#topup-quote').textContent = stars ? (valid ? SbandT("{0} ⭐ → {1} ₽ на баланс. Курс: 1 ⭐ = 1,20 ₽.",num(amountInput.value),Number(amountInput.value * 120 / 100).toLocaleString(window.SbandI18n.locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })) : SbandT("Введите целое число от 1 до 10 000 ⭐.")) : SbandT('Сумма пополнения: от {0} до {1} ₽.',num(amountInput.min),num(amountInput.max));
+        createButton.textContent = methodInput.value === 'platega' ? SbandT('Оплатить {0} ₽',num(amountInput.value)) : SbandT('Создать счёт');
         createButton.disabled = state.busy || !valid;
       };
       methodInput.onchange = updateQuote; amountInput.oninput = updateQuote; updateQuote();
       createButton.onclick = async () => {
-        if (state.busy || (methodInput.value === 'stars' && !starCount())) return;
+        if (state.busy || !amountInput.checkValidity() || (methodInput.value === 'stars' && !starCount())) return;
         const provider = methodInput.value;
         const body = provider === 'stars' ? { provider, stars: Number(amountInput.value) } : { provider, amount: amountInput.value };
         const revision = state.dialogRevision;
@@ -301,7 +303,7 @@
     let url;
     try { url = new URL(i.pay_url); } catch (_) { state.invoice = null; throw new Error(SbandT("Не удалось открыть ссылку счёта. Создай новый счёт.")); }
     const stars = i.provider === 'stars';
-    if (url.protocol !== 'https:' || url.username || url.password || (stars && (!['t.me', 'telegram.me'].includes(url.hostname) || !Number.isInteger(i.stars) || i.stars < 1 || i.stars > 8333 || Math.round(Number(i.amount) * 100) !== i.stars * 120))) {
+    if (url.protocol !== 'https:' || url.username || url.password || (stars && (!['t.me', 'telegram.me'].includes(url.hostname) || !Number.isInteger(i.stars) || i.stars < 1 || i.stars > 10000 || Math.round(Number(i.amount) * 100) !== i.stars * 120))) {
       state.invoice = null; throw new Error(SbandT("Счёт содержит некорректные условия оплаты. Создай новый счёт."));
     }
     const nativeStars = stars && typeof tg?.openInvoice === 'function';

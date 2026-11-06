@@ -48,6 +48,7 @@ async def main():
         assert not await sql("SELECT slug FROM categories WHERE slug IN ('ru','ua') AND is_active=1")
         await sql('INSERT INTO users(id,balance) VALUES(42,30000),(43,30000)')
         await sql("UPDATE settings SET value='fixture_support' WHERE `key`='support_username'")
+        await admin_web.save_settings(42,{'platega_stub':'0'})
         for slug,label in [('ru','Россия'),('ua','Украина'),('custom','🇷🇺 Premium')]:
             await denied(admin_web.save_category(42,{'slug':slug,'name':label}))
         for phone in ['+79991234567','+380991234567']:
@@ -123,15 +124,15 @@ async def main():
 
         stars=await ledger.register_invoice(43,8333)
         assert stars['amount']=='9999.60'
-        await denied(ledger.register_invoice(43,8334))
+        await denied(ledger.register_invoice(43,10001))
         old_id=uuid4().hex
         await sql("INSERT INTO payment_invoices(provider,invoice_id,user_id,amount_rub,stars_count,created_at,expires_at,next_check_at) VALUES('stars',%s,43,12000,10000,UTC_TIMESTAMP(),UTC_TIMESTAMP()+INTERVAL 1 HOUR,UTC_TIMESTAMP())",(old_id,))
-        await denied(ledger.check_precheckout(43,ledger.PAYLOAD_PREFIX+old_id,'XTR',10000))
+        assert (await ledger.check_precheckout(43,ledger.PAYLOAD_PREFIX+old_id,'XTR',10000))['stars']==10000
         before=(await db.get_user(43))['balance']
         assert await ledger.credit_payment(43,old_id,10000,'fixture-legacy-charge')==12000
         assert await ledger.credit_payment(43,old_id,10000,'fixture-legacy-charge') is None
         assert (await db.get_user(43))['balance']==before+12000
-        report('New Stars top-ups stop at 8,333; already paid historical 10,000-Star receipts remain exactly-once credited')
+        report('Stars retain their native 10,000 count ceiling independently of SBP; historical receipts remain exactly-once credited')
 
         runner=web.AppRunner(create_app(token=TEST_TOKEN,bot=SimpleNamespace(),bot_username='fixture_store_bot'),access_log=None)
         await runner.setup();await web.TCPSite(runner,'127.0.0.1',8089).start()

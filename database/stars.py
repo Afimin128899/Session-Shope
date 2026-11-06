@@ -9,7 +9,6 @@ import aiomysql
 
 from database.admin_tools import _transaction
 from database.db import _get_pool
-from utils.commerce_policy import MAX_NEW_STARS
 
 STARS_RATE = Decimal('1.20')
 MAX_STARS = 10000  # Historical receipt/reconciliation ceiling; do not discard paid invoices.
@@ -30,13 +29,7 @@ def parse_count(value):
 
 
 def parse_new_count(value):
-    try:
-        value = parse_count(value)
-    except ValueError:
-        raise ValueError(tr('Введите целое количество звёзд от 1 до 8 333 (лимит 10 000 ₽).')) from None
-    if value > MAX_NEW_STARS:
-        raise ValueError(tr('Лимит пополнения — 10 000 ₽: не более 8 333 ⭐.'))
-    return value
+    return parse_count(value)
 
 
 def invoice_id(payload):
