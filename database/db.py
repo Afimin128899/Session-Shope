@@ -333,6 +333,8 @@ async def init_db ():
                     await init_commerce_schema(cur, DB_CONFIG["db"])
                     from database.quality import init_schema as init_quality_schema
                     await init_quality_schema(cur, DB_CONFIG["db"])
+                    from database.welcome import init_schema as init_welcome_schema
+                    await init_welcome_schema(cur)
 
                     await cur.execute("""
                         CREATE TABLE IF NOT EXISTS stock_subscriptions (
@@ -388,15 +390,10 @@ async def update_user_username(user_id: int, username: str | None):
             await cur.execute("UPDATE users SET username = %s WHERE id = %s", (clean_username, user_id))
 
 
-async def create_user(user_id: int, username: str | None = None):
-    clean_username = username.lstrip("@").strip() if username else None
-    async with _get_pool().acquire() as conn:
-        async with conn.cursor() as cur:
-            await cur.execute(
-                "INSERT INTO users (id, balance, balance_usdt, username) VALUES (%s, 0, 0, %s) "
-                "ON DUPLICATE KEY UPDATE username = IF(%s IS NOT NULL AND %s != '', %s, username)",
-                (user_id, clean_username, clean_username, clean_username, clean_username)
-            )
+async def create_user(user_id: int, username: str | None = None, *, welcome_bonus=False):
+    # Administrative profile creation alone is not a visitor's first login.
+    from database.referrals import register_user
+    return await register_user(user_id, None, username, welcome_bonus=welcome_bonus)
 
 async def add_balance (user_id :int ,amount :float ):
     async with _get_pool().acquire() as conn :
@@ -986,7 +983,7 @@ async def set_setting(key: str, value: str) -> None:
 
 # ── Referral DB functions ─────────────────────────────────────────────
 
-async def create_user_with_referrer(user_id: int, referrer_id: int | None, username: str | None = None) -> None:
+async def create_user_with_referrer(user_id: int, referrer_id: int | None, username: str | None = None):
     from database.referrals import register_user
     return await register_user(user_id, referrer_id, username)
 

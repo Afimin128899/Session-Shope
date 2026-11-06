@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 
 async def ensure_user(user_id: int, username: str | None = None) -> None:
-    await create_user(user_id, username)
+    await create_user(user_id, username, welcome_bonus=True)
 
 
 async def answer_safe(call: CallbackQuery, *args, **kwargs) -> None:

@@ -40,6 +40,7 @@
     $('#avatar').textContent = initial; $('#profile-avatar').textContent = initial;
     $('#profile-name').textContent = data.user.first_name || SbandT("Покупатель"); $('#profile-username').textContent = data.user.username ? '@' + data.user.username : SbandT("Покупатель Sband ACCS");
     $('#profile-id').textContent = data.user.id; $('#header-balance').textContent = rub(data.balance); $('#profile-balance').textContent = rub(data.balance);
+    $('#welcome-bonus').hidden = !(Number(data.welcome_bonus) > 0);
     $('#profile-usdt').textContent = num(data.balance_usdt) + ' USDT'; $('#version').textContent = 'v' + data.version;
   }
   function updateSalesStatus(status={}) {

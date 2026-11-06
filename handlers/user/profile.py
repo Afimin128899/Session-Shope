@@ -4,6 +4,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
 
 from database.db import get_user, get_referral_count, get_referral_settings
+from database import welcome
 from keyboards.user_kb import _btn_text, profile_menu
 from utils.nav import edit_message_safe, answer_safe
 from utils import constants as c
@@ -20,6 +21,8 @@ async def my_profile(call: CallbackQuery, state: FSMContext):
     ref_count = await get_referral_count(call.from_user.id)
     username = call.from_user.username or '—'
     text = tr("<tg-emoji emoji-id='5258362837411045098'>👤</tg-emoji> <b>Мой профиль</b>\n\n┏ <tg-emoji emoji-id='5258011929993026890'>👤</tg-emoji> <b>Пользователь:</b> <code>@{0}</code>\n┣ <tg-emoji emoji-id='5258476306152038031'>🔒</tg-emoji> <b>ID:</b> <code>{1}</code>\n┣ <tg-emoji emoji-id='5406841020769936275'>💵</tg-emoji> <b>Баланс:</b> <code>{2} ₽</code>\n┗ <tg-emoji emoji-id='{3}'>✋</tg-emoji> <b>Рефералов:</b> <code>{4}</code>", f'{username}', f'{call.from_user.id}', f'{balance:.2f}', f'{EMOJI_HAND}', f'{ref_count}')
+    if await welcome.received(call.from_user.id):
+        text += '\n\n' + tr('🎁 Приветственный бонус 4 ₽ уже зачислен.')
     kb = await profile_menu()
     await edit_message_safe(call, text, reply_markup=kb)
     await answer_safe(call)

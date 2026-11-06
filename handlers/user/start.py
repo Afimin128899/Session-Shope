@@ -30,7 +30,9 @@ async def cmd_start(message: Message, command, state=None):
         except ValueError:
             referrer_id = None
     is_new = await is_new_user(message.from_user.id)
-    await create_user_with_referrer(message.from_user.id, referrer_id if is_new else None, message.from_user.username)
+    welcome_bonus = await create_user_with_referrer(message.from_user.id, referrer_id if is_new else None, message.from_user.username)
+    if welcome_bonus:
+        await message.answer(tr('🎁 Приветственный бонус: {0} ₽ зачислены на баланс. Используйте их для покупок в магазине.', f'{welcome_bonus:.2f}'))
     await update_user_username(message.from_user.id, message.from_user.username)
     if args and args.startswith('product_'):
         from utils.miniapp import miniapp_url

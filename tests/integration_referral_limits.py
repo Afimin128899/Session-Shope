@@ -9,16 +9,16 @@ from miniapp import storage
 
 async def limit_scenarios(sql,balance,stock):
     await admin_web.save_settings(42,{'referral_daily_limit':'30','referral_signup_bonus':'3','referral_deposit_pct':'5','referral_purchase_pct':'5','referral_discount_pct':'5'})
-    await db.create_user_with_referrer(200,None)
+    await db.create_user(200)  # Existing inviter fixture; no welcome grant.
     await db.create_user_with_referrer(300,200,'limit_buyer')
     await db.create_user_with_referrer(301,200,'limit_buyer_2')
     assert await balance(200)==6
     await db.credit_paid_deposit(300,1000,'crypto','daily-first')
-    assert await balance(300)==1100 and await balance(200)==30
+    assert await balance(300)==1104 and await balance(200)==30
     # Reaching the cap does not stop future real top-ups or create deferred rewards.
     await db.credit_paid_deposit(301,200,'xrocket','daily-full')
     await db.create_user_with_referrer(302,200,'limit_buyer_3')
-    assert await balance(301)==220 and await balance(200)==30
+    assert await balance(301)==224 and await balance(200)==30
     assert (await referrals.summary(200))['daily']['remaining']=='0'
     assert (await sql("SELECT amount,requested_amount,limit_reason FROM referral_rewards WHERE reference='daily-first'"))[0]==(D(24),D(50),'daily_limit')
     print('PASS: RUB 30/day is shared by signups and deposits; partial final rewards stop exactly at the cap without losing payer money',flush=True)
@@ -51,14 +51,14 @@ async def limit_scenarios(sql,balance,stock):
         assert (await sql("SELECT amount FROM referral_rewards WHERE reference='remaining-after-unblock'"))[0][0]==11
     print('PASS: Moscow date changes reset allowance; blocked recipients earn zero while buyer payments/purchases/refunds continue; refunds do not replenish the cap',flush=True)
 
-    await db.create_user_with_referrer(500,None)
+    await db.create_user(500)  # Existing inviter fixture; no welcome grant.
     await db.create_user_with_referrer(600,500)
     await db.create_user_with_referrer(601,500)
     await asyncio.gather(db.credit_paid_deposit(600,1000,'crypto','concurrent-cap-a'),db.credit_paid_deposit(601,1000,'crypto','concurrent-cap-b'))
     assert await balance(500)==30
-    assert await balance(600)==1100 and await balance(601)==1100
+    assert await balance(600)==1104 and await balance(601)==1104
     # Cap purchases too, with an actual saved partial bonus that can later be refunded.
-    await db.create_user_with_referrer(700,None)
+    await db.create_user(700)  # Existing inviter fixture; no welcome grant.
     await db.create_user_with_referrer(701,700)
     await sql('UPDATE users SET balance=1000 WHERE id=701')
     await sql('UPDATE users SET balance=29 WHERE id=700')
@@ -72,8 +72,8 @@ async def limit_scenarios(sql,balance,stock):
     print('PASS: simultaneous deposits cannot exceed the cap; purchases save and refund the actual partial reward',flush=True)
 
     # Old ledger-free purchases today count towards the allowance after upgrade.
-    await db.create_user_with_referrer(800,None)
-    await db.create_user_with_referrer(801,None)
+    await db.create_user(800)  # Existing inviter fixture; no welcome grant.
+    await db.create_user(801)  # Existing inviter fixture; no welcome grant.
     identity=await stock(72)
     await sql("UPDATE accounts SET status='sold' WHERE id=%s",(identity,))
     await sql("INSERT INTO purchases(user_id,account_id,date,currency,paid_amount,referrer_id,referral_bonus) VALUES(801,%s,%s,'RUB',100,800,25)",(identity,str(referrals.reward_day())+' 00:01:00'))
@@ -81,7 +81,7 @@ async def limit_scenarios(sql,balance,stock):
     assert await balance(800)==3
     assert D((await referrals.summary(800))['daily']['issued'])==28
     await referrals.set_block(42,888888,True,'Block future ID')
-    await db.create_user_with_referrer(888888,None)
+    await db.create_user(888888)  # Existing inviter fixture; no welcome grant.
     await db.create_user_with_referrer(888889,888888)
     assert await balance(888888)==0
     assert (await referrals.summary(888888))['daily']['blocked']
@@ -89,7 +89,7 @@ async def limit_scenarios(sql,balance,stock):
     assert {item['id'] for item in listing['items']}=={300,301,302,303}
     assert not ({item['id'] for item in (await referrals.invited(500))['items']} & {300,301,302,303})
     assert 'balance' not in str(listing) and 'PRIVATE_REFERRAL_SESSION' not in str(listing)
-    await db.create_user_with_referrer(900,None)
+    await db.create_user(900)  # Existing inviter fixture; no welcome grant.
     for user_id in range(1000,1025):
         await db.create_user_with_referrer(user_id,900,'ref_user_'+str(user_id))
     assert len((await referrals.invited(900,0))['items'])==20 and (await referrals.invited(900,0))['has_more']

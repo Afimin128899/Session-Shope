@@ -11,7 +11,7 @@ from pathlib import Path
 from aiohttp import web
 
 import config
-from database import db, commerce, quality, coupons, tickets
+from database import db, commerce, quality, coupons, tickets, welcome
 from services import payments
 from services.demo import STORE
 from miniapp.auth import AuthError, validate_init_data
@@ -122,7 +122,7 @@ async def authenticate(request, handler):
         member = await bot.get_chat_member(channel, user['id'])
         if member.status not in {'creator', 'administrator', 'member'} and (not getattr(member, 'is_member', False)):
             return response({'error': tr('Сначала подпишитесь на канал в боте.'), 'code': 'subscription_required'}, 403)
-    await db.create_user(user['id'], user['username'])
+    await db.create_user(user['id'], user['username'], welcome_bonus=True)
     return await handler(request)
 
 
@@ -144,6 +144,7 @@ async def me(request):
     user = await db.get_user(request['user']['id'])
     return response({'user': request['user'], 'balance': str(user['balance']), 'balance_usdt': str(user['balance_usdt']),
                      'language':language(user.get('language')), 'shop_status':request['shop_status'],
+                     'welcome_bonus': str(await welcome.received(request['user']['id'])),
                      'bot_username': request.app[BOT_USERNAME], 'test_mode_active': STORE.active(request['user']['id']), 'version': BOT_VERSION, 'is_admin': request['user']['id'] in config.ADMIN_IDS})
 
 

@@ -53,6 +53,7 @@ class MiniAppAPITests(unittest.IsolatedAsyncioTestCase):
         self.patchers = [
             patch.object(storage, 'access_settings', AsyncMock(return_value={})),
             patch.object(db, 'create_user', AsyncMock()),
+            patch.object(server.welcome, 'received', AsyncMock(return_value=Decimal(0))),
             patch.object(db, 'get_setting', AsyncMock(return_value='1')),
             patch.object(server.quality, 'my_review', AsyncMock(return_value=None)),
             patch.object(db, 'get_user', AsyncMock(return_value={'balance': 500, 'balance_usdt': 0})),
@@ -199,7 +200,7 @@ class MiniAppBotIntegrationTests(unittest.IsolatedAsyncioTestCase):
         from keyboards import user_kb
         message = SimpleNamespace(from_user=SimpleNamespace(id=42, username='alex_test', first_name='Alex'), answer=AsyncMock())
         with patch.object(start, 'is_new_user', AsyncMock(return_value=False)), \
-             patch.object(start, 'create_user_with_referrer', AsyncMock()), \
+             patch.object(start, 'create_user_with_referrer', AsyncMock(return_value=Decimal(0))), \
              patch.object(start, 'update_user_username', AsyncMock()), \
              patch.object(db, 'get_purchase_for_user', AsyncMock(return_value={'id': 5, 'data': 'SECRET'})) as get, \
              patch.object(user_kb, 'after_purchase_menu', AsyncMock(return_value=None)) as menu:

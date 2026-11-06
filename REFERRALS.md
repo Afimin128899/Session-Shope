@@ -53,3 +53,5 @@ systemctl restart session-shope.service
 Схема добавляется при запуске: новые поля `referral_settings`, таблицы `referral_rewards`, `referral_daily_totals` и `referral_blocks`. Старые заказы, связи приглашений и суммы сохраняются. Новые таблицы включены в проверку восстановления резервных копий. Новых платёжных ключей или переменных `.env` не требуется.
 
 Проверки разработки: `python -m unittest discover -s tests`, затем `python tests/integration_referrals.py` и `python tests/integration_miniapp.py --admin`. Интеграционные сценарии используют одноразовую MariaDB на `127.0.0.1:13307` и тестовые ответы, без рабочих платежей. Для Chromium: `python tests/integration_referrals.py --serve`, затем `node tests/referrals_browser.cjs`.
+
+Приветственные **4 ₽ новому пользователю** начисляются отдельно от награды пригласившему, один раз при регистрации. Это бонус на покупки, а не платёжное пополнение: процент за пополнение с него не начисляется. Подробнее: [PROFILE-BONUSES.md](PROFILE-BONUSES.md).

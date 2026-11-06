@@ -1664,5 +1664,7 @@
   "Сумма должна быть от {0} до {1} ₽, до двух знаков после запятой.": "Enter an amount from {0} to {1} ₽ with up to two decimal places.",
   "Сумма пополнения:": "Top-up amount:",
   "Сумма пополнения: от 1 до 10 000 ₽.\nЗаглушка:": "Top-up amount: from 1 to 10,000 ₽.\nPayment placeholder:",
-  "Сумма пополнения: от {0} до {1} ₽.": "Top-up amount: from {0} to {1} ₽."
+  "Сумма пополнения: от {0} до {1} ₽.": "Top-up amount: from {0} to {1} ₽.",
+  "🎁 Приветственный бонус: {0} ₽ зачислены на баланс. Используйте их для покупок в магазине.": "🎁 Welcome bonus: {0} ₽ added to your balance. Use it for purchases in the store.",
+  "🎁 Приветственный бонус 4 ₽ уже зачислен.": "🎁 Your 4 ₽ welcome bonus has been credited."
 }

@@ -228,25 +228,30 @@ async def reverse_deposit(cur, user_id, provider, reference):
     return amount
 
 
-async def register_user(user_id, referrer_id, username=None):
-    if type(user_id) is not int or user_id <= 0:
+async def register_user(user_id, referrer_id, username=None, *, welcome_bonus=True):
+    if type(user_id) is not int or not 0 < user_id <= 9223372036854775807:
         raise ValueError(tr('Некорректный пользователь.'))
     clean = username.lstrip('@').strip() if username else None
     async with _transaction() as cur:
-        await cur.execute('INSERT IGNORE INTO users(id,balance,balance_usdt,username) VALUES(%s,0,0,%s)', (user_id, clean))
+        # Upsert takes an exclusive row lock immediately. INSERT IGNORE followed
+        # by UPDATE can deadlock when the bot and Mini App enter concurrently.
+        await cur.execute("INSERT INTO users(id,balance,balance_usdt,username) VALUES(%s,0,0,%s) ON DUPLICATE KEY UPDATE username=IF(VALUES(username) IS NOT NULL AND VALUES(username)!='',VALUES(username),username)", (user_id, clean))
         new = cur.rowcount == 1
         if not new:
-            if clean:
-                await cur.execute('UPDATE users SET username=%s WHERE id=%s', (clean, user_id))
-            return
+            return Decimal(0)
+        awarded = Decimal(0)
+        if welcome_bonus:
+            from database.welcome import credit_new_user
+            awarded = await credit_new_user(cur, user_id)
         if type(referrer_id) is not int or not 0 < referrer_id <= 9223372036854775807 or referrer_id == user_id:
-            return
+            return awarded
         await cur.execute('SELECT id FROM users WHERE id=%s FOR UPDATE', (referrer_id,))
         if not await cur.fetchone():
-            return
+            return awarded
         await cur.execute('INSERT INTO referrals(referral_id,referrer_id) VALUES(%s,%s)', (user_id, referrer_id))
         values = await read_settings(cur, lock=True)
         await _award(cur, user_id, referrer_id, 'signup', 'telegram', str(user_id), Decimal(0), Decimal(0), values['signup_bonus'], values)
+        return awarded
 
 
 async def summary(user_id):

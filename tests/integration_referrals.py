@@ -56,7 +56,7 @@ async def main():
 
         credited=await asyncio.gather(db.credit_paid_deposit(100,1000,'crypto','deposit-1'),db.credit_paid_deposit(100,1000,'crypto','deposit-1'))
         assert sum(value is not None for value in credited)==1
-        assert await balance(100)==1100 and await balance(inviter)==53
+        assert await balance(100)==1104 and await balance(inviter)==53
         for provider in ['xrocket','lave','platega']:
             await db.credit_paid_deposit(100,100,provider,'deposit-'+provider)
         assert await balance(inviter)==68
