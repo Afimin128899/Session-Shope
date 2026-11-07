@@ -262,7 +262,8 @@ async def admin_balance_step_3(message: Message, state: FSMContext):
         currency = data.get('balance_currency', 'RUB')
         user_label = f'@{target_username} (<code>{uid}</code>)' if target_username else f'<code>{uid}</code>'
         await change_balance(message.from_user.id, uid, amount, currency, mode)
-        amount = float(amount)
+        from decimal import Decimal
+        amount = Decimal(amount)
         if currency == 'USDT':
             if mode == 'add':
                 res_text = tr('{0} Пользователю {1} добавлено <b>{2} USDT</b>', f'{OK}', f'{user_label}', f'{amount:.2f}')
@@ -397,7 +398,7 @@ async def show_account_detail(call: CallbackQuery):
     from database.db import get_category
     cat_row = await get_category(account['country'])
     cat_display = f"{cat_row['name']}" if cat_row else account['country']
-    text = tr('{0} <b>Карточка аккаунта</b>\n\n{1} Товар: <code>SBA-{2}</code>\nTelegram ID: <code>{3}</code>\n{4} Категория: <b>{5}</b>\n{6} Номер: <code>{7}</code>\n{8} 2FA пароль: <code>{9}</code>\n{10} Цена: <code>{11}</code> ₽\n{12} Статус: {13}\n', f'{ACCOUNT}', f'{INFO}', f"{account['id']:06d}", f"{account.get('telegram_user_id') or tr('Не сохранён')}", f'{EXCHANGE}', f'{cat_display}', f'{MAIL}', f"{account['number']}", f'{LOCK}', f"{account.get('password') or '-'}", f'{COIN}', f"{float(account['price']):.2f}", f'{CHART}', f'{status_text}')
+    text = tr('{0} <b>Карточка аккаунта</b>\n\n{1} Товар: <code>#{2}</code>\nTelegram ID: <code>{3}</code>\n{4} Категория: <b>{5}</b>\n{6} Номер: <code>{7}</code>\n{8} 2FA пароль: <code>{9}</code>\n{10} Цена: <code>{11}</code> ₽\n{12} Статус: {13}\n', f'{ACCOUNT}', f'{INFO}', f"{account['id']:02d}", f"{account.get('telegram_user_id') or tr('Не сохранён')}", f'{EXCHANGE}', f'{cat_display}', f'{MAIL}', f"{account['number']}", f'{LOCK}', f"{account.get('password') or '-'}", f'{COIN}', f"{float(account['price']):.2f}", f'{CHART}', f'{status_text}')
     from database.spam_checks import description as spam_description
     text += tr('\nСпамблок: ') + spam_description(account) + '\n'
     from html import escape
@@ -457,7 +458,7 @@ async def ask_delete_account(call: CallbackQuery):
     if not account:
         await answer_safe(call, tr('❌ Аккаунт не найден.'), show_alert=True)
         return
-    text = tr('{0} <b>Подтвердите удаление аккаунта</b>\n\n{1} Товар: <code>SBA-{2}</code>\nTelegram ID: <code>{3}</code>\n{4} Номер: <code>{5}</code>\n\n<i>{6} Это действие необратимо. Если аккаунт был куплен, он пропадёт из истории покупок пользователя.</i>', f'{ALERT}', f'{INFO}', f"{account['id']:06d}", f"{account.get('telegram_user_id') or tr('Не сохранён')}", f'{MAIL}', f"{account['number']}", f'{TRASH}')
+    text = tr('{0} <b>Подтвердите удаление аккаунта</b>\n\n{1} Товар: <code>#{2}</code>\nTelegram ID: <code>{3}</code>\n{4} Номер: <code>{5}</code>\n\n<i>{6} Это действие необратимо. Если аккаунт был куплен, он пропадёт из истории покупок пользователя.</i>', f'{ALERT}', f'{INFO}', f"{account['id']:02d}", f"{account.get('telegram_user_id') or tr('Не сохранён')}", f'{MAIL}', f"{account['number']}", f'{TRASH}')
     await edit_message_safe(call, text, reply_markup=confirm_delete_acc_menu(acc_id))
     await answer_safe(call)
 

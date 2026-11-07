@@ -72,7 +72,7 @@ async def price_alerts(bot):
             continue
         try:
             from utils.notification_language import send_translated
-            await send_translated(bot,item['user_id'],"💚 Цена снизилась!\n{0} · SBA-{1}\nНовая базовая цена: {2} ₽. Личная скидка применяется в магазине.\n\nУбрать уведомления можно, удалив аккаунт из избранного.",escape(item['name']),f"{item['account_id']:06d}",f"{item['price']:.2f}",parse_mode='HTML')
+            await send_translated(bot,item['user_id'],"💚 Цена снизилась!\n{0} · #{1}\nНовая базовая цена: {2} ₽. Личная скидка применяется в магазине.\n\nУбрать уведомления можно, удалив аккаунт из избранного.",escape(item['name']),f"{item['account_id']:02d}",f"{item['price']:.2f}",parse_mode='HTML')
         except Exception:
             log.warning('Price alert delivery deferred')
             continue

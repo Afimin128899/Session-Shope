@@ -8,6 +8,7 @@ from unittest.mock import patch
 from test_payments import config,db
 from test_miniapp import signed_data
 from database import imports,admin_web
+from inventory_fixture import confirm_fixture_account
 from services import telethon_auth
 
 
@@ -103,12 +104,13 @@ async def admin_scenarios(session,connection,headers):
     assert (await api('users/43/balance',body,'POST'))[0]==200
     assert (await api('users/43/balance',body,'POST'))[0]==400
     assert (await db.get_user(43))['balance']==before+Decimal(25)
-    status,data=await api('stock/'+str(ids[0]),{'price':'150.00','category':'us','warranty_hours':48,'registration_date':'2020-01-01','is_premium':True,'note':'Edited via API'},'PATCH')
+    await confirm_fixture_account(ids[0])
+    status,data=await api('stock/'+str(ids[0]),{'price':'150.00','category':'auto-us-clear','warranty_hours':48,'registration_date':'2020-01-01','is_premium':True,'note':'Edited via API'},'PATCH')
     assert status==200,data
     stock=await db.get_account(ids[0]);assert stock['price']==150 and stock['warranty_hours']==48
     from database import commerce
     await commerce.add_to_cart(43,ids[0])
-    assert (await api('stock/'+str(ids[0]),{'price':'100.00','category':'us','warranty_hours':24,'note':''},'PATCH'))[0]==400
+    assert (await api('stock/'+str(ids[0]),{'price':'100.00','category':'auto-us-clear','warranty_hours':24,'note':''},'PATCH'))[0]==400
     assert (await api('stock/'+str(ids[0]),method='DELETE'))[0]==400
     await commerce.remove_from_cart(43,ids[0])
     assert (await api('categories',{'slug':'admin-test','name':'Тестовая категория','active':True},'POST'))[0]==200

@@ -99,7 +99,7 @@ async def confirm_delete_account(call: CallbackQuery):
     if not removed:
         await answer_safe(call, tr('Аккаунт уже удалён.'), show_alert=True)
         return
-    await edit_message_safe(call, tr('✅ Аккаунт #{0} удален.', f'{account_id}'), reply_markup=back_to_admin())
+    await edit_message_safe(call, tr('✅ Аккаунт #{0} удален.', f'{account_id:02d}'), reply_markup=back_to_admin())
     await answer_safe(call)
 
 

@@ -60,11 +60,18 @@ class AdminMutationTests(unittest.IsolatedAsyncioTestCase):
                 await storage.change_balance(7, 42, value, 'RUB', 'set')
         self.conn.begin.assert_not_awaited()
 
-    async def test_negative_result_rolls_back(self):
+    async def test_admin_can_set_a_debt_or_add_above_the_sbp_limit(self):
+        await storage.change_balance(7,42,'-101','RUB','add')
+        self.assertEqual(self.cur.execute.call_args_list[1].args[1],(Decimal('-1'),42))
+        self.conn.commit.assert_awaited_once()
+        self.cur.execute.reset_mock()
+        await storage.change_balance(7,42,'1000000','RUB','set')
+        self.assertEqual(self.cur.execute.call_args_list[1].args[1],(Decimal('1000000'),42))
+
+    async def test_balance_overflow_still_rolls_back(self):
         with self.assertRaises(ValueError):
-            await storage.change_balance(7, 42, '-101', 'RUB', 'add')
+            await storage.change_balance(7,42,'9999999999.99999999','RUB','add')
         self.conn.rollback.assert_awaited_once()
-        self.assertEqual(self.cur.execute.await_count, 1)
 
     async def test_missing_user_cannot_produce_success_log(self):
         self.cur.fetchone.return_value = None

@@ -50,8 +50,6 @@ async def change_balance(admin_id, user_id, amount, currency, mode, request_key=
     if currency not in {'RUB', 'USDT'} or mode not in {'add', 'set'}:
         raise ValueError(tr('Некорректная операция с балансом.'))
     amount = _decimal(amount, '0.00000001', '9999999999.99999999')
-    if currency == 'RUB' and abs(amount) > Decimal('10000'):
-        raise ValueError(tr('Сумма операции не должна превышать 10 000 ₽.'))
     column = 'balance_usdt' if currency == 'USDT' else 'balance'
     async with _transaction() as cur:
         if request_key:
@@ -70,10 +68,8 @@ async def change_balance(admin_id, user_id, amount, currency, mode, request_key=
             raise ValueError(tr('Пользователь не найден.'))
         before = Decimal(str(user['balance']))
         after = before + amount if mode == 'add' else amount
-        if currency == 'RUB' and abs(after - before) > Decimal('10000'):
-            raise ValueError(tr('Сумма операции не должна превышать 10 000 ₽.'))
-        if not Decimal('0') <= after <= Decimal('9999999999.99999999'):
-            raise ValueError(tr('Итоговый баланс не может быть отрицательным или превышать лимит.'))
+        if abs(after) > Decimal('9999999999.99999999'):
+            raise ValueError(tr('Итоговый баланс превышает точность базы данных.'))
         await cur.execute(f'UPDATE users SET {column} = %s WHERE id = %s', (after, user_id))
         await _record(cur, admin_id, 'balance_' + mode, 'user', user_id, {'currency': currency, 'before': str(before), 'after': str(after)})
 

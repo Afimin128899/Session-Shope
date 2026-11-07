@@ -70,7 +70,7 @@ async def render_order(call, purchase_id):
             snapshot = {}
         if not isinstance(snapshot, dict):
             snapshot = {}
-        text = tr('<b>Детали покупки #{0}</b>\n\nКатегория: <b>{1}</b>\nСтатус: <b>{2}</b>\nТовар: <code>SBA-{3}</code>\nTelegram ID: <code>{4}</code>\nНомер: <code>{5}</code>\nПароль 2FA: <code>{6}</code>\nОплачено: {7}\nДата: {8}\nСпамблок при покупке: {9}\nГарантия: <b>{10}</b>', f'{purchase_id}', f'{escape(name)}', f'{escape(order_status(order))}', f"{order['account_id']:06d}", f"{order.get('telegram_user_id') or tr('Не сохранён')}", f"{escape(order['number'])}", f"{escape(order.get('password') or tr('Не установлен'))}", f'{paid}', f"{escape(str(order['date']))}", f'{escape(spam_checks.description(snapshot))}', f"{escape(assurance['label'])}")
+        text = tr('<b>Детали покупки #{0}</b>\n\nКатегория: <b>{1}</b>\nСтатус: <b>{2}</b>\nТовар: <code>#{3}</code>\nTelegram ID: <code>{4}</code>\nНомер: <code>{5}</code>\nПароль 2FA: <code>{6}</code>\nОплачено: {7}\nДата: {8}\nСпамблок при покупке: {9}\nГарантия: <b>{10}</b>', f'{purchase_id}', f'{escape(name)}', f'{escape(order_status(order))}', f"{order['account_id']:02d}", f"{order.get('telegram_user_id') or tr('Не сохранён')}", f"{escape(order['number'])}", f"{escape(order.get('password') or tr('Не установлен'))}", f'{paid}', f"{escape(str(order['date']))}", f'{escape(spam_checks.description(snapshot))}', f"{escape(assurance['label'])}")
         if assurance['active']:
             from datetime import datetime
             from zoneinfo import ZoneInfo

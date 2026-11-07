@@ -97,7 +97,7 @@ async def catalog(user_id, category='', query='', sort='new', page=0, *, min_pri
                 price=money(Decimal(str(row['price']))*factor)
                 before=max(Decimal(str(row['price'])),Decimal(str(row['compare_price'] or 0)))
                 reduction=money((1-price/before)*100) if before>0 else Decimal('0')
-                items.append({'id':row['id'],'product_id':f"SBA-{row['id']:06d}", 'telegram_user_id':str(row['telegram_user_id']) if row['telegram_user_id'] else None,
+                items.append({'id':row['id'],'product_id':f"#{row['id']:02d}", 'telegram_user_id':str(row['telegram_user_id']) if row['telegram_user_id'] else None,
                               'category':row['slug'],'name':row['name'],'phone':mask_phone(row['number']),
                               'price':str(price),'original_price':str(before),'discount':str(reduction),
                               'favorite':bool(row['favorite']), 'in_cart':bool(row['in_cart']),

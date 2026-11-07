@@ -108,7 +108,7 @@ async def begin_features(call, state):
     await state.clear()
     await state.update_data(quality_account=account)
     await state.set_state(Input.features)
-    await edit_message_safe(call, tr('Товар SBA-{0}. Гарантия сейчас: {1} ч.\nОтправьте четыре строки:\n<code>24\n2024-01-31\nда\nОписание аккаунта</code>\n1. Гарантия в часах, 0 = без гарантии (до 8760).\n2. Проверенная дата регистрации или ?.\n3. Premium: да / нет / ?.\n4. Описание до 500 символов или -.\nСохраняйте только проверенные характеристики. Проданные заказы сохранят прежние условия.', f'{account:06d}', f"{(row.get('warranty_hours') if row.get('warranty_hours') is not None else tr('не указана'))}"))
+    await edit_message_safe(call, tr('Товар #{0}. Гарантия сейчас: {1} ч.\nОтправьте четыре строки:\n<code>24\n2024-01-31\nда\nОписание аккаунта</code>\n1. Гарантия в часах, 0 = без гарантии (до 8760).\n2. Проверенная дата регистрации или ?.\n3. Premium: да / нет / ?.\n4. Описание до 500 символов или -.\nСохраняйте только проверенные характеристики. Проданные заказы сохранят прежние условия.', f'{account:02d}', f"{(row.get('warranty_hours') if row.get('warranty_hours') is not None else tr('не указана'))}"))
     await call.answer()
 
 

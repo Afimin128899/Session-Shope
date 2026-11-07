@@ -3,6 +3,7 @@ import asyncio
 from decimal import Decimal
 from unittest.mock import AsyncMock
 from test_payments import db
+from inventory_fixture import confirm_fixture_account
 from test_miniapp import signed_data
 from database import quality,coupons,commerce,activity,tickets,refunds
 from miniapp import storage
@@ -26,6 +27,8 @@ async def quality_scenarios(session,connection,headers):
         async with connection.cursor() as cur:
             await cur.execute('SELECT id,warranty_hours FROM accounts WHERE data=%s',(f'quality-session-{i}',))
             account,hours=await cur.fetchone();ids.append(account);assert hours==24
+    for account in ids:
+        await confirm_fixture_account(account)
     await quality.edit_characteristics(999,ids[0],hours=24,registered='2020-03-02',premium=True,note='Fixture account')
     result=await storage.checkout(42,ids[0],Decimal(95))
     order=result['id']

@@ -28,7 +28,18 @@ def classify_reply(text):
         'вы можете отправлять сообщения только взаимным контактам',
         'you can only send messages to mutual contacts',
     ))
-    return 'clear' if clear and not limited else 'limited' if limited and not clear else 'unknown'
+    permanent = any(part in text for part in (
+        'your account is permanently limited', 'your account has been permanently limited',
+        'your account is permanently restricted', 'your account has been permanently restricted',
+        'your account is now permanently limited',
+        'permanent limitations have been applied to your account',
+        'ваш аккаунт ограничен навсегда', 'ваш аккаунт заблокирован навсегда',
+        'на ваш аккаунт наложены бессрочные ограничения',
+        'на ваш аккаунт наложены постоянные ограничения',
+    ))
+    if clear and (limited or permanent):
+        return 'unknown'
+    return 'clear' if clear else 'permanent' if permanent else 'limited' if limited else 'unknown'
 
 
 def result(status, reason=None, retry_after=None):
@@ -52,10 +63,15 @@ async def _conversation(client, expected_id, expected_phone):
         except (YouBlockedUserError, UserIsBlockedError):
             await client(UnblockRequest(id=peer))
             sent = await dialog.send_message('/start')
-        reply = await dialog.get_response(sent)
-        if reply.sender_id != peer.id or reply.id <= sent.id:
-            return result('unknown', 'unrecognized')
-        status = classify_reply(reply.raw_text)
+        for attempt in range(2):
+            reply = await dialog.get_response(sent)
+            status = classify_reply(reply.raw_text) if reply.sender_id == peer.id and reply.id > sent.id else 'unknown'
+            if status != 'unknown' or attempt:
+                break
+            # Reset only the verified official bot; request one new reply rather
+            # than accepting an old dialog message or guessing that it is clear.
+            await client(UnblockRequest(id=peer))
+            sent = await dialog.send_message('/start')
         return result(status, 'unrecognized' if status == 'unknown' else None)
 
 
@@ -65,7 +81,7 @@ async def check_session(session, *, expected_id=None, expected_phone=None):
         if not isinstance(session, str) or len(session.strip()) < 100:
             return result('error', 'no_session')
         client = create_client(session_str=session)
-        return await asyncio.wait_for(_conversation(client, expected_id, expected_phone), timeout=25)
+        return await asyncio.wait_for(_conversation(client, expected_id, expected_phone), timeout=40)
     except FloodWaitError as exc:
         return result('error', 'flood_wait', max(1, int(exc.seconds)))
     except TimeoutError:

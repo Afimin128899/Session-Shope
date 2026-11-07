@@ -57,6 +57,10 @@ async def main():
         assert not await sql('SELECT identity_key FROM inventory_identities')
         await db.add_account('kz','','+77011234567','-',100,'fixture-kz')
         await db.add_account('us','','+15551230002','-',10000,'fixture-at-limit')
+        from database import spam_checks
+        for _ in range(2):
+            lease=await spam_checks.claim()
+            assert await spam_checks.finish(lease,{'status':'clear','reason':None})
         report('Defaults exclude restricted categories; adding/category creation reject blocked origins and prices; Kazakhstan works')
 
         batch=await imports.create(42)
@@ -104,8 +108,8 @@ async def main():
         assert not await admin_tools.change_account_price(42,sold,100)
         await admin_tools.change_category_price(42,'us',6000)
         assert (await sql('SELECT price FROM accounts WHERE id=%s',(sold,)))[0][0]==20000
-        await denied(admin_tools.change_balance(42,43,10001,'RUB','add'))
-        report('Idempotent migration withdraws legacy stock; category repricing preserves sold history and monetary adjustments stay bounded')
+        await admin_tools.change_balance(42,43,10001,'RUB','add')
+        report('Idempotent migration withdraws legacy stock; category repricing preserves sold history; administrative balance changes are independent of SBP limits')
 
         identity='1a413e35-0db0-48b5-bf29-2461e0652df0'
         pending={'id':identity,'pay_url':'https://app.platega.io/pay/fixture'}

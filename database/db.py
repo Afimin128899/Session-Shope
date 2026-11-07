@@ -665,10 +665,15 @@ async def add_account(country, code, number, password, price, data, telegram_use
     from utils.commerce_policy import money, category as check_category
     price = money(price)
     async with _transaction() as cur:
-        await check_category(cur, country)
+        if country != 'auto':
+            await check_category(cur, country)
         keys = await claim(cur, number, telegram_user_id, data)
+        from database.auto_categories import ensure
+        country = await ensure(cur, number, 'not_checked')
         await cur.execute("INSERT INTO accounts(country,code,number,password,price,data,telegram_user_id,warranty_hours,is_premium,attributes_checked_at) VALUES(%s,%s,%s,%s,%s,%s,%s,24,%s,UTC_TIMESTAMP())", (country,code,number,password,price,data,telegram_user_id,is_premium))
-        await bind(cur, keys, cur.lastrowid)
+        account_id = cur.lastrowid
+        await bind(cur, keys, account_id)
+        return account_id
 
 async def delete_account (account_id :int ):
     async with _get_pool().acquire() as conn :
@@ -680,11 +685,13 @@ async def update_account_country(account_id: int, new_country: str) -> bool:
     from database.admin_tools import _transaction
     from utils.commerce_policy import category, require_phone
     async with _transaction() as cur:
-        await cur.execute("SELECT id,number FROM accounts WHERE id=%s AND status IN ('available','review') FOR UPDATE", (account_id,))
+        await cur.execute("SELECT id,number,country,spam_status,spam_checked_at FROM accounts WHERE id=%s AND status IN ('available','review') FOR UPDATE", (account_id,))
         row = await cur.fetchone()
         if not row:
             return False
         require_phone(row['number'])
+        from database.auto_categories import validate_selection
+        validate_selection(row['number'], row.get('spam_status'), row.get('spam_checked_at'), new_country, row.get('country'))
         await category(cur, new_country)
         await cur.execute('UPDATE accounts SET country=%s WHERE id=%s', (new_country, account_id))
         return True
@@ -848,10 +855,15 @@ async def add_account(country, code, number, password, price, data, telegram_use
     from utils.commerce_policy import money, category as check_category
     price = money(price)
     async with _transaction() as cur:
-        await check_category(cur, country)
+        if country != 'auto':
+            await check_category(cur, country)
         keys = await claim(cur, number, telegram_user_id, data)
+        from database.auto_categories import ensure
+        country = await ensure(cur, number, 'not_checked')
         await cur.execute("INSERT INTO accounts(country,code,number,password,price,data,telegram_user_id,warranty_hours,is_premium,attributes_checked_at) VALUES(%s,%s,%s,%s,%s,%s,%s,24,%s,UTC_TIMESTAMP())", (country,code,number,password,price,data,telegram_user_id,is_premium))
-        await bind(cur, keys, cur.lastrowid)
+        account_id = cur.lastrowid
+        await bind(cur, keys, account_id)
+        return account_id
 
 async def delete_account (account_id :int ):
     async with _get_pool().acquire() as conn :
@@ -863,11 +875,13 @@ async def update_account_country(account_id: int, new_country: str) -> bool:
     from database.admin_tools import _transaction
     from utils.commerce_policy import category, require_phone
     async with _transaction() as cur:
-        await cur.execute("SELECT id,number FROM accounts WHERE id=%s AND status IN ('available','review') FOR UPDATE", (account_id,))
+        await cur.execute("SELECT id,number,country,spam_status,spam_checked_at FROM accounts WHERE id=%s AND status IN ('available','review') FOR UPDATE", (account_id,))
         row = await cur.fetchone()
         if not row:
             return False
         require_phone(row['number'])
+        from database.auto_categories import validate_selection
+        validate_selection(row['number'], row.get('spam_status'), row.get('spam_checked_at'), new_country, row.get('country'))
         await category(cur, new_country)
         await cur.execute('UPDATE accounts SET country=%s WHERE id=%s', (new_country, account_id))
         return True

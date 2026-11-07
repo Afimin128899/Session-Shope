@@ -118,12 +118,15 @@ async def commit(admin, batch, selections):
             item = await cur.fetchone()
             if not item or not item['session_data']:
                 raise ValueError(tr('Строка не готова к импорту.'))
-            await cur.execute('SELECT slug FROM categories WHERE slug=%s AND is_active=1', (category,))
-            if not await cur.fetchone():
-                raise ValueError(tr('Категория отключена или не существует.'))
-            from utils.commerce_policy import category as check_category
-            await check_category(cur, category)
+            if category != 'auto':
+                await cur.execute('SELECT slug FROM categories WHERE slug=%s AND is_active=1', (category,))
+                if not await cur.fetchone():
+                    raise ValueError(tr('Категория отключена или не существует.'))
+                from utils.commerce_policy import category as check_category
+                await check_category(cur, category)
             keys = await claim(cur, item['phone'], item['telegram_id'], item['session_data'])
+            from database.auto_categories import ensure
+            category = await ensure(cur, item['phone'], 'not_checked')
             await cur.execute("INSERT INTO accounts(country,code,number,password,price,data,telegram_user_id,warranty_hours,is_premium,attributes_checked_at)\n                VALUES(%s,'',%s,%s,%s,%s,%s,%s,%s,UTC_TIMESTAMP())", (category, item['phone'], password, price, item['session_data'], item['telegram_id'], hours, item['premium']))
             account = cur.lastrowid
             ids.append(account)

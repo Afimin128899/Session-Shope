@@ -50,5 +50,5 @@ async def one_account(call):
     if call.data.startswith('spam_check:'):
         count = await spam_checks.enqueue(call.from_user.id, account_id)
         note = tr('\n\nПроверка добавлена в очередь.') if count else tr('\n\nПроверка уже идёт, повтор пока недоступен или товар уже продан.')
-    await edit_message_safe(call, tr('<b>Спамблок · SBA-{0}</b>\n\n{1}', f'{account_id:06d}', f'{escape(spam_checks.description(row))}') + note + tr('\n\nИсточник: официальный @SpamBot. Результат актуален на момент проверки; состояние может измениться.'), reply_markup=InlineKeyboardMarkup(inline_keyboard=[button(tr('Обновить результат'), f'spam_show:{account_id}', 'refresh'), button(tr('Проверить снова'), f'spam_check:{account_id}', 'warranty'), button(tr('К аккаунту'), f'admin_account_detail:{account_id}', 'back')]))
+    await edit_message_safe(call, tr('<b>Спамблок · #{0}</b>\n\n{1}', f'{account_id:02d}', f'{escape(spam_checks.description(row))}') + note + tr('\n\nИсточник: официальный @SpamBot. Результат актуален на момент проверки; состояние может измениться.'), reply_markup=InlineKeyboardMarkup(inline_keyboard=[button(tr('Обновить результат'), f'spam_show:{account_id}', 'refresh'), button(tr('Проверить снова'), f'spam_check:{account_id}', 'warranty'), button(tr('К аккаунту'), f'admin_account_detail:{account_id}', 'back')]))
     await answer_safe(call)

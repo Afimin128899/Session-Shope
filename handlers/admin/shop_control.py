@@ -100,7 +100,7 @@ async def review_list(call, state):
         return
     await state.clear()
     result = await admin_web.stock(status='review', page=page)
-    rows = [button(f"SBA-{r['id']:06d} · {r['number']}", f"admin_account_detail:{r['id']}") for r in result['items']]
+    rows = [button(f"#{r['id']:02d} · {r['number']}", f"admin_account_detail:{r['id']}") for r in result['items']]
     if page:
         rows.append(button(tr('← Назад'), f'review_list:{page - 1}'))
     if result['has_more']:
@@ -143,7 +143,7 @@ async def review_reason(message, state):
     await state.update_data(review_reason=reason, review_token=token)
     await state.set_state(ControlInput.confirm)
     action = tr('Отправить на проверку') if saved['review_enabled'] else tr('Вернуть в продажу')
-    text = tr('🔎 <b>{0}: SBA-{1}</b>\n\nПричина: {2}\n\n', f'{action}', f"{saved['review_id']:06d}", f'{escape(reason)}')
+    text = tr('🔎 <b>{0}: #{1}</b>\n\nПричина: {2}\n\n', f'{action}', f"{saved['review_id']:02d}", f'{escape(reason)}')
     text += tr('Товар будет скрыт из каталога, резерв и запись в корзине отменятся. Деньги не списываются.') if saved['review_enabled'] else tr('Товар станет доступен в активной категории. Проверка @SpamBot будет поставлена в очередь.')
     from utils.section_banners import answer_screen
     await answer_screen(message, text, section='inventory', reply_markup=InlineKeyboardMarkup(inline_keyboard=[button(tr('Подтвердить решение'), f'review_apply:{token}'), button(tr('Отмена'), f"admin_account_detail:{saved['review_id']}")]))

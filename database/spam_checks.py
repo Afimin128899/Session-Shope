@@ -6,7 +6,8 @@ from uuid import uuid4
 from database.admin_tools import _transaction, _record
 
 LABELS = {'not_checked': 'Не проверен', 'clear': 'Ограничений не обнаружено',
-          'limited': 'Есть ограничения', 'unknown': 'Ответ не распознан', 'error': 'Не удалось проверить'}
+          'limited': 'Есть ограничения', 'permanent': 'Вечный спамблок',
+          'unknown': 'Нужна повторная проверка', 'error': 'Не удалось проверить'}
 CHECK_FREE = '(a.spam_lease_until IS NULL OR a.spam_lease_until<=UTC_TIMESTAMP())'
 
 
@@ -24,6 +25,11 @@ async def init_schema(cur, database):
     await cur.execute("SELECT INDEX_NAME FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=%s AND TABLE_NAME='accounts' AND INDEX_NAME='spam_check_queue'", (database,))
     if not await cur.fetchone():
         await cur.execute('CREATE INDEX spam_check_queue ON accounts(status,spam_next_check_at,id)')
+    await cur.execute("INSERT IGNORE INTO settings(`key`,`value`) VALUES('auto_spam_categories_v1','1')")
+    if cur.rowcount == 1:
+        # Fresh results, not old names, determine the first automatic grouping.
+        # Existing reservations and Telegram FloodWait continue to be respected.
+        await cur.execute("UPDATE accounts SET spam_next_check_at=UTC_TIMESTAMP() WHERE status='available' AND country NOT LIKE 'auto-%' AND NOT (COALESCE(spam_reason,'')='flood_wait' AND spam_next_check_at>UTC_TIMESTAMP())")
 
 
 def public(row):
@@ -90,11 +96,11 @@ async def claim():
 
 
 async def finish(lease, report):
-    status = report['status'] if report['status'] in {'clear', 'limited', 'unknown', 'error'} else 'unknown'
+    status = report['status'] if report['status'] in {'clear', 'limited', 'permanent', 'unknown', 'error'} else 'unknown'
     reason = report.get('reason')
     if reason not in {None, 'unrecognized', 'unauthorized', 'identity_mismatch', 'wrong_peer', 'no_session', 'flood_wait', 'timeout', 'connection'}:
         reason = 'connection'
-    delay = 86400 if status in {'clear', 'limited'} else 3600 if status == 'unknown' else 900
+    delay = 86400 if status in {'clear', 'limited', 'permanent'} else 3600 if status == 'unknown' else 900
     if reason == 'flood_wait':
         delay = max(delay, int(report.get('retry_after') or delay))
     async with _transaction() as cur:
@@ -102,7 +108,11 @@ async def finish(lease, report):
                           "spam_next_check_at=DATE_ADD(UTC_TIMESTAMP(),INTERVAL %s SECOND),spam_token=NULL,spam_lease_until=NULL "
                           "WHERE id=%s AND spam_token=%s AND status='available' AND data=%s AND spam_lease_until>UTC_TIMESTAMP()",
                           (status, reason, delay, lease['id'], lease['token'], lease['data']))
-        return cur.rowcount > 0
+        saved = cur.rowcount > 0
+        if saved:
+            from database.auto_categories import move_checked
+            await move_checked(cur, lease['id'], status)
+        return saved
 
 
 async def release(lease):

@@ -78,7 +78,7 @@ async def select_product(call: CallbackQuery):
         await answer_safe(call, str(exc), show_alert=True)
         return
     accounts, total, page = await bot_store.products(call.from_user.id, sku, page)
-    rows = [button(f"SBA-{a['id']:06d} · {mask_phone(a['number'])} · {a['price']:.2f} ₽", f"buy_acc:{a['id']}") for a in accounts]
+    rows = [button(f"#{a['id']:02d} · {mask_phone(a['number'])} · {a['price']:.2f} ₽", f"buy_acc:{a['id']}") for a in accounts]
     rows += pagination(page, total, bot_store.PAGE_SIZE, f'items_page:{sku}')
     rows += [button(tr('Все категории'), 'back_buy', 'back')]
     text = tr('<b>{0}</b>\n\nСвободно: {1} шт.\nВыберите аккаунт, чтобы проверить цену и гарантию.', f"{escape(cat['name'])}", f'{total}')
@@ -102,7 +102,7 @@ async def show_product(call, state, account_id, promo_code=None):
     await state.clear()
     await state.update_data(purchase_quote={'id': account_id, 'price': str(item['price']), 'warranty_hours': item['warranty_hours'], 'spam_status': spam['status'], 'promo_code': promo['code'] if promo else None, 'pay_price': str(pay_price), 'token': token, 'expires': time.time() + 600})
     hours = tr('Не указана') if item['warranty_hours'] is None else tr('{0} ч', f"{item['warranty_hours']}")
-    text = tr('<b>Подтверждение покупки</b>\n\nКатегория: <b>{0}</b>\nТовар: <code>SBA-{1}</code>\nTelegram ID: <code>{2}</code>\nГарантия: {3}\nРегистрация: {4}\nPremium: {5}\nСпамблок: {6}\nНомер: <code>{7}</code>\nК оплате: <b>{8} ₽</b>\n\nПосле оплаты номер и данные входа появятся в покупках. После входа смените пароль и привяжите свою почту. Оптовая скидка применяется при оплате корзины в Mini App.', f"{escape(item['name'])}", f'{account_id:06d}', f"{item['telegram_user_id'] or tr('Не сохранён')}", f'{hours}', f"{escape(str(item['registration_date'] or tr('Не указана')))}", f"{(tr('Не проверено') if item['is_premium'] is None else tr('Да') if item['is_premium'] else tr('Нет'))}", f'{escape(spam_checks.description(item))}', f"{escape(mask_phone(item['number']))}", f'{pay_price:.2f}')
+    text = tr('<b>Подтверждение покупки</b>\n\nКатегория: <b>{0}</b>\nТовар: <code>#{1}</code>\nTelegram ID: <code>{2}</code>\nГарантия: {3}\nРегистрация: {4}\nPremium: {5}\nСпамблок: {6}\nНомер: <code>{7}</code>\nК оплате: <b>{8} ₽</b>\n\nПосле оплаты номер и данные входа появятся в покупках. После входа смените пароль и привяжите свою почту. Оптовая скидка применяется при оплате корзины в Mini App.', f"{escape(item['name'])}", f'{account_id:02d}', f"{item['telegram_user_id'] or tr('Не сохранён')}", f'{hours}', f"{escape(str(item['registration_date'] or tr('Не указана')))}", f"{(tr('Не проверено') if item['is_premium'] is None else tr('Да') if item['is_premium'] else tr('Нет'))}", f'{escape(spam_checks.description(item))}', f"{escape(mask_phone(item['number']))}", f'{pay_price:.2f}')
     rows = [button(tr('Обновить проверку'), f'buy_acc:{account_id}', 'refresh') if spam['running'] else button(tr('Купить за {0} ₽', f'{pay_price:.2f}'), f'confirm_buy_acc:{account_id}:{token}', 'confirm'), button(tr('Назад к категории'), f"buy_{item['country']}", 'back')]
     rows.insert(1, button(tr('Изменить промокод') if promo else tr('Ввести промокод'), f'purchase_promo:{account_id}', 'reviews'))
     if promo:

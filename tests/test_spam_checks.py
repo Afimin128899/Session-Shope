@@ -39,13 +39,18 @@ class ReplyTests(unittest.TestCase):
         self.assertEqual(spam_checks.public({})['status'], 'not_checked')
 
 
+class CallableClient(NS):
+    def __call__(self, request):
+        return self.unblock(request)
+
+
 class ConversationTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         self.sent=NS(id=10)
         self.dialog=NS(send_message=AsyncMock(return_value=self.sent), get_response=AsyncMock(return_value=NS(id=11,sender_id=100,raw_text=CLEAR)))
         context=MagicMock()
         context.__aenter__.return_value=self.dialog
-        self.client=NS(connect=AsyncMock(),disconnect=AsyncMock(),is_user_authorized=AsyncMock(return_value=True),
+        self.client=CallableClient(unblock=AsyncMock(),connect=AsyncMock(),disconnect=AsyncMock(),is_user_authorized=AsyncMock(return_value=True),
                        get_me=AsyncMock(return_value=NS(id=9001,phone='79990001122')),
                        get_entity=AsyncMock(return_value=NS(id=100,bot=True,username='SpamBot')),
                        conversation=MagicMock(return_value=context))
@@ -88,6 +93,22 @@ class ConversationTests(unittest.IsolatedAsyncioTestCase):
             self.dialog.get_response.return_value=reply
             self.assertEqual((await self.check())['status'],'unknown')
 
+    async def test_unknown_reply_unblocks_and_retries_with_a_new_response(self):
+        self.dialog.send_message.side_effect=[NS(id=10),NS(id=20)]
+        self.dialog.get_response.side_effect=[NS(id=11,sender_id=100,raw_text='Please choose a language'),NS(id=21,sender_id=100,raw_text='Your account is permanently limited.')]
+        report=await self.check()
+        self.assertEqual(report['status'],'permanent')
+        self.client.unblock.assert_awaited_once()
+        self.assertEqual(self.dialog.send_message.await_count,2)
+        self.assertEqual(self.dialog.get_response.call_args.args[0].id,20)
+
+    async def test_repeated_unknown_is_never_reported_as_clear_or_retried_forever(self):
+        self.dialog.get_response.return_value.raw_text='Unexpected new response'
+        report=await self.check()
+        self.assertEqual(report['status'],'unknown')
+        self.assertEqual(self.dialog.send_message.await_count,2)
+        self.client.unblock.assert_awaited_once()
+
     async def test_timeout_has_error_status_and_disconnects(self):
         self.dialog.get_response.side_effect=TimeoutError()
         self.assertEqual((await self.check())['reason'],'timeout')
@@ -124,7 +145,7 @@ class QueueTests(unittest.IsolatedAsyncioTestCase):
         @asynccontextmanager
         async def transaction(): yield cur
         lease={'id':1,'token':'lease-token','data':'session-private'}
-        with patch.object(spam_checks,'_transaction',transaction):
+        with patch.object(spam_checks,'_transaction',transaction), patch('database.auto_categories.move_checked',AsyncMock()):
             self.assertTrue(await spam_checks.finish(lease,{'status':'error','reason':'flood_wait','retry_after':7200}))
         self.assertEqual(cur.execute.call_args.args[1],('error','flood_wait',7200,1,'lease-token','session-private'))
 

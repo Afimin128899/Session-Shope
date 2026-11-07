@@ -33,6 +33,8 @@ def category_allowed(*values):
 def require_category(*values):
     if not category_allowed(*values):
         raise ValueError(tr('Добавление и продажа аккаунтов РФ и Украины запрещены.'))
+    if any(str(value or '').startswith('auto-') and str(value).endswith('-pending') for value in values):
+        raise ValueError(tr('Непроверенные аккаунты скрыты до подтверждения спамблока.'))
 
 
 def require_phone(phone):

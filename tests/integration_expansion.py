@@ -2,6 +2,7 @@
 from decimal import Decimal
 from unittest.mock import AsyncMock
 from test_payments import db
+from inventory_fixture import confirm_fixture_account
 from database import expansion,commerce,tickets
 from miniapp import storage
 
@@ -14,6 +15,8 @@ async def expansion_scenarios(connection):
         await db.add_account('us','US',f'+1555666100{i}','expansion-password',300,'expand-fixture-'+str(i),telegram_user_id=6660000000+i,is_premium=True)
         async with connection.cursor() as cur:
             await cur.execute('SELECT id FROM accounts WHERE data=%s',('expand-fixture-'+str(i),));ids.append((await cur.fetchone())[0])
+    for account in ids:
+        await confirm_fixture_account(account)
     await expansion.bulk_edit(999,ids,'features_note','Checked in batch')
     for item in ids[:2]: await commerce.add_to_cart(42,item)
     quotes=[{'account_id':i,'price':'285.00','warranty_hours':24} for i in ids[:2]]

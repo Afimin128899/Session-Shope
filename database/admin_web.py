@@ -63,19 +63,24 @@ async def edit_stock(admin, account, body):
         if not date(2013, 8, 1) <= registered <= datetime.now(ZoneInfo('Europe/Moscow')).date():
             raise ValueError(tr('Проверьте дату регистрации.'))
     async with _transaction() as cur:
-        await cur.execute("SELECT id,number FROM accounts WHERE id=%s AND status IN ('available','review') FOR UPDATE", (account,))
+        await cur.execute("SELECT id,number,country,spam_status,spam_checked_at FROM accounts WHERE id=%s AND status IN ('available','review') FOR UPDATE", (account,))
         account_row = await cur.fetchone()
         if not account_row:
             raise ValueError(tr('Редактирование доступно только для свободного товара.'))
         from utils.commerce_policy import require_phone, category as check_category
         require_phone(account_row['number'])
-        await check_category(cur, category)
+        from database.auto_categories import validate_selection
+        validate_selection(account_row['number'], account_row.get('spam_status'), account_row.get('spam_checked_at'), category, account_row.get('country'))
+        pending_category = category == account_row.get('country') and category.startswith('auto-') and category.endswith('-pending')
+        if not pending_category:
+            await check_category(cur, category)
         await cur.execute('SELECT user_id FROM account_reservations WHERE account_id=%s AND expires_at>UTC_TIMESTAMP() FOR UPDATE', (account,))
         if await cur.fetchone():
             raise ValueError(tr('Товар зарезервирован покупателем. Дождитесь окончания резерва.'))
-        await cur.execute('SELECT slug FROM categories WHERE slug=%s AND is_active=1', (category,))
-        if not await cur.fetchone():
-            raise ValueError(tr('Категория недоступна.'))
+        if not (category == account_row.get('country') and category.startswith('auto-') and category.endswith('-pending')):
+            await cur.execute('SELECT slug FROM categories WHERE slug=%s AND is_active=1', (category,))
+            if not await cur.fetchone():
+                raise ValueError(tr('Категория недоступна.'))
         await cur.execute('UPDATE accounts SET compare_price=CASE WHEN price>%s THEN GREATEST(price,COALESCE(compare_price,0)) WHEN compare_price>%s THEN compare_price ELSE NULL END,\n            price=%s,country=%s,warranty_hours=%s,registration_date=%s,is_premium=%s,features_note=%s,attributes_checked_at=UTC_TIMESTAMP() WHERE id=%s', (price, price, price, category, hours, registered, premium, note.strip(), account))
         await _record(cur, admin, 'web_stock_edit', 'account', account, {'price': str(price), 'category': category, 'warranty_hours': hours})
 

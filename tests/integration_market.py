@@ -24,7 +24,7 @@ async def marketplace_scenarios(session, connection, headers):
             ids.append(cur.lastrowid)
     status,data=await request('catalog?min_price=90&max_price=96&sort=discount&q='+str(8880000000))
     assert status==200 and [i['id'] for i in data['items']]==[ids[0]]
-    assert data['items'][0]['product_id']==f'SBA-{ids[0]:06d}' and data['items'][0]['telegram_user_id']=='8880000000'
+    assert data['items'][0]['product_id']==f'#{ids[0]:02d}' and data['items'][0]['telegram_user_id']=='8880000000'
     assert Decimal(data['items'][0]['discount'])==Decimal('52.5')
     assert (await request('catalog?min_price=NaN'))[0]==400
     print('PASS: both IDs, price-range validation and historical discount ordering')

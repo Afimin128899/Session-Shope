@@ -52,7 +52,7 @@ async def start_add_account_session(call: CallbackQuery, state: FSMContext):
         return
     await state.clear()
     await state.set_state(AddAccountState.waiting_for_session_file)
-    await edit_message_safe(call, tr('📁 <b>Загрузка Telegram-сессии</b>\n\nОтправьте файл <code>.session</code> от уже авторизованного Telegram-аккаунта.\n\nПосле проверки бот получит номер из сессии, а затем попросит цену и категорию.'), reply_markup=back_to_admin())
+    await edit_message_safe(call, tr('📁 <b>Загрузка Telegram-сессии</b>\n\nОтправьте файл <code>.session</code> от уже авторизованного Telegram-аккаунта.\n\nПосле проверки бот получит номер из сессии, а затем попросит цену. Категория определяется по стране и ответу @SpamBot.'), reply_markup=back_to_admin())
     await answer_safe(call)
 
 
@@ -221,7 +221,7 @@ async def process_price(message: Message, state: FSMContext):
         return
     await state.set_state(AddAccountState.waiting_for_category)
     cats = await get_all_categories()
-    rows = []
+    rows = [[InlineKeyboardButton(text=tr('🌐 Авто: страна и спамблок'), callback_data='addacc_cat:auto')]]
     for c in cats:
         emoji = c.get('emoji')
         status = '✅' if c['is_active'] else '❌'
@@ -232,7 +232,7 @@ async def process_price(message: Message, state: FSMContext):
             display_emoji = emoji or '📁'
             rows.append([InlineKeyboardButton(text=f'{display_emoji} {button_text}', callback_data=f"addacc_cat:{c['slug']}")])
     rows.append([InlineKeyboardButton(text=tr('« Отмена'), callback_data='admin_home')])
-    text_msg = tr('📂 <b>Выберите категорию</b> из списка ниже или <b>напишите название категории текстом</b> (например: <code>Спамблок группы</code>):\n\n<i>(Цена аккаунта: {0} ₽)</i>', f'{price:.2f}')
+    text_msg = tr('📂 Выберите <b>автоматическую категорию</b>. Страна определяется по номеру из сессии, спамблок — через @SpamBot. До подтверждения аккаунт скрыт. Выбранная вручную категория также проверяется и затем уточняется автоматически:\n\n<i>(Цена аккаунта: {0} ₽)</i>', f'{price:.2f}')
     await message.answer(text_msg, reply_markup=InlineKeyboardMarkup(inline_keyboard=rows))
 
 
@@ -307,19 +307,12 @@ async def finalize_imported_session(message: Message, state: FSMContext):
             await message.answer(tr('❌ Данные сессии потеряны. Начните загрузку заново.'))
             return
         code = detect_country_code(phone)
-        if not category_slug:
-            from database.db import get_all_categories
-            auto_country = detect_country(phone)
-            all_cats = await get_all_categories()
-            for c in all_cats:
-                if c['name'].lower() == auto_country.lower():
-                    category_slug = c['slug']
-                    break
-            if not category_slug:
-                category_slug = all_cats[0]['slug'] if all_cats else 'us'
-        await add_account(country=category_slug, code=code, number=phone, password=data.get('password', '-'), price=price, data=session_string, telegram_user_id=data.get('telegram_user_id'), is_premium=data.get('is_premium'))
+        category_slug = category_slug or 'auto'
+        account_id = await add_account(country=category_slug, code=code, number=phone, password=data.get('password', '-'), price=price, data=session_string, telegram_user_id=data.get('telegram_user_id'), is_premium=data.get('is_premium'))
         await state.clear()
-        from database.db import get_category
+        from database.db import get_category, get_account
+        saved_account = await get_account(account_id)
+        category_slug = saved_account['country']
         cat_display = await get_category(category_slug)
         cat_name = cat_display['name'] if cat_display else category_slug
         kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text=tr('« В меню'), callback_data='admin_home')]])
@@ -343,27 +336,17 @@ async def finalize_and_save_account(message: Message, state: FSMContext, client)
         custom_price = state_data.get('custom_price')
         category_slug = state_data.get('category_slug')
         code = detect_country_code(phone)
-        if not category_slug:
-            from database.db import get_all_categories
-            auto_country = detect_country(phone)
-            all_cats = await get_all_categories()
-            for c in all_cats:
-                if c['name'].lower() == auto_country.lower():
-                    category_slug = c['slug']
-                    break
-            if not category_slug:
-                if all_cats:
-                    category_slug = all_cats[0]['slug']
-                else:
-                    category_slug = 'us'
+        category_slug = category_slug or 'auto'
         price = custom_price if custom_price is not None else 0.35
-        await add_account(country=category_slug, code=code, number=phone, password=saved_password, price=price, data=session_string, telegram_user_id=metadata.get('telegram_user_id'), is_premium=metadata.get('is_premium'))
+        account_id = await add_account(country=category_slug, code=code, number=phone, password=saved_password, price=price, data=session_string, telegram_user_id=metadata.get('telegram_user_id'), is_premium=metadata.get('is_premium'))
         await state.clear()
         kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text=tr('« В меню'), callback_data='admin_home')]])
-        from database.db import get_category
+        from database.db import get_category, get_account
+        saved_account = await get_account(account_id)
+        category_slug = saved_account['country']
         cat_display = await get_category(category_slug)
         cat_name = cat_display['name'] if cat_display else category_slug
-        await message.answer(tr("<tg-emoji emoji-id='{0}'>✅</tg-emoji> <b>Аккаунт успешно добавлен!</b>\n\n<tg-emoji emoji-id='{1}'>📞</tg-emoji> Номер: <code>{2}</code>\n<tg-emoji emoji-id='{3}'>🔒</tg-emoji> Пароль (2FA): <code>{4}</code>\n📂 Категория: <b>{5}</b>\n<tg-emoji emoji-id='5258368777350816286'>🪙</tg-emoji> Цена: <b>{6} ₽</b>\n\n<i>Товар доступен в магазине.</i>", f'{EMOJI_CHECK}', f'{EMOJI_PHONE}', f'{phone}', f'{EMOJI_LOCK}', f'{saved_password}', f'{cat_name}', f'{price:.2f}'), reply_markup=kb)
+        await message.answer(tr("<tg-emoji emoji-id='{0}'>✅</tg-emoji> <b>Аккаунт успешно добавлен!</b>\n\n<tg-emoji emoji-id='{1}'>📞</tg-emoji> Номер: <code>{2}</code>\n<tg-emoji emoji-id='{3}'>🔒</tg-emoji> Пароль (2FA): <code>{4}</code>\n📂 Категория: <b>{5}</b>\n<tg-emoji emoji-id='5258368777350816286'>🪙</tg-emoji> Цена: <b>{6} ₽</b>\n\n<i>Товар появится в магазине после подтверждения страны и спамблока.</i>", f'{EMOJI_CHECK}', f'{EMOJI_PHONE}', f'{phone}', f'{EMOJI_LOCK}', f'{saved_password}', f'{cat_name}', f'{price:.2f}'), reply_markup=kb)
     except Exception as e:
         await state.clear()
         await message.answer(tr('❌ Ошибка сохранения в базу: {0}', f'{str(e)}'))
