@@ -21,9 +21,9 @@ async def categories(user_id, page=0):
         async with conn.cursor(aiomysql.DictCursor) as cur:
             await cur.execute(
                 "SELECT c.slug,c.name,c.emoji,COUNT(a.id) AS count,MIN(a.price) AS min_price "
-                "FROM categories c JOIN accounts a ON a.country=c.slug AND a.status='available' "
-                "WHERE c.is_active=1 AND NOT EXISTS(SELECT 1 FROM account_reservations r "
-                "WHERE r.account_id=a.id AND r.expires_at>UTC_TIMESTAMP() AND r.user_id<>%s) "
+                "FROM categories c LEFT JOIN accounts a ON a.country=c.slug AND a.status='available' "
+                "AND NOT EXISTS(SELECT 1 FROM account_reservations r "
+                "WHERE r.account_id=a.id AND r.expires_at>UTC_TIMESTAMP() AND r.user_id<>%s) WHERE c.is_active=1 "
                 "GROUP BY c.slug,c.name,c.emoji,c.sort_order ORDER BY COUNT(a.id) DESC,c.sort_order,c.name", (user_id,),
             )
             rows = list(await cur.fetchall())
@@ -31,7 +31,7 @@ async def categories(user_id, page=0):
             page = bounded_page(page, len(rows))
             selected = rows[page * PAGE_SIZE:(page + 1) * PAGE_SIZE]
             for row in selected:
-                row['min_price'] = money(Decimal(str(row['min_price'])) * (1 - discount / 100))
+                row['min_price'] = money(Decimal(str(row['min_price'])) * (1 - discount / 100)) if row['min_price'] is not None else None
             return selected, len(rows), page
 
 

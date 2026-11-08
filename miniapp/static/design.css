@@ -46,3 +46,5 @@ body{background:#0b0d0a}.shell{max-width:1640px;grid-template-columns:218px minm
 .spam-line.spam-unverified{color:#e5c77c}
 
 .categories{max-height:none;overflow:visible;margin-bottom:20px}.category>span:not(.all-countries-icon){white-space:normal;overflow:visible;overflow-wrap:anywhere;text-overflow:clip}
+
+.categories:not(.expanded)>.category:nth-child(n+7){display:none}.categories{grid-template-columns:repeat(6,minmax(0,1fr));margin-bottom:4px}#countries-toggle{font-size:11px;margin:5px 0 15px;color:var(--accent)}@media(max-width:1000px){.categories{grid-template-columns:repeat(3,minmax(0,1fr))}}

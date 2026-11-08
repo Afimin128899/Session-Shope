@@ -94,6 +94,17 @@ class FlowTests(unittest.IsolatedAsyncioTestCase):
             self.assertIn('&lt;title&gt;',edit.call_args.args[1])
             self.assertLessEqual(len(edit.call_args.kwargs['reply_markup'].inline_keyboard),10)
 
+    async def test_empty_bot_category_has_no_fake_price_and_remains_clickable(self):
+        self.call.data='buy'
+        rows=[{'slug':'us','name':'США','emoji':'🇺🇸','min_price':None,'count':0}]
+        with patch.object(bot_store,'categories',AsyncMock(return_value=(rows,1,0))), \
+             patch.object(shop,'edit_message_safe',AsyncMock()) as edit, patch.object(shop,'answer_safe',AsyncMock()):
+            await shop.open_shop(self.call,self.state)
+            button=edit.call_args.kwargs['reply_markup'].inline_keyboard[0][0]
+            self.assertEqual(button.callback_data,'buy_us')
+            self.assertIn('Нет в наличии',button.text)
+            self.assertNotIn('₽',button.text)
+
     async def test_invalid_promo_keeps_form_open_and_does_not_credit(self):
         message=NS(from_user=NS(id=42),text='mistake',answer=AsyncMock())
         with patch.object(coupons,'preview',AsyncMock(side_effect=ValueError('Код не найден'))), \

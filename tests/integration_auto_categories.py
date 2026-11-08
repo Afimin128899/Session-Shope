@@ -105,6 +105,17 @@ async def main():
         assert (await row(identities[3]))['country']=='auto-cl-unverified'
         cats=(await storage.catalog(43))['categories']
         assert len(cats)>=35
+        from database import bot_store
+        bot_categories=[]
+        first,total,_=await bot_store.categories(43)
+        bot_categories.extend(first)
+        for page in range(1,(total+bot_store.PAGE_SIZE-1)//bot_store.PAGE_SIZE):
+            more,_,_=await bot_store.categories(43,page)
+            bot_categories.extend(more)
+        assert {c['slug'] for c in bot_categories}=={c['slug'] for c in cats}
+        assert any(c['count']==0 and c['min_price'] is None for c in bot_categories)
+        assert [int(c['count']) for c in bot_categories]==sorted([int(c['count']) for c in bot_categories],reverse=True)
+
         assert [int(c['count']) for c in cats]==sorted([int(c['count']) for c in cats],reverse=True)
         await sql("UPDATE categories SET is_active=0 WHERE slug='auto-cl-unverified'")
         await sql("DELETE FROM settings WHERE `key`='unverified_stock_v1'")

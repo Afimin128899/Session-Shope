@@ -84,6 +84,8 @@
     state.page = page; state.items = append ? [...state.items, ...data.items] : data.items;
     $('#total-count').textContent = tab === 'catalog' ? data.categories.reduce((n, c) => n + Number(c.count), 0) : state.items.length;
     $('#categories').innerHTML = [{ slug: '', name: SbandT("Все аккаунты"), count: data.categories.reduce((n, c) => n + Number(c.count), 0) }, ...data.categories.slice().sort((a,b)=>Number(b.count)-Number(a.count))].map(c => `<button class="category ${c.slug === state.category ? 'active' : ''}" data-category="${esc(c.slug)}">${c.slug ? window.SbandCountryArt({category:c.slug,name:c.name}) : '<span class="all-countries-icon" aria-hidden="true">◎</span>'}<span>${esc(window.SbandCountryName({category:c.slug,name:c.name}))}</span><small>${c.count}</small></button>`).join('');
+    $('#countries-toggle').textContent=SbandT($('#categories').classList.contains('expanded')?'Свернуть страны ↑':'Все страны ↓');
+    $('#countries-toggle').hidden=data.categories.length<6;
     $('#load-more').hidden = !data.has_more; render();
   }
   async function loadOrders(append = false) {
@@ -451,6 +453,11 @@
       } catch (e) { error(e); button.disabled = false; }
     }
   });
+  $('#countries-toggle').onclick = e => {
+    const expanded=$('#categories').classList.toggle('expanded');
+    e.currentTarget.setAttribute('aria-expanded',String(expanded));
+    e.currentTarget.textContent=SbandT(expanded?'Свернуть страны ↑':'Все страны ↓');
+  };
   $('#checkout-cart').onclick = checkout;
   $('#close-dialog').onclick = () => { if (!state.busy) $('#purchase-dialog').close(); };
   $('#purchase-dialog').addEventListener('cancel', e => { if (state.busy) e.preventDefault(); });

@@ -45,7 +45,7 @@ async def open_shop(call: CallbackQuery, state: FSMContext):
     rows = []
     for cat in categories:
         emoji = cat.get('emoji') or ''
-        label = tr('{0} · от {1} ₽ · {2} шт.', f"{cat['name'][:35]}", f"{cat['min_price']:.2f}", f"{cat['count']}")
+        label = tr('{0} · от {1} ₽ · {2} шт.', cat['name'][:35], f"{cat['min_price']:.2f}", str(cat['count'])) if cat['count'] and cat['min_price'] is not None else tr('{0} · Нет в наличии', cat['name'][:35])
         rows.append([InlineKeyboardButton(text=label if emoji.isdigit() else f'{emoji} {label}'.strip(), callback_data=f"buy_{cat['slug']}", icon_custom_emoji_id=emoji if emoji.isdigit() else None)])
     rows += pagination(page, total, bot_store.PAGE_SIZE, 'shop_page')
     rows.append(button(tr('Уведомить о поступлении'), 'stock_menu', 'notifications'))
@@ -80,6 +80,8 @@ async def select_product(call: CallbackQuery):
     accounts, total, page = await bot_store.products(call.from_user.id, sku, page)
     rows = [button(f"#{a['id']:02d} · {mask_phone(a['number'])} · {a['price']:.2f} ₽", f"buy_acc:{a['id']}") for a in accounts]
     rows += pagination(page, total, bot_store.PAGE_SIZE, f'items_page:{sku}')
+    if not accounts:
+        rows += [button(tr('Уведомить о поступлении'), 'stock_menu', 'notifications')]
     rows += [button(tr('Все категории'), 'back_buy', 'back')]
     text = tr('<b>{0}</b>\n\nСвободно: {1} шт.\nВыберите аккаунт, чтобы проверить цену и гарантию.', f"{escape(cat['name'])}", f'{total}')
     await edit_message_safe(call, text, reply_markup=InlineKeyboardMarkup(inline_keyboard=rows))
