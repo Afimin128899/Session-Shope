@@ -38,7 +38,7 @@ async def about(request):
     cards = ''.join(f'<div class="info"><span>{escape(item["name"])} · {item["quantity"]} шт.</span><b>{price(item)} ₽</b></div>' for item in prices if category_allowed(item['slug'], item['name']))
     if not cards:
         cards = '<p>Доступных товаров сейчас нет. Актуальные товары и их окончательная цена появляются в каталоге перед подтверждением покупки.</p>'
-    html = f'''<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>SBAND ACCS · Документы, цены и поддержка</title><link rel="stylesheet" href="/assets/style.css"></head>
+    html = f'''<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>SBAND ACCS · Документы, цены и поддержка</title><link rel="stylesheet" href="/assets/style.css"><link rel="stylesheet" href="/assets/design.css"></head>
 <body class="public-info"><main class="public-card"><a href="/">SBAND <b>ACCS</b></a><h1>Информация</h1><p>Магазин Telegram-аккаунтов. Характеристики, цена и срок гарантии указаны в карточке каждого товара. Данные заказа доступны в покупках после оплаты.</p>
 <h2>Документы</h2><div class="public-links"><a class="secondary-button" href="{PRIVACY_URL}" target="_blank" rel="noopener noreferrer">Политика конфиденциальности</a><a class="secondary-button" href="{AGREEMENT_URL}" target="_blank" rel="noopener noreferrer">Пользовательское соглашение</a></div>
 <h2>Поддержка</h2>{contact}<h2>Актуальные цены</h2>{cards}<p>Цены в рублях за один аккаунт. Цена с доступными скидками и состав заказа показываются перед подтверждением покупки. Максимальная стоимость товара и одной покупки корзины — 10 000 ₽.</p>
