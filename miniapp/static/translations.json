@@ -1681,5 +1681,17 @@
   "от уже авторизованного Telegram-аккаунта.\n\nПосле проверки бот получит номер из сессии, а затем попросит цену. Категория определяется по стране и ответу @SpamBot.": "from an authorized Telegram account.\n\nAfter verification, the bot reads the phone number from the session and asks for a price. The category is based on the country and the @SpamBot reply.",
   "Срок черновика: {3} МСК. Пароли и сессии не отображаются. Назначьте цену готовым строкам. Категория определяется по номеру и проверке @SpamBot; до подтверждения товар скрыт.": "Draft expiry: {3} MSK. Passwords and sessions are hidden. Set prices for ready rows. Categories follow the phone country and @SpamBot check; products stay hidden until verified.",
   "Непроверенные аккаунты скрыты до подтверждения спамблока.": "Unverified accounts stay hidden until their spam status is confirmed.",
-  "В корзине": "In cart"
+  "В корзине": "In cart",
+  "Новая страна.": "New country.",
+  "Твои возможности.": "Your possibilities.",
+  "Telegram-аккаунты в одном месте.": "Telegram accounts, all in one place.",
+  "Выбирай, сравнивай и забирай.": "Explore, compare and make it yours.",
+  "Выбрать аккаунт": "Find your account",
+  "Направления": "Destinations",
+  "Сначала в наличии": "In stock first",
+  "Все страны ↓": "All countries ↓",
+  "Свернуть страны ↑": "Show fewer countries ↑",
+  "Поиск и фильтры": "Search & filters",
+  "Срок черновика: {3} МСК. Пароли и сессии не отображаются. Назначьте цену готовым строкам. Категория определяется по номеру и проверке @SpamBot. Если спамблок проверить не удалось, товар продаётся с пометкой «Спамблок не проверен».": "Draft expiry: {3} MSK. Passwords and sessions are hidden. Set prices for ready rows. Categories follow the phone country and SpamBot result. Failed checks are sold with an explicit unverified status.",
+  ". Страна определяется по номеру из сессии, спамблок — через @SpamBot. До первого результата аккаунт скрыт. При ошибке проверки он продаётся с пометкой «Спамблок не проверен». Выбранная вручную категория также проверяется и затем уточняется автоматически:": ". The country comes from the session phone number and the spam status from @SpamBot. The first check runs before listing. If it fails, the item is sold as “Spam status unverified”. A manually selected category is also checked and adjusted automatically:"
 }

@@ -232,7 +232,7 @@ async def process_price(message: Message, state: FSMContext):
             display_emoji = emoji or '📁'
             rows.append([InlineKeyboardButton(text=f'{display_emoji} {button_text}', callback_data=f"addacc_cat:{c['slug']}")])
     rows.append([InlineKeyboardButton(text=tr('« Отмена'), callback_data='admin_home')])
-    text_msg = tr('📂 Выберите <b>автоматическую категорию</b>. Страна определяется по номеру из сессии, спамблок — через @SpamBot. До подтверждения аккаунт скрыт. Выбранная вручную категория также проверяется и затем уточняется автоматически:\n\n<i>(Цена аккаунта: {0} ₽)</i>', f'{price:.2f}')
+    text_msg = tr('📂 Выберите <b>автоматическую категорию</b>. Страна определяется по номеру из сессии, спамблок — через @SpamBot. До первого результата аккаунт скрыт. При ошибке проверки он продаётся с пометкой «Спамблок не проверен». Выбранная вручную категория также проверяется и затем уточняется автоматически:\n\n<i>(Цена аккаунта: {0} ₽)</i>', f'{price:.2f}')
     await message.answer(text_msg, reply_markup=InlineKeyboardMarkup(inline_keyboard=rows))
 
 

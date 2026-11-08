@@ -60,18 +60,18 @@ async def main():
             assert await spam_checks.finish(lease,{'status':status,'reason':'unrecognized' if status=='unknown' else 'timeout' if status=='error' else None})
             assert not await spam_checks.finish(lease,{'status':'clear','reason':None})
         for i,status in zip(identities,statuses):
-            expected='pending' if status in {'unknown','error'} else status
+            expected='unverified' if status in {'unknown','error'} else status
             assert (await row(i))['country']=='auto-cl-'+expected
         assert (await sql("SELECT COUNT(*) FROM categories WHERE slug='auto-cl-clear'"))[0][0]==1
         catalog=(await storage.catalog(43))['items']
-        assert {i['id'] for i in catalog}=={identities[0],identities[1],identities[2],identities[5]}
+        assert {i['id'] for i in catalog}==set(identities)
         assert next(i for i in catalog if i['id']==1)['product_id']=='#01'
         assert next(i for i in catalog if i['id']==2)['characteristics']['spam_check']['status']=='permanent'
         assert all('SBA-' not in i['product_id'] for i in catalog)
         try:await db.update_account_country(identities[1],'auto-cl-clear')
         except ValueError:pass
         else:raise AssertionError('Permanent account mislabeled clear')
-        report('Chile clear/permanent/general limits use distinct reusable categories; unrecognized/error stock stays hidden; IDs are #01/#02 and false manual moves are rejected')
+        report('Chile clear/permanent/general limits use distinct reusable categories; unrecognized/error stock sells with an explicit unverified label; IDs are #01/#02 and false manual moves are rejected')
 
         batch=await imports.create(42)
         await imports.add_item(batch,'chile.session','ready',phone='+56999887766',telegram_id=123456,session='FAKE_IMPORTED_SESSION')
@@ -98,6 +98,21 @@ async def main():
         assert (await row(legacy))['country']=='auto-cl-clear'
         report('First upgrade queues existing unsold stock for fresh country/status grouping; stale lease results cannot overwrite the completed category')
 
+        # Upgrade previously hidden failed stock, preserve admin-disabled destination.
+        await sql("UPDATE accounts SET country='auto-cl-pending' WHERE id=%s", (identities[3],))
+        await sql("DELETE FROM settings WHERE `key`='unverified_stock_v1'")
+        async with conn.cursor() as cur: await spam_checks.init_schema(cur,name)
+        assert (await row(identities[3]))['country']=='auto-cl-unverified'
+        cats=(await storage.catalog(43))['categories']
+        assert len(cats)>=35
+        assert [int(c['count']) for c in cats]==sorted([int(c['count']) for c in cats],reverse=True)
+        await sql("UPDATE categories SET is_active=0 WHERE slug='auto-cl-unverified'")
+        await sql("DELETE FROM settings WHERE `key`='unverified_stock_v1'")
+        async with conn.cursor() as cur: await spam_checks.init_schema(cur,name)
+        assert (await sql("SELECT is_active FROM categories WHERE slug='auto-cl-unverified'"))[0][0]==0
+        await sql("UPDATE categories SET is_active=1 WHERE slug='auto-cl-unverified'")
+        report('Popular country seed, stock-first sorting and failed-stock migration work; disabled destinations stay disabled')
+
         runner=web.AppRunner(create_app(token=TEST_TOKEN,bot=NS(),bot_username='auto_fixture_bot'),access_log=None)
         await runner.setup();await web.TCPSite(runner,'127.0.0.1',8093).start()
         async with ClientSession() as client:
@@ -117,6 +132,10 @@ async def main():
         assert json.loads(saved_order['attributes_snapshot'])['spam_status']=='permanent'
         assert not await spam_checks.finish(lease,{'status':'clear','reason':None})
         report('A purchased permanent-limit account retains its actual spam status in the immutable order snapshot')
+        unchecked=await storage.checkout(43,identities[4],D(100),spam_status='error')
+        snapshot=await db.get_purchase_for_user(unchecked['id'],43)
+        assert json.loads(snapshot['attributes_snapshot'])['spam_status']=='error'
+        report('Failed SpamBot check can be purchased and preserves the error status in the receipt')
         if '--serve' in sys.argv:
             print('BROWSER FIXTURE: http://127.0.0.1:8093 customer=43 admin=42',flush=True)
             await asyncio.Event().wait()

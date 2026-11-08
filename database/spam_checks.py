@@ -32,6 +32,21 @@ async def init_schema(cur, database):
         await cur.execute("UPDATE accounts SET spam_next_check_at=UTC_TIMESTAMP() WHERE status='available' AND country NOT LIKE 'auto-%' AND NOT (COALESCE(spam_reason,'')='flood_wait' AND spam_next_check_at>UTC_TIMESTAMP())")
 
 
+    from database.country_catalog import seed
+    await seed(cur)
+    await cur.execute("INSERT IGNORE INTO settings(`key`,`value`) VALUES('unverified_stock_v1','1')")
+    if cur.rowcount == 1:
+        # Only failed completed checks leave the initial hidden waiting category.
+        # Existing manually disabled destinations are never enabled again.
+        await cur.execute("INSERT IGNORE INTO categories(slug,name,emoji,is_active) "
+                          "SELECT DISTINCT REPLACE(c.slug,'-pending','-unverified'),REPLACE(c.name,'Проверка спамблока','Спамблок не проверен'),c.emoji,1 "
+                          "FROM categories c JOIN accounts a ON a.country=c.slug "
+                          "WHERE c.slug LIKE 'auto-%-pending' AND a.status='available' AND a.spam_status IN ('error','unknown') AND a.spam_checked_at IS NOT NULL")
+        await cur.execute("UPDATE accounts a JOIN categories c ON c.slug=REPLACE(a.country,'-pending','-unverified') "
+                          "SET a.country=c.slug WHERE a.country LIKE 'auto-%-pending' AND a.status='available' "
+                          "AND a.spam_status IN ('error','unknown') AND a.spam_checked_at IS NOT NULL")
+
+
 def public(row):
     status = row.get('spam_status') or 'not_checked'
     if status not in LABELS:

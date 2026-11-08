@@ -4,15 +4,16 @@ from utils.commerce_policy import require_phone
 from database.admin_tools import _record
 
 LABELS = {'clear': 'Без спамблока', 'permanent': 'Вечный спамблок',
-          'limited': 'Есть ограничения'}
+          'limited': 'Есть ограничения', 'unknown': 'Спамблок не проверен',
+          'error': 'Спамблок не проверен'}
 
 
 def specification(phone, status):
     phone = '+' + require_phone(phone)
     name, flag = detect_country(phone), detect_country_flag(phone)
     country = ''.join(chr(ord(c) - 0x1F1E6 + ord('a')) for c in flag) if len(flag) == 2 else 'unknown'
-    verified = status in LABELS and country != 'unknown'
-    state = status if verified else 'pending'
+    verified = status in LABELS and (country != 'unknown' or status in {'unknown', 'error'})
+    state = ('unverified' if status in {'unknown', 'error'} else status) if verified else 'pending'
     label = LABELS[status] if verified else 'Проверка спамблока'
     return {'slug': f'auto-{country}-{state}', 'name': f'{name} {flag} · {label}',
             'emoji': flag, 'active': int(verified)}
@@ -20,8 +21,8 @@ def specification(phone, status):
 
 async def ensure(cur, phone, status):
     spec = specification(phone, status)
-    # Preserve a manually disabled category; pending stock cannot be published
-    # merely by editing the category before a successful check.
+    # Preserve manually disabled categories. Initial waiting stock remains hidden;
+    # completed failed checks have a separate, explicitly unverified category.
     await cur.execute('INSERT INTO categories(slug,name,emoji,is_active) VALUES(%s,%s,%s,%s) ON DUPLICATE KEY UPDATE name=VALUES(name),emoji=VALUES(emoji),is_active=IF(VALUES(is_active)=0,0,is_active)',
                       (spec['slug'], spec['name'], spec['emoji'], spec['active']))
     return spec['slug']

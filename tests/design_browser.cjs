@@ -7,7 +7,7 @@ const root=path.join(__dirname,'../miniapp/static');
  try{for(const width of [320,390,768,1440]){
   const ctx=await browser.newContext({viewport:{width,height:900}});let language='ru';
   const items=[['auto-cl-clear','Чили 🇨🇱 · Без спамблока',120],['auto-us-permanent','США 🇺🇸 · Вечный спамблок',90],['fr','Франция 🇫🇷',250],['unknown','Другая страна',80]].map(([category,name,price],i)=>({id:i+1,category,name,price,original_price:price+20,discount:10,available:true,product_id:'#0'+(i+1),telegram_user_id:123456789+i,phone:'+56 ••• •• 2345',characteristics:{is_premium:i===2,warranty_hours:24,two_fa:'Да',spam_check:{status:i===1?'permanent':'clear',label:i===1?'Вечный спамблок':'Нет спамблока',checked_at:'2026-11-08T10:00:00Z'}}}));
-  const categories=items.map(i=>({slug:i.category,name:i.name,count:1}));
+  const categories=[{slug:'de',name:'Германия 🇩🇪',count:0},...items.map(i=>({slug:i.category,name:i.name,count:1})),...['es','gb','tr','kz','id','br','in','jp','ca','pl'].map(slug=>({slug,name:slug.toUpperCase(),count:0}))];
   await ctx.addInitScript(()=>{window.Telegram={WebApp:{initData:'ui-fixture',ready(){},expand(){},setHeaderColor(){},setBackgroundColor(){}}};});
   await ctx.route('**/*',async route=>{
    const u=new URL(route.request().url()),p=u.pathname;
@@ -33,6 +33,9 @@ const root=path.join(__dirname,'../miniapp/static');
   });
   const p=await ctx.newPage();p.on('pageerror',e=>errors.push(e.message));await p.goto('https://sband.test/');await p.waitForSelector('.account-card');
   assert.equal(await p.locator('.account-card .country-image').count(),4);
+  assert.equal(await p.locator('.category').nth(1).getAttribute('data-category'),'auto-cl-clear');
+  await p.locator('#countries-toggle').click();assert.equal(await p.locator('#countries-toggle').getAttribute('aria-expanded'),'true');
+  await p.locator('#countries-toggle').click();await p.locator('.filter-panel summary').click();assert(await p.locator('#search').isVisible());await p.locator('.filter-panel summary').click();
   await p.locator('.country-image').evaluateAll(images=>images.forEach(i=>i.loading='eager'));
   await p.waitForFunction(()=>[...document.querySelectorAll('.country-image')].every(i=>i.complete&&i.naturalWidth>0));
   assert((await p.locator('.country-image').first().getAttribute('src')).endsWith('/cl.svg'));
@@ -45,7 +48,7 @@ const root=path.join(__dirname,'../miniapp/static');
   const nav=width<=700?'.mobile-nav':'.side-nav';await p.locator(`${nav} [data-tab="cart"]`).click();await p.waitForSelector('#cart-summary:not([hidden])');assert((await p.locator('#cart-total').innerText()).includes('120'));
   await p.locator(`${nav} [data-tab="profile"]`).click();await p.locator('#profile-page [data-language="en"]').click();await p.waitForFunction(()=>document.documentElement.lang==='en');
   assert((await p.locator('#profile-page h1').innerText()).includes('profile'));assert.equal(await p.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,`profile overflow ${width}`);
-  await p.locator(`${nav} [data-tab="catalog"]`).click();await p.waitForSelector('.account-card');assert((await p.locator('[data-add="2"]').innerText()).includes('Add to cart'));assert((await p.locator('.account-card h3').first().innerText()).includes('Chile'));assert((await p.locator('[data-spam-status="2"]').innerText()).includes('Permanent spam restriction'));await p.locator('#toast').evaluate(e=>e.hidden=true);
+  await p.locator(`${nav} [data-tab="catalog"]`).click();await p.waitForSelector('.account-card');assert((await p.locator('[data-add="2"]').innerText()).includes('Add to cart'));assert((await p.locator('#countries-toggle').innerText()).includes('All countries'));assert((await p.locator('.account-card h3').first().innerText()).includes('Chile'));assert((await p.locator('[data-spam-status="2"]').innerText()).includes('Permanent spam restriction'));await p.locator('#toast').evaluate(e=>e.hidden=true);
   await p.screenshot({path:`/workspace/session-shope-previews/redesign-${width}-en.png`,fullPage:true});
   await p.locator(`${nav} [data-tab="profile"]`).click();await p.locator('#profile-page [data-open-admin]').click();await p.waitForSelector('.stat-card');assert.equal(await p.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,`admin overflow ${width}`);
   await p.screenshot({path:`/workspace/session-shope-previews/redesign-admin-${width}.png`,fullPage:true});await ctx.close();

@@ -24,7 +24,7 @@ async def categories(user_id, page=0):
                 "FROM categories c JOIN accounts a ON a.country=c.slug AND a.status='available' "
                 "WHERE c.is_active=1 AND NOT EXISTS(SELECT 1 FROM account_reservations r "
                 "WHERE r.account_id=a.id AND r.expires_at>UTC_TIMESTAMP() AND r.user_id<>%s) "
-                "GROUP BY c.slug,c.name,c.emoji,c.sort_order ORDER BY c.sort_order,c.name", (user_id,),
+                "GROUP BY c.slug,c.name,c.emoji,c.sort_order ORDER BY COUNT(a.id) DESC,c.sort_order,c.name", (user_id,),
             )
             rows = list(await cur.fetchall())
             _, discount, _ = await pricing(cur, user_id)

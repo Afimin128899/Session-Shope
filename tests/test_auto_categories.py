@@ -19,11 +19,19 @@ class CategoryTests(unittest.TestCase):
             self.assertEqual(value['active'],1)
 
     def test_unknown_errors_and_unchecked_are_hidden_and_never_called_clear(self):
-        for status in ['unknown','error','not_checked','invented']:
+        for status in ['not_checked','invented']:
             value=auto_categories.specification('+56912345678',status)
             self.assertEqual(value['slug'],'auto-cl-pending')
             self.assertEqual(value['active'],0)
             self.assertNotIn('Без спамблока',value['name'])
+
+    def test_failed_checks_are_sellable_but_never_promised_clean(self):
+        for status in ['unknown', 'error']:
+            value=auto_categories.specification('+56912345678',status)
+            self.assertEqual(value['slug'],'auto-cl-unverified')
+            self.assertEqual(value['active'],1)
+            self.assertIn('не проверен',value['name'])
+            require_category(value['slug'])
 
     def test_pending_category_cannot_be_manually_enabled_or_sold(self):
         with self.assertRaises(ValueError):require_category('auto-cl-pending')

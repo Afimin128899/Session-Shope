@@ -10,9 +10,14 @@
   return codes.has(value)?value:'unknown';
  }
  window.SbandCountryName=item=>{
-  const match=String(item.category||'').match(/^auto-([a-z]{2})-(clear|permanent|limited|pending)$/);
-  if(window.SbandI18n?.language!=='en'||!match||!codes.has(match[1]))return item.name;
-  const status={clear:'No spam restrictions',permanent:'Permanent spam restriction',limited:'Spam restrictions',pending:'Spam check pending'};
+  const match=String(item.category||'').match(/^auto-([a-z]{2})-(clear|permanent|limited|pending|unverified)$/);
+  if(window.SbandI18n?.language!=='en')return item.name;
+  if(!match){
+    if(codes.has(String(item.category))){try{return new Intl.DisplayNames(['en'],{type:'region'}).of(item.category.toUpperCase());}catch(_){}}
+    return item.name;
+  }
+  if(!codes.has(match[1]))return item.name;
+  const status={clear:'No spam restrictions',permanent:'Permanent spam restriction',limited:'Spam restrictions',pending:'Spam check pending',unverified:'Spam status unverified'};
   try{return new Intl.DisplayNames(['en'],{type:'region'}).of(match[1].toUpperCase())+' · '+status[match[2]];}catch(_){return item.name;}
  };
  window.SbandCountryArt=item=>`<img class="country-image" src="/assets/flags/${code(item)}.svg" alt="" width="160" height="120" loading="lazy" decoding="async">`;
