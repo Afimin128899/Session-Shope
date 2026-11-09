@@ -249,3 +249,36 @@ async def enter_purchase_promo(message: Message, state: FSMContext):
             await show_product(call, state, account_id, promo['code'] if promo else None)
         except ValueError as exc:
             await message.answer(str(exc) + tr(' Введите другой код или /cancel.'))
+
+
+@shop_router.callback_query(F.data.startswith('all_categories:'))
+async def all_categories(call, state):
+    from database.db import get_all_categories
+    await state.clear()
+    try:page=page_index(call.data.split(':')[1])
+    except (ValueError,IndexError):
+        await answer_safe(call,tr('Некорректная страница.'),show_alert=True);return
+    cats=await get_all_categories()
+    visible=[c for c in cats if c['is_active'] or c['slug'].startswith('section-')]
+    page=min(page,max(0,(len(visible)-1)//8))
+    rows=[]
+    for c in visible[page*8:(page+1)*8]:
+        if c['slug'].startswith('section-'):
+            suffix=tr('Открыта') if c['is_active'] else tr('В разработке')
+            rows.append(button(c['name']+' · '+suffix,'department:'+c['slug']))
+        else:rows.append(button(c['name'],'buy_'+c['slug']))
+    rows+=pagination(page,len(visible),8,'all_categories')
+    rows.append(button(tr('В главное меню'),'back_main','back'))
+    await edit_message_safe(call,tr('<b>Все категории</b>\n\nВыберите раздел. Новые направления помечены «В разработке».'),reply_markup=InlineKeyboardMarkup(inline_keyboard=rows))
+    await answer_safe(call)
+
+
+@shop_router.callback_query(F.data.startswith('department:'))
+async def department(call):
+    slug=call.data.split(':',1)[1]
+    row=await get_category(slug)
+    if not row or not slug.startswith('section-'):
+        await answer_safe(call,tr('Категория недоступна.'),show_alert=True);return
+    status=tr('Пока нет товаров. Загляните позже.') if row['is_active'] else tr('Раздел в разработке. Скоро здесь появятся товары.')
+    await edit_message_safe(call,'<b>'+escape(row['name'])+'</b>\n\n'+status,reply_markup=InlineKeyboardMarkup(inline_keyboard=[button(tr('Все категории'),'all_categories:0')]))
+    await answer_safe(call)

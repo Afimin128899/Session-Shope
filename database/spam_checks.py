@@ -32,6 +32,8 @@ async def init_schema(cur, database):
         await cur.execute("UPDATE accounts SET spam_next_check_at=UTC_TIMESTAMP() WHERE status='available' AND country NOT LIKE 'auto-%' AND NOT (COALESCE(spam_reason,'')='flood_wait' AND spam_next_check_at>UTC_TIMESTAMP())")
 
 
+    from database.sections import seed as seed_sections
+    await seed_sections(cur)
     from database.country_catalog import seed
     await seed(cur)
     await cur.execute("INSERT IGNORE INTO settings(`key`,`value`) VALUES('unverified_stock_v1','1')")

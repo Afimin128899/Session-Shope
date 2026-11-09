@@ -32,6 +32,26 @@ class TicketStorageTests(unittest.IsolatedAsyncioTestCase):
             patcher.start()
             self.addCleanup(patcher.stop)
 
+    async def test_general_question_locks_user_and_reuses_thread(self):
+        self.cur.fetchone.side_effect=[{'id':42},{'id':9}]
+        self.assertEqual(await tickets.create_general(42,'General question'),9)
+        self.assertIn('FOR UPDATE',self.cur.execute.call_args_list[0].args[0])
+        self.assertIn('purchase_id IS NULL',self.cur.execute.call_args_list[1].args[0])
+        self.assertFalse(any('INSERT INTO support_tickets' in c.args[0] for c in self.cur.execute.call_args_list))
+        self.assertEqual(self.cur.execute.call_args_list[-1].args[1],(9,42,'user','General question',None))
+
+    async def test_general_question_rejects_unknown_user(self):
+        self.cur.fetchone.return_value=None
+        with self.assertRaises(ValueError):await tickets.create_general(99,'Question')
+        self.conn.commit.assert_not_awaited()
+
+    async def test_web_history_always_filters_owner_and_bounds_rows(self):
+        await tickets.web_history(9,42,100)
+        query,args=self.cur.execute.call_args.args
+        self.assertIn('t.user_id=%s',query)
+        self.assertIn('LIMIT 26',query)
+        self.assertEqual(args,(9,42,100))
+
     async def test_creation_locks_owners_order_and_saves_message(self):
         self.cur.fetchone.side_effect = [{'id': 52}, None]
         self.assertEqual(await tickets.create_ticket(42, 52, 'Problem'), 9)

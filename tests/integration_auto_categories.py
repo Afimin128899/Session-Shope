@@ -149,6 +149,44 @@ async def main():
         snapshot=await db.get_purchase_for_user(unchecked['id'],43)
         assert json.loads(snapshot['attributes_snapshot'])['spam_status']=='error'
         report('Failed SpamBot check can be purchased and preserves the error status in the receipt')
+        from database import sections,tickets
+        from database.support_schema import init_support_schema
+        await sql('ALTER TABLE support_tickets MODIFY purchase_id INT NOT NULL')
+        async with conn.cursor() as cur:await init_support_schema(cur,name)
+        async with ClientSession() as client:
+            own={'Authorization':'tma '+signed_data(43)}
+            foreign={'Authorization':'tma '+signed_data(44)}
+            admin={'Authorization':'tma '+signed_data(42)}
+            base='http://127.0.0.1:8093/api/'
+            d=await (await client.get(base+'departments',headers=own)).json()
+            assert len(d['items'])==8 and all(not item['is_active'] for item in d['items'])
+            denied=await client.post(base+'admin/categories',headers=own,json={'slug':'section-gmail','name':'Gmail','active':True})
+            assert denied.status==403
+            enabled=await client.post(base+'admin/categories',headers=admin,json={'slug':'section-gmail','name':'Gmail','active':True})
+            assert enabled.status==200,(enabled.status,await enabled.text())
+            d=await (await client.get(base+'departments',headers=own)).json()
+            assert next(i for i in d['items'] if i['slug']=='section-gmail')['is_active']==1
+            assert not any(c['slug'].startswith('section-') for c in (await storage.catalog(43))['categories'])
+            assert not any(c['slug'].startswith('section-') for c in (await bot_store.categories(43))[0])
+            async with conn.cursor() as cur:await sections.seed(cur)
+            assert next(i for i in await sections.listing() if i['slug']=='section-gmail')['is_active']==1
+            replies=await asyncio.gather(*[client.post(base+'support',headers=own,json={'body':'Question '+str(i)}) for i in range(2)])
+            assert all(r.status==201 for r in replies)
+            created=[await r.json() for r in replies];identity=created[0]['ticket_id']
+            assert created[1]['ticket_id']==identity
+            history=await client.get(base+'support/'+str(identity),headers=own)
+            assert history.status==200 and len((await history.json())['messages'])==2
+            denied=await client.get(base+'support/'+str(identity),headers=foreign);assert denied.status==404
+            denied=await client.post(base+'support/'+str(identity)+'/reply',headers=foreign,json={'body':'wrong owner'});assert denied.status==400
+            inbox=await (await client.get(base+'support',headers=foreign)).json();assert not inbox['items']
+            sent=await client.post(base+'support/'+str(identity)+'/reply',headers=own,json={'body':'<script>customer content</script>'});assert sent.status==200
+            sent=await client.post(base+'admin/tickets/'+str(identity)+'/reply',headers=admin,json={'body':'Support answer'});assert sent.status==200
+            history=await (await client.get(base+'support/'+str(identity),headers=own)).json()
+            assert history['messages'][0]['author_role']=='admin' and history['messages'][0]['body']=='Support answer'
+            await tickets.close_ticket(identity,42)
+            sent=await client.post(base+'support/'+str(identity)+'/reply',headers=own,json={'body':'Reopen'});assert sent.status==200
+            assert (await tickets.get_ticket(identity,43))['status']=='open'
+        report('Departments toggle only for admins, survive seeding and stay out of Telegram sales; general support migration, concurrent reuse, ownership isolation, admin replies and reopen work')
         if '--serve' in sys.argv:
             print('BROWSER FIXTURE: http://127.0.0.1:8093 customer=43 admin=42',flush=True)
             await asyncio.Event().wait()

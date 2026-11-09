@@ -3,7 +3,7 @@
   const $ = s => document.querySelector(s);
   const tg = window.Telegram?.WebApp;
   const state = { tab: 'home', wholesale:{minimum:'500',percent:'15'}, ready: false, me: null, items: [], page: 0, category: '', orderPage: 0, orders: [], busy: false, revision: 0, invoice: null, refreshing: false, dialogRevision: 0 };
-  const labels = { home:'Главная', catalog: 'Каталог', favorites: 'Избранное', cart: 'Корзина', orders: 'Покупки', profile: 'Профиль' };
+  const labels = { home:'Главная', messages:'Сообщения', catalog: 'Каталог', favorites: 'Избранное', cart: 'Корзина', orders: 'Покупки', profile: 'Профиль' };
   const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const num = v => new Intl.NumberFormat(window.SbandI18n.locale, { maximumFractionDigits: 2 }).format(Number(v || 0));
   const rub = v => num(v) + ' ₽';
@@ -16,7 +16,7 @@
     document.body.classList.remove('maintenance-mode');
     if($('#demo-mode-notice'))$('#demo-mode-notice').hidden=true;
     document.querySelectorAll('[data-demo]').forEach(button=>button.hidden=true);
-    window.SBAND_USER=null; document.dispatchEvent(new Event('sband-logout')); state.ready = false; state.me = null; state.items = []; state.recentItems=[]; state.orders = []; state.invoice = null; state.revision++;
+    window.SBAND_USER=null; document.dispatchEvent(new Event('sband-logout')); state.ready = false; state.me = null; state.items = []; state.recentItems=[]; state.supportRows=[]; state.supportTicket=null; state.orders = []; state.invoice = null; state.revision++;
     $('#header-balance').textContent = '— ₽'; $('#profile-balance').textContent = '— ₽'; $('#home-balance').textContent='— ₽'; $('#home-countries').replaceChildren(); $('#recent-products').replaceChildren(); $('#country-feature').replaceChildren(); $('#catalog-grid').replaceChildren(); $('#orders-list').replaceChildren();
     document.querySelectorAll('.page').forEach(el => { el.hidden = true; }); $('#login-panel').hidden = false;
     $('#purchase-dialog').close(); $('#dialog-content').replaceChildren(); $('#sync-state').textContent = SbandT("Нужен вход"); notice(text);
@@ -76,6 +76,7 @@
     return `<button class="country-tile ${scene(item)} ${extra}" data-category="${esc(cat.slug)}" aria-label="${esc(name)}"><span class="tile-art" aria-hidden="true"></span>${window.SbandCountryArt(item)}<span class="tile-caption"><strong>${esc(title)}</strong><small>${extra?esc(parts[1]||SbandT('В наличии')):SbandT('В наличии')+': '+(Number(cat.count)||0)}</small></span>${cat.min_price!=null?`<b class="tile-price">${SbandT('от')} ${rub(cat.min_price)}</b>`:''}</button>`;
   }
   function renderDiscovery(){
+    $('#departments-grid').innerHTML=(state.departments||[]).map(d=>`<button class="department-card" data-department="${esc(d.slug)}"><span aria-hidden="true">${esc(d.emoji||'◇')}</span><strong>${esc(SbandT(d.name))}</strong><small class="${d.is_active?'':'pending-department'}">${SbandT(d.is_active?'Открыта':'В разработке')}</small></button>`).join('');
     const cats=(state.categories||[]).slice().sort((a,b)=>Number(b.count)-Number(a.count));
     $('#home-countries').innerHTML=cats.filter((c,i,list)=>Number(c.count)>0&&list.findIndex(other=>window.SbandCountryCode({category:other.slug,name:other.name})===window.SbandCountryCode({category:c.slug,name:c.name}))===i).slice(0,3).map(c=>countryTile(c)).join('')||`<p class="muted">${SbandT('Пока ничего не найдено')}</p>`;
     const codes=new Set(cats.map(c=>window.SbandCountryCode({category:c.slug,name:c.name})).filter(c=>c!=='unknown'));
@@ -92,6 +93,40 @@
     $('#recent-section').hidden=!recent.length;
     $('#recent-products').innerHTML=recent.map(item=>`<button class="recent-product ${scene(item)}" data-features="${item.id}"><span class="tile-art" aria-hidden="true"></span>${window.SbandCountryArt(item)}<strong>${esc(window.SbandCountryName(item).split(' · ')[0])}</strong><b>${rub(item.price)}</b></button>`).join('');
   }
+  async function openDepartment(slug){
+    try{
+      const d=(await api('departments')).items?.find(item=>item.slug===slug);
+      if(!d)return;
+      modal(`<h2 id="dialog-title">${esc(SbandT(d.name))}</h2><p>${SbandT(d.is_active?'Пока нет товаров. Загляните позже.':'Раздел в разработке. Скоро здесь появятся товары.')}</p>`);
+    }catch(e){error(e);}
+  }
+  async function loadSupport(append=false){
+    const revision=state.supportRevision=(state.supportRevision||0)+1,page=append?(state.supportPage||0)+1:0;
+    const data=await api('support?page='+page);
+    if(revision!==state.supportRevision||state.tab!=='messages'||!state.ready)return;
+    state.supportPage=page;state.supportRows=append?[...(state.supportRows||[]),...data.items.slice(0,5)]:data.items.slice(0,5);
+    $('#support-list').innerHTML=state.supportRows.map(t=>`<button class="support-thread" data-support-ticket="${t.id}"><strong>${SbandT('Обращение')} #${t.id}</strong><span>${t.purchase_id?SbandT('Заказ')+' #'+t.purchase_id:SbandT('Общий вопрос')}</span><small>${SbandT({open:'Ждёт ответа',waiting_user:'Поддержка ответила',closed:'Закрыто'}[t.status]||'Ждёт ответа')}</small></button>`).join('')||`<p class="muted">${SbandT('Обращений пока нет')}</p>`;
+    $('#support-more').hidden=data.items.length<=5;
+  }
+  async function refreshSupport(){
+    if(!(state.supportPage>0))await loadSupport();
+    if(!$('#support-reply')||!state.supportTicket||state.supportBefore||$('#reply-body').value.trim())return;
+    const id=state.supportTicket,revision=state.dialogRevision;
+    const data=await api('support/'+id);
+    if(revision===state.dialogRevision&&$('#support-reply')&&!$('#reply-body').value.trim()&&(data.messages[0]?.id||0)!==state.supportNewest)await openSupport(id);
+  }
+  async function openSupport(id,before=0){
+    const revision=++state.dialogRevision;
+    try{
+      const d=await api('support/'+id+(before?'?before='+before:''));
+      if(revision!==state.dialogRevision||!state.ready)return;
+      state.supportTicket=id;state.supportBefore=before;state.supportNewest=d.messages[0]?.id||0;
+      modal(`<h2 id="dialog-title">${SbandT('Обращение')} #${id}</h2><p class="muted">${SbandT('Только вы и поддержка SBAND')}</p><button class="secondary-button" id="support-refresh-thread">${SbandT('Обновить')}</button><div class="support-history">${d.messages.slice().reverse().map(m=>`<article class="support-bubble ${m.author_role==='admin'?'support-answer':''}"><small>${SbandT({user:'Вы',admin:'Поддержка',system:'Система'}[m.author_role]||'Система')}</small><p>${esc(m.body)}</p>${m.has_photo?`<small>${SbandT('Скриншот доступен в боте')}</small>`:''}</article>`).join('')}</div>${d.has_more?`<button class="secondary-button" id="support-older">${SbandT('Ранее')}</button>`:''}<form id="support-reply"><label for="reply-body">${SbandT('Сообщение поддержке')}</label><textarea id="reply-body" rows="3" maxlength="500" required></textarea><p id="reply-error" role="alert" hidden></p><button type="submit" class="primary-button">${SbandT('Отправить')}</button></form>`);
+      $('#support-refresh-thread').onclick=()=>{if($('#reply-body').value.trim()){toast(SbandT('Сначала отправьте или очистите черновик.'));return;}openSupport(id);};
+      if($('#support-older'))$('#support-older').onclick=()=>openSupport(id,d.messages.at(-1).id);
+      $('#support-reply').onsubmit=async e=>{e.preventDefault();const form=e.currentTarget,button=form.querySelector('button');button.disabled=true;try{await post('support/'+id+'/reply',{body:$('#reply-body').value});await openSupport(id);if(state.tab==='messages')await loadSupport();}catch(e){const el=$('#reply-error');if(el){el.textContent=e.message;el.hidden=false;}}finally{if(button.isConnected)button.disabled=false;}};
+    }catch(e){error(e);}
+  }
   function countdown() {
     document.querySelectorAll('[data-until]').forEach(el => {
       const seconds = Math.max(0, Math.floor((Date.parse(el.dataset.until) - Date.now()) / 1000));
@@ -104,7 +139,8 @@
     const rev = ++state.revision, tab = state.tab, page = append ? state.page + 1 : 0;
     const query = new URLSearchParams({ page });
     if (tab === 'catalog') { query.set('category', state.category); query.set('q', $('#search').value); query.set('sort', $('#sort').value); query.set('min_price', $('#min-price').value); query.set('max_price', $('#max-price').value); query.set('premium',$('#premium-filter').value);query.set('min_age',$('#age-filter').value); }
-    const data = await api((['home','catalog'].includes(tab) ? 'catalog' : tab) + '?' + query);
+    const [data,departments]=await Promise.all([api((['home','catalog'].includes(tab)?'catalog':tab)+'?'+query),api('departments')]);
+    state.departments=departments.items||[];
     if (rev !== state.revision || state.tab !== tab || !state.ready) return;
     state.categories=data.categories;
     state.page = page; state.items = append ? [...state.items, ...data.items] : data.items;
@@ -130,7 +166,7 @@
   function showPage() {
     document.body.dataset.storeTab=state.tab;
     $('#market-page').hidden = !['catalog', 'favorites', 'cart'].includes(state.tab);
-    $('#orders-page').hidden = state.tab !== 'orders'; $('#profile-page').hidden = state.tab !== 'profile';
+    $('#orders-page').hidden = state.tab !== 'orders'; $('#profile-page').hidden = state.tab !== 'profile'; $('#messages-page').hidden=state.tab!=='messages';
     document.querySelectorAll('[data-tab]').forEach(el => el.classList.toggle('active', el.dataset.tab === state.tab));
     $('#breadcrumb').textContent = SbandT(labels[state.tab]); $('#home-page').hidden=state.tab!=='home'; $('#benefits').hidden=true; $('#filters').hidden = state.tab !== 'catalog';
     $('#market-title').textContent = state.tab === 'catalog' ? SbandT("Аккаунты") : SbandT(labels[state.tab]);
@@ -142,7 +178,7 @@
     if (!state.ready || !labels[tab]) return;
     state.tab = tab; state.revision++; state.page = 0; state.items = []; showPage(); notice();
     $('#catalog-grid').replaceChildren(); $('#cart-summary').hidden = true;
-    try { if (tab === 'orders') await loadOrders(); else if (tab !== 'profile') await loadMarket(); } catch (e) { error(e); }
+    try { if (tab === 'messages') await loadSupport(); else if (tab === 'orders') await loadOrders(); else if (tab !== 'profile') await loadMarket(); } catch (e) { error(e); }
     window.scrollTo({ top: 0, behavior: 'instant' });
   }
   function modal(html) { state.dialogRevision++; $('#dialog-content').innerHTML = html; if (!$('#purchase-dialog').open) $('#purchase-dialog').showModal(); }
@@ -446,12 +482,12 @@
   async function synchronize() {
     if (!state.ready || state.busy || state.refreshing || document.hidden || document.body.classList.contains('admin-mode')) return;
     state.refreshing = true;
-    try { await Promise.all([loadMe(), state.tab === 'orders' ? (state.orderPage === 0 ? loadOrders() : null) : (state.page === 0 ? loadMarket() : null), checkInvoice()]); $('#sync-state').textContent = (state.tab === 'orders' ? state.orderPage : state.page) > 0 ? SbandT("● Баланс обновлён") : SbandT("● Обновлено сейчас"); }
+    try { await Promise.all([loadMe(), state.tab === 'messages' ? refreshSupport() : state.tab === 'orders' ? (state.orderPage === 0 ? loadOrders() : null) : (state.page === 0 ? loadMarket() : null), checkInvoice()]); $('#sync-state').textContent = (state.tab === 'orders' ? state.orderPage : state.page) > 0 ? SbandT("● Баланс обновлён") : SbandT("● Обновлено сейчас"); }
     catch(e) { if(e.code==='maintenance'){showMaintenance(e.details?.shop_status);return;} $('#sync-state').textContent=SbandT("Нет обновления"); if(e.code==='unauthorized') reset(e.message); }
     finally { state.refreshing=false; }
   }
   async function initialize() {
-    try { await window.SbandI18n.ready; tg?.ready(); tg?.expand(); tg?.setHeaderColor('#101116'); tg?.setBackgroundColor('#1c1d24'); await loadMe(); const info=await api('shop-info');state.wholesale=info.wholesale;state.support=info; state.ready = true; document.body.classList.remove('maintenance-mode'); $('#maintenance-page').hidden=true; $('#login-panel').hidden = true; notice(); showPage(); await loadMarket(); $('#sync-state').textContent = SbandT("● Обновлено сейчас"); const start=tg?.initDataUnsafe?.start_param || new URLSearchParams(location.search).get('tgWebAppStartParam') || (new URLSearchParams(location.search).get('product') ? 'product_'+new URLSearchParams(location.search).get('product') : ''); if(/^product_[0-9]{1,10}$/.test(start)) await features(Number(start.slice(8))); }
+    try { await window.SbandI18n.ready; tg?.ready(); tg?.expand(); tg?.setHeaderColor('#101116'); tg?.setBackgroundColor('#1c1d24'); await loadMe(); const info=await api('shop-info');state.wholesale=info.wholesale;state.support=info; state.ready = true; document.body.classList.remove('maintenance-mode'); $('#maintenance-page').hidden=true; $('#login-panel').hidden = true; notice(); showPage(); if(state.tab==='messages')await loadSupport();else await loadMarket(); $('#sync-state').textContent = SbandT("● Обновлено сейчас"); const start=tg?.initDataUnsafe?.start_param || new URLSearchParams(location.search).get('tgWebAppStartParam') || (new URLSearchParams(location.search).get('product') ? 'product_'+new URLSearchParams(location.search).get('product') : ''); if(/^product_[0-9]{1,10}$/.test(start)) await features(Number(start.slice(8))); }
     catch (e) { if(e.code==='maintenance')showMaintenance(e.details?.shop_status);else reset(e.message); }
   }
   document.addEventListener('sband-shop',()=>{if(state.ready) { showPage(); synchronize(); }});
@@ -464,6 +500,8 @@
     if(button.hasAttribute('data-demo-exit')) { try{await post('demo/exit',{});await loadMe();notice(SbandT("Тестовый режим закрыт. Рабочие операции доступны."));}catch(e){error(e);}return; }
     if(button.hasAttribute('data-header-search')){await switchTab('home');$('#home-query').focus();return;}
     if(button.hasAttribute('data-discover')){state.category='';$('#search').value=button.dataset.discover;switchTab('catalog');return;}
+    if(button.dataset.department){openDepartment(button.dataset.department);return;}
+    if(button.dataset.supportTicket){openSupport(Number(button.dataset.supportTicket));return;}
     if (button.dataset.tab) { switchTab(button.dataset.tab); return; }
     if (button.hasAttribute('data-bot')) openBot();
     if (button.dataset.botOrder) openBot(Number(button.dataset.botOrder));
@@ -496,6 +534,12 @@
   $('#open-filters').onclick=()=>{const panel=$('.filter-panel');panel.open=!panel.open;if(panel.open)$('#search').focus();};
   $('#stock-countries').onclick=()=>{state.onlyStockCountries=true;$('#stock-countries').setAttribute('aria-pressed','true');$('#all-countries').setAttribute('aria-pressed','false');renderDiscovery();};
   $('#all-countries').onclick=()=>{state.onlyStockCountries=false;$('#stock-countries').setAttribute('aria-pressed','false');$('#all-countries').setAttribute('aria-pressed','true');renderDiscovery();};
+  $('#support-new').onsubmit=async e=>{
+    e.preventDefault();const button=e.currentTarget.querySelector('button');button.disabled=true;$('#support-error').hidden=true;$('#support-success').hidden=true;
+    try{const data=await post('support',{body:$('#support-body').value});$('#support-body').value='';$('#support-success').hidden=false;await loadSupport();await openSupport(data.ticket_id);}catch(e){$('#support-error').textContent=e.message;$('#support-error').hidden=false;}finally{button.disabled=false;}
+  };
+  $('#refresh-support').onclick=()=>loadSupport().catch(error);
+  $('#support-more').onclick=async()=>{const b=$('#support-more');b.disabled=true;try{await loadSupport(true);}catch(e){error(e);}finally{b.disabled=false;}};
   $('#checkout-cart').onclick = checkout;
   $('#close-dialog').onclick = () => { if (!state.busy) $('#purchase-dialog').close(); };
   $('#purchase-dialog').addEventListener('cancel', e => { if (state.busy) e.preventDefault(); });

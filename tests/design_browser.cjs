@@ -5,7 +5,7 @@ const root=path.join(__dirname,'../miniapp/static');
  const browser=await chromium.launch({executablePath:'/usr/bin/chromium',headless:true,args:['--no-sandbox']});
  const errors=[];fs.mkdirSync('/workspace/session-shope-previews',{recursive:true});
  try{for(const width of [320,390,768,1440]){
-  const ctx=await browser.newContext({viewport:{width,height:900}});let language='ru';
+  const ctx=await browser.newContext({viewport:{width,height:900}});let language='ru';const departments=['email','gmail','chatgpt','roblox','discord','steam','spotify','youtube'].map(slug=>({slug:'section-'+slug,name:slug==='email'?'Почта':slug==='chatgpt'?'ChatGPT':slug==='gmail'?'Gmail':slug[0].toUpperCase()+slug.slice(1),emoji:'◇',is_active:0}));const supportMessages=[];
   const items=[['auto-cl-clear','Чили 🇨🇱 · Без спамблока',120],['auto-us-permanent','США 🇺🇸 · Вечный спамблок',90],['fr','Франция 🇫🇷',250],['unknown','Другая страна',80]].map(([category,name,price],i)=>({id:i+1,category,name,price,original_price:price+20,discount:10,available:true,product_id:'#0'+(i+1),telegram_user_id:123456789+i,phone:'+56 ••• •• 2345',characteristics:{is_premium:i===2,warranty_hours:24,two_fa:'Да',spam_check:{status:i===1?'permanent':'clear',label:i===1?'Вечный спамблок':'Нет спамблока',checked_at:'2026-11-08T10:00:00Z'}}}));
   const categories=[{slug:'de',name:'Германия 🇩🇪',count:0},...items.map(i=>({slug:i.category,name:i.name,count:1,min_price:i.price})),...['es','gb','tr','kz','id','br','in','jp','ca','pl'].map(slug=>({slug,name:slug.toUpperCase(),count:0}))];
   await ctx.addInitScript(()=>{window.Telegram={WebApp:{initData:'ui-fixture',ready(){},expand(){},setHeaderColor(){},setBackgroundColor(){}}};});
@@ -14,7 +14,12 @@ const root=path.join(__dirname,'../miniapp/static');
    if(u.hostname!=='sband.test')return route.abort();
    if(p.startsWith('/api/')){
     let data={};const key=p.slice(5),body=route.request().postDataJSON();
-    if(key==='preferences/language'){language=body.language;data={language};}
+    if(key==='departments')data={items:departments};
+    else if(key==='support'&&route.request().method()==='POST'){supportMessages.unshift({id:supportMessages.length+1,author_role:'user',body:body.body});data={ticket_id:77};}
+    else if(key==='support')data={items:supportMessages.length?[{id:77,purchase_id:null,status:'open'}]:[]};
+    else if(key==='support/77')data={ticket:{id:77,purchase_id:null},messages:supportMessages,has_more:false};
+    else if(key==='support/77/reply'){supportMessages.unshift({id:supportMessages.length+1,author_role:'user',body:body.body});data={ok:true};}
+    else if(key==='preferences/language'){language=body.language;data={language};}
     else if(key==='me')data={language,user:{id:42,first_name:'Alex',username:'alex'},balance:1250,balance_usdt:0,welcome_bonus:4,version:'5.11.0',is_admin:true,bot_username:'fixture_bot',shop_status:{}};
     else if(key==='shop-info')data={wholesale:{minimum:500,percent:15}};
     else if(key==='cart'&&route.request().method()==='POST'){Object.assign(items.find(i=>i.id===body.account_id),{in_cart:true,reserved_until:new Date(Date.now()+300000).toISOString()});}
@@ -52,10 +57,22 @@ const root=path.join(__dirname,'../miniapp/static');
   assert((await p.locator('.account-card .country-image').last().getAttribute('src')).endsWith('/unknown.svg'));
   assert.equal(await p.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,`catalog overflow ${width}`);
   await p.screenshot({path:`/workspace/session-shope-previews/redesign-${width}-ru.png`,fullPage:true});
+  assert.equal(await p.locator('.department-card').count(),8);
+  await p.locator('[data-department="section-gmail"]').click();await p.waitForSelector('#dialog-title');assert((await p.locator('#dialog-content').innerText()).includes('в разработке'));await p.locator('#close-dialog').click();
+  await p.screenshot({path:`/workspace/session-shope-previews/sections-${width}.png`,fullPage:true});
   await p.locator('[data-features="1"]').click();await p.waitForSelector('#dialog-title');assert(await p.locator('.product-cover .country-image').isVisible());await p.locator('#close-dialog').click();
   await p.locator('[data-favorite="1"]').click();await p.waitForFunction(()=>document.querySelector('[data-favorite="1"]').getAttribute('aria-pressed')==='true');
   await p.locator('[data-add="1"]').click();await p.waitForFunction(()=>document.querySelector('[data-add="1"]').textContent.includes('В корзине'));
   await p.locator(`${nav} [data-tab="profile"]`).click();await p.locator('#profile-page [data-tab="cart"]').click();await p.waitForSelector('#cart-summary:not([hidden])');assert((await p.locator('#cart-total').innerText()).includes('120'));
+  await p.locator(`${nav} [data-tab="messages"]`).click();await p.waitForSelector('#messages-page:not([hidden])');
+  await p.locator('#support-body').fill('<img src=x onerror=alert(1)> test question');await p.locator('#support-new [type=submit]').click();await p.waitForSelector('#support-reply');
+  assert((await p.locator('.support-history').innerText()).includes('<img src=x onerror=alert(1)>'));
+  assert.equal(await p.locator('.support-history img').count(),0);
+  supportMessages.unshift({id:88,author_role:'admin',body:'Ответ поддержки'});
+  await p.locator('#support-refresh-thread').click();await p.waitForFunction(()=>document.querySelector('.support-history').textContent.includes('Ответ поддержки'));
+  await p.locator('#reply-body').fill('Спасибо');await p.locator('#support-reply [type=submit]').click();await p.waitForFunction(()=>document.querySelector('.support-history').textContent.includes('Спасибо'));
+  await p.screenshot({path:`/workspace/session-shope-previews/support-${width}.png`,fullPage:true});await p.locator('#close-dialog').click();
+  assert.equal(await p.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
   await p.locator(`${nav} [data-tab="profile"]`).click();await p.locator('#profile-page [data-language="en"]').click();await p.waitForFunction(()=>document.documentElement.lang==='en');
   assert((await p.locator('#profile-page h1').innerText()).includes('profile'));assert.equal(await p.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,`profile overflow ${width}`);
   await p.locator(`${nav} [data-tab="home"]`).click();await p.waitForSelector('#recent-section:not([hidden])');

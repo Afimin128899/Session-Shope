@@ -39,6 +39,7 @@ async def main_menu(user_id: int | None=None) -> InlineKeyboardMarkup:
     else:
         reviews_url = f"https://t.me/{reviews_val.lstrip('@')}"
     rows = [[InlineKeyboardButton(text=label_buy, callback_data='buy', icon_custom_emoji_id=emoji_buy)], [InlineKeyboardButton(text=label_profile, callback_data='my_profile', icon_custom_emoji_id=emoji_profile)], [InlineKeyboardButton(text=label_info, callback_data='info_menu', icon_custom_emoji_id=emoji_info)]]
+    rows.insert(1,[InlineKeyboardButton(text=tr('🗂 Все категории'),callback_data='all_categories:0')])
     from utils.miniapp import miniapp_url
     app_url = miniapp_url()
     if app_url:

@@ -130,3 +130,29 @@ async def close_ticket(ticket_id, admin_id):
         await _message(cur, ticket_id, admin_id, 'system', 'Обращение закрыто поддержкой.')
         await _record(cur, admin_id, 'ticket_close', 'ticket', ticket_id, {'before': ticket['status'], 'after': 'closed'})
         return ticket['user_id']
+
+
+async def create_general(user_id, body):
+    """Serialize per customer so concurrent requests reuse the same general thread."""
+    body=validate_body(body)
+    async with _transaction() as cur:
+        await cur.execute('SELECT id FROM users WHERE id=%s FOR UPDATE', (user_id,))
+        if not await cur.fetchone():
+            raise ValueError(tr('Покупатель не найден.'))
+        await cur.execute('SELECT id FROM support_tickets WHERE user_id=%s AND purchase_id IS NULL ORDER BY id LIMIT 1 FOR UPDATE',(user_id,))
+        ticket=await cur.fetchone()
+        if ticket:
+            identity=ticket['id']
+            await cur.execute("UPDATE support_tickets SET status='open',updated_at=UTC_TIMESTAMP() WHERE id=%s",(identity,))
+        else:
+            await cur.execute("INSERT INTO support_tickets(purchase_id,user_id,status,created_at,updated_at) VALUES(NULL,%s,'open',UTC_TIMESTAMP(),UTC_TIMESTAMP())",(user_id,))
+            identity=cur.lastrowid
+        await _message(cur,identity,user_id,'user',body)
+        return identity
+
+
+async def web_history(ticket_id, user_id, before=0):
+    async with _get_pool().acquire() as conn:
+        async with conn.cursor(aiomysql.DictCursor) as cur:
+            await cur.execute('SELECT m.id,m.author_role,m.body,m.created_at,(m.photo_id IS NOT NULL) AS has_photo FROM support_messages m JOIN support_tickets t ON t.id=m.ticket_id WHERE m.ticket_id=%s AND t.user_id=%s'+(' AND m.id<%s' if before else '')+' ORDER BY m.id DESC LIMIT 26', (ticket_id,user_id,before) if before else (ticket_id,user_id))
+            return list(await cur.fetchall())

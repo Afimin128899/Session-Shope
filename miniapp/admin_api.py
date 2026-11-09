@@ -186,7 +186,7 @@ def register(app, response, page_number):
         from miniapp.server import BOT
         bot = request.app[BOT]
         if bot:
-            await send_notice(request, user, 'Поддержка ответила на ваше обращение. Переписка доступна в боте.')
+            await send_notice(request, user, 'Поддержка ответила на ваше обращение. Переписка доступна в Mini App и боте.')
         return response({'ok': True})
 
     async def close(request):

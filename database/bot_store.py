@@ -23,7 +23,7 @@ async def categories(user_id, page=0):
                 "SELECT c.slug,c.name,c.emoji,COUNT(a.id) AS count,MIN(a.price) AS min_price "
                 "FROM categories c LEFT JOIN accounts a ON a.country=c.slug AND a.status='available' "
                 "AND NOT EXISTS(SELECT 1 FROM account_reservations r "
-                "WHERE r.account_id=a.id AND r.expires_at>UTC_TIMESTAMP() AND r.user_id<>%s) WHERE c.is_active=1 "
+                "WHERE r.account_id=a.id AND r.expires_at>UTC_TIMESTAMP() AND r.user_id<>%s) WHERE c.is_active=1 AND c.slug NOT LIKE 'section-%%' "
                 "GROUP BY c.slug,c.name,c.emoji,c.sort_order ORDER BY COUNT(a.id) DESC,c.sort_order,c.name", (user_id,),
             )
             rows = list(await cur.fetchall())

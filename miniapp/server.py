@@ -107,7 +107,7 @@ async def authenticate(request, handler):
     if request.path.startswith('/api/admin/') or request.path == '/api/admin':
         if user['id'] not in config.ADMIN_IDS:
             return response({'error': tr('Доступ только администратору.'), 'code': 'forbidden'}, 403)
-    if limited(request.app, user['id'], request.method == 'POST' and (request.path in {'/api/purchase', '/api/cart/checkout', '/api/invoices', '/api/promo/preview', '/api/promo/redeem', '/api/reviews', '/api/rewards/claim'} or request.path.endswith('/warranty-claim'))):
+    if limited(request.app, user['id'], request.method == 'POST' and (request.path in {'/api/purchase', '/api/cart/checkout', '/api/invoices', '/api/promo/preview', '/api/promo/redeem', '/api/reviews', '/api/rewards/claim', '/api/support'} or request.path.endswith('/warranty-claim') or (request.path.startswith('/api/support/') and request.method=='POST'))):
         return response({'error': tr('Слишком много запросов. Подождите минуту.'), 'code': 'rate_limited'}, 429)
     settings = await storage.access_settings()
     request['shop_status'] = public_status(settings)
@@ -393,6 +393,51 @@ async def warranty_claim(request):
     return response({'ticket_id': ticket}, 201)
 
 
+async def departments(request):
+    from database.sections import listing
+    return response({'items':await listing()})
+
+
+async def support_list(request):
+    return response({'items':await tickets.inbox(request['user']['id'],page=page_number(request))})
+
+
+async def support_create(request):
+    body=await json_body(request)
+    if not isinstance(body.get('body'),str):raise ValueError
+    purchase_id=body.get('purchase_id')
+    if purchase_id is None:
+        identity=await tickets.create_general(request['user']['id'],body['body'])
+    elif type(purchase_id) is int and 0<purchase_id<=2147483647:
+        identity=await tickets.create_ticket(request['user']['id'],purchase_id,body['body'])
+    else:raise ValueError
+    if request.app[BOT]:
+        from handlers.tickets import notify
+        await notify(request.app[BOT],config.ADMIN_IDS,identity,'Новое обращение в поддержку.')
+    return response({'ticket_id':identity},201)
+
+
+async def support_detail(request):
+    identity=order_id(request)
+    row=await tickets.get_ticket(identity,request['user']['id'])
+    if not row:raise web.HTTPNotFound()
+    before=request.query.get('before','0')
+    if not before.isascii() or not before.isdigit() or len(before)>19:raise ValueError
+    messages=await tickets.web_history(identity,request['user']['id'],int(before))
+    return response({'ticket':row,'messages':messages[:25],'has_more':len(messages)>25})
+
+
+async def support_reply(request):
+    body=await json_body(request)
+    if not isinstance(body.get('body'),str):raise ValueError
+    identity=order_id(request)
+    await tickets.reply(identity,request['user']['id'],body['body'])
+    if request.app[BOT]:
+        from handlers.tickets import notify
+        await notify(request.app[BOT],config.ADMIN_IDS,identity,'Новое сообщение в поддержку.')
+    return response({'ok':True})
+
+
 async def shop_info(request):
     from database.expansion import rules
     return response({'wholesale': await rules(), 'support_hours': await db.get_setting('support_hours', tr('График поддержки пока не указан')), 'response_time': await db.get_setting('support_eta', tr('Поддержка отвечает в порядке очереди; точное время не установлено.'))})
@@ -438,6 +483,7 @@ def create_app(*, token=None, bot=None, bot_username=''):
         web.get('/api/referrals',referral_info),web.get('/api/spam-status',spam_statuses),
         web.get('/api/status',shop_status),web.post('/api/preferences/language',save_language),
         web.get('/api/rewards',reward_status),web.post('/api/rewards/claim',reward_claim),
+        web.get('/api/departments',departments),web.get('/api/support',support_list),web.post('/api/support',support_create),web.get('/api/support/{id}',support_detail),web.post('/api/support/{id}/reply',support_reply),
         web.get('/api/shop-info',shop_info),web.get('/api/products/{id}',product),web.get('/api/me', me), web.get('/api/catalog', catalog), web.post('/api/purchase', purchase),
         web.get('/api/favorites', collection), web.post('/api/favorites', collection_update),
         web.get('/api/cart', collection), web.post('/api/cart', collection_update), web.delete('/api/cart', collection_update),

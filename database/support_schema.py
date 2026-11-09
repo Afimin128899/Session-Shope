@@ -22,7 +22,7 @@ async def init_support_schema(cur, database_name):
     await cur.execute("""
         CREATE TABLE IF NOT EXISTS support_tickets (
             id BIGINT AUTO_INCREMENT PRIMARY KEY,
-            purchase_id INT NOT NULL,
+            purchase_id INT DEFAULT NULL,
             user_id BIGINT NOT NULL,
             status VARCHAR(24) NOT NULL DEFAULT 'open',
             created_at DATETIME NOT NULL,
@@ -34,6 +34,11 @@ async def init_support_schema(cur, database_name):
                 REFERENCES purchases(id) ON DELETE RESTRICT
         ) ENGINE=InnoDB
     """)
+    await cur.execute("SELECT IS_NULLABLE FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=%s AND TABLE_NAME='support_tickets' AND COLUMN_NAME='purchase_id'", (database_name,))
+    column = await cur.fetchone()
+    nullable = column.get('IS_NULLABLE') if isinstance(column,dict) else column[0] if column else 'YES'
+    if nullable == 'NO':
+        await cur.execute('ALTER TABLE support_tickets MODIFY purchase_id INT DEFAULT NULL')
     await cur.execute("""
         CREATE TABLE IF NOT EXISTS support_messages (
             id BIGINT AUTO_INCREMENT PRIMARY KEY,

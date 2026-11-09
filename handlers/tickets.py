@@ -66,7 +66,9 @@ async def display_ticket(call, ticket_id, before_id=0):
         await answer_safe(call, tr('Обращение не найдено.'), show_alert=True)
         return
     messages = await store.history(ticket_id, owner_id, before_id)
-    text = tr('🛟 <b>Обращение #{0} · заказ #{1}</b>\nСтатус: <b>{2}</b>\n\n', f"{ticket['id']}", f"{ticket['purchase_id']}", f"{tr(TICKET_STATUSES.get(ticket['status'], tr('Неизвестен')))}")
+    text = tr('🛟 <b>Обращение #{0} · заказ #{1}</b>\nСтатус: <b>{2}</b>\n\n', f"{ticket['id']}", f"{ticket['purchase_id'] or tr('Общий вопрос')}", f"{tr(TICKET_STATUSES.get(ticket['status'], tr('Неизвестен')))}")
+    if not ticket['purchase_id']:
+        text=tr('🛟 <b>Обращение #{0} · Общий вопрос</b>\nСтатус: <b>{1}</b>\n\n',ticket['id'],tr(TICKET_STATUSES.get(ticket['status'],'Неизвестен')))
     if ticket.get('warranty_claimed_at'):
         text += tr('🛡 Гарантийное обращение: принято в пределах срока.\n\n')
     if messages:
@@ -88,7 +90,8 @@ async def display_ticket(call, ticket_id, before_id=0):
             rows.append(button(tr('Закрыть обращение'), f'tk_close:{ticket_id}'))
         rows.append(button(tr('К обращениям'), 'tk_admin:active:0'))
     else:
-        rows.append(button(tr('Назад к заказу'), f"open_purchase:{ticket['purchase_id']}"))
+        if ticket['purchase_id']:
+            rows.append(button(tr('Назад к заказу'), f"open_purchase:{ticket['purchase_id']}"))
         rows.append(button(tr('Мои обращения'), 'tk_user:0'))
     await edit_message_safe(call, text, reply_markup=InlineKeyboardMarkup(inline_keyboard=rows))
 
@@ -232,7 +235,7 @@ async def show_inbox(call, state):
         return
     entries = await store.inbox(None if admin else call.from_user.id, mode == 'closed', page)
     await state.clear()
-    rows = [button(tr('#{0} · заказ #{1} · {2}', f"{t['id']}", f"{t['purchase_id']}", f"{tr(TICKET_STATUSES.get(t['status'], ''))}"), f"tk:{t['id']}:0") for t in entries[:5]]
+    rows = [button(tr('#{0} · заказ #{1} · {2}', f"{t['id']}", f"{t['purchase_id'] or tr('Общий вопрос')}", f"{tr(TICKET_STATUSES.get(t['status'], ''))}"), f"tk:{t['id']}:0") for t in entries[:5]]
     prefix = f'tk_admin:{mode}' if admin else 'tk_user'
     if page:
         rows.append(button(tr('← Назад'), f'{prefix}:{page - 1}'))
