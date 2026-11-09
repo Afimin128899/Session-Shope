@@ -2,7 +2,7 @@ from utils.i18n import tr
 from html import escape
 from aiogram import Router, F
 from aiogram.filters import CommandStart
-from aiogram.types import CallbackQuery, Message, InlineKeyboardButton, InlineKeyboardMarkup
+from aiogram.types import CallbackQuery, Message, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 
 from database.db import create_user_with_referrer, is_new_user, get_setting, update_user_username
 
@@ -34,9 +34,14 @@ async def cmd_start(message: Message, command, state=None):
     if welcome_bonus:
         await message.answer(tr('🎁 Приветственный бонус: {0} ₽ зачислены на баланс. Используйте их для покупок в магазине.', f'{welcome_bonus:.2f}'))
     await update_user_username(message.from_user.id, message.from_user.username)
+    if args == 'miniapp':
+        from utils.miniapp import miniapp_url
+        url=miniapp_url()
+        if url:
+            await message.answer(tr('Откройте магазин по кнопке ниже.'),reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text=tr('🛍 Открыть Mini App'),web_app=WebAppInfo(url=url))]]))
+            return
     if args and args.startswith('product_'):
         from utils.miniapp import miniapp_url
-        from aiogram.types import WebAppInfo
         value = args[8:]
         url = miniapp_url()
         if url and value.isascii() and value.isdigit() and (0 < int(value) <= 2147483647):

@@ -1,0 +1,26 @@
+/* Original SBAND 3D emoji atlas. Decorative: accessible text stays in controls. */
+.sband-emoji{display:inline-block;flex-shrink:0;width:32px;height:32px;background-image:url("/assets/emoji-pack.webp");background-repeat:no-repeat;background-size:600% 400%;vertical-align:middle}
+.emoji-home{background-position:0% 0.00000%}
+.emoji-catalog{background-position:20% 0.00000%}
+.emoji-bag{background-position:40% 0.00000%}
+.emoji-support{background-position:60% 0.00000%}
+.emoji-user{background-position:80% 0.00000%}
+.emoji-heart{background-position:100% 0.00000%}
+.emoji-wallet{background-position:0% 33.33333%}
+.emoji-plus{background-position:20% 33.33333%}
+.emoji-gift{background-position:40% 33.33333%}
+.emoji-search{background-position:60% 33.33333%}
+.emoji-filters{background-position:80% 33.33333%}
+.emoji-coupon{background-position:100% 33.33333%}
+.emoji-verified{background-position:0% 66.66667%}
+.emoji-unverified{background-position:20% 66.66667%}
+.emoji-success{background-position:40% 66.66667%}
+.emoji-lock{background-position:60% 66.66667%}
+.emoji-clock{background-position:80% 66.66667%}
+.emoji-globe{background-position:100% 66.66667%}
+.emoji-mail{background-position:0% 100.00000%}
+.emoji-ai{background-position:20% 100.00000%}
+.emoji-game{background-position:40% 100.00000%}
+.emoji-cards{background-position:60% 100.00000%}
+.emoji-settings{background-position:80% 100.00000%}
+.emoji-arrow{background-position:100% 100.00000%}

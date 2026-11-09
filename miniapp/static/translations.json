@@ -1751,5 +1751,16 @@
   "🛟 <b>Обращение #{0} · Общий вопрос</b>\nСтатус: <b>{1}</b>\n\n": "🛟 <b>Request #{0} · General question</b>\nStatus: <b>{1}</b>\n\n",
   "{0} · Покупатель {1} · {2}": "{0} · Customer {1} · {2}",
   "{0} товар": "{0} product",
-  "{0} товаров": "{0} products"
+  "{0} товаров": "{0} products",
+  "Поделиться Mini App": "Share Mini App",
+  "Поделиться Mini App ↗": "Share Mini App ↗",
+  "Отправь ссылку другу — он сможет открыть магазин через Telegram.": "Send this link to a friend to open the store through Telegram.",
+  "Ссылка на магазин": "Store link",
+  "Отправить в Telegram": "Send in Telegram",
+  "Выделенная ссылка готова для копирования.": "The selected link is ready to copy.",
+  "SBAND ACCS — аккаунты и цифровые товары": "SBAND ACCS — accounts and digital products",
+  "Открыть Mini App в Telegram": "Open Mini App in Telegram",
+  "Откройте магазин по кнопке ниже.": "Open the store using the button below.",
+  "Новый вопрос": "New question",
+  "Только поддержка SBAND": "SBAND support only"
 }

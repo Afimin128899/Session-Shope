@@ -195,6 +195,27 @@ class MiniAppBotIntegrationTests(unittest.IsolatedAsyncioTestCase):
             keyboard = await user_kb.main_menu(42)
             self.assertEqual(keyboard.inline_keyboard[0][0].web_app.url, 'https://sbandsub.space')
 
+    async def test_shared_miniapp_link_opens_authenticated_webapp_button(self):
+        import os
+        from handlers.user import start
+        message=SimpleNamespace(from_user=SimpleNamespace(id=42,username='fixture',first_name='Fixture'),answer=AsyncMock())
+        with patch.dict(os.environ,MINIAPP_URL='https://sbandsub.space'), patch.object(start,'is_new_user',AsyncMock(return_value=False)), patch.object(start,'create_user_with_referrer',AsyncMock(return_value=Decimal(0))), patch.object(start,'update_user_username',AsyncMock()):
+            await start.cmd_start(message,SimpleNamespace(args='miniapp'))
+            keyboard=message.answer.call_args.kwargs['reply_markup']
+            self.assertEqual(keyboard.inline_keyboard[0][0].web_app.url,'https://sbandsub.space')
+            self.assertNotIn('initData',keyboard.inline_keyboard[0][0].web_app.url)
+
+    async def test_public_app_link_metadata_does_not_require_login_or_expose_private_data(self):
+        client=TestClient(TestServer(server.create_app(token=TEST_TOKEN,bot_username='fixture_bot')))
+        try:
+            await client.start_server()
+            response=await client.get('/api/app-info')
+            self.assertEqual(response.status,200)
+            self.assertEqual(await response.json(),{'bot_username':'fixture_bot'})
+            response=await client.get('/api/me')
+            self.assertEqual(response.status,401)
+        finally:await client.close()
+
     async def test_order_deep_link_checks_ownership_and_opens_existing_bot_flow(self):
         from handlers.user import start
         from keyboards import user_kb

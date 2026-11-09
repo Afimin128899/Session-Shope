@@ -8,13 +8,14 @@ const root=path.join(__dirname,'../miniapp/static');
   const ctx=await browser.newContext({viewport:{width,height:900}});let language='ru';const departments=['email','gmail','chatgpt','roblox','discord','steam','spotify','youtube'].map(slug=>({slug:'section-'+slug,name:slug==='email'?'Почта':slug==='chatgpt'?'ChatGPT':slug==='gmail'?'Gmail':slug[0].toUpperCase()+slug.slice(1),emoji:'◇',is_active:0}));const supportMessages=[];
   const items=[['auto-cl-clear','Чили 🇨🇱 · Без спамблока',120],['auto-us-permanent','США 🇺🇸 · Вечный спамблок',90],['fr','Франция 🇫🇷',250],['unknown','Другая страна',80]].map(([category,name,price],i)=>({id:i+1,category,name,price,original_price:price+20,discount:10,available:true,product_id:'#0'+(i+1),telegram_user_id:123456789+i,phone:'+56 ••• •• 2345',characteristics:{is_premium:i===2,warranty_hours:24,two_fa:'Да',spam_check:{status:i===1?'permanent':'clear',label:i===1?'Вечный спамблок':'Нет спамблока',checked_at:'2026-11-08T10:00:00Z'}}}));
   const categories=[{slug:'de',name:'Германия 🇩🇪',count:0},...items.map(i=>({slug:i.category,name:i.name,count:1,min_price:i.price})),...['es','gb','tr','kz','id','br','in','jp','ca','pl'].map(slug=>({slug,name:slug.toUpperCase(),count:0}))];
-  await ctx.addInitScript(()=>{window.Telegram={WebApp:{initData:'ui-fixture',ready(){},expand(){},setHeaderColor(){},setBackgroundColor(){}}};});
+  await ctx.addInitScript(()=>{window.Telegram={WebApp:{initData:'ui-fixture',ready(){},expand(){},setHeaderColor(){},setBackgroundColor(){},openTelegramLink(url){window.sharedURL=url;}}};Object.defineProperty(navigator,'clipboard',{value:{async writeText(value){window.savedCopy=value;}},configurable:true});});
   await ctx.route('**/*',async route=>{
    const u=new URL(route.request().url()),p=u.pathname;
    if(u.hostname!=='sband.test')return route.abort();
    if(p.startsWith('/api/')){
     let data={};const key=p.slice(5),body=route.request().postDataJSON();
-    if(key==='departments')data={items:departments};
+    if(key==='app-info')data={bot_username:'fixture_bot'};
+    else if(key==='departments')data={items:departments};
     else if(key==='support'&&route.request().method()==='POST'){supportMessages.unshift({id:supportMessages.length+1,author_role:'user',body:body.body});data={ticket_id:77};}
     else if(key==='support')data={items:supportMessages.length?[{id:77,purchase_id:null,status:'open'}]:[]};
     else if(key==='support/77')data={ticket:{id:77,purchase_id:null},messages:supportMessages,has_more:false};
@@ -72,9 +73,15 @@ const root=path.join(__dirname,'../miniapp/static');
   supportMessages.unshift({id:88,author_role:'admin',body:'Ответ поддержки'});
   await p.locator('#support-refresh-thread').click();await p.waitForFunction(()=>document.querySelector('.support-history').textContent.includes('Ответ поддержки'));
   await p.locator('#reply-body').fill('Спасибо');await p.locator('#support-reply [type=submit]').click();await p.waitForFunction(()=>document.querySelector('.support-history').textContent.includes('Спасибо'));
-  await p.screenshot({path:`/workspace/session-shope-previews/support-${width}.png`,fullPage:true});await p.locator('#close-dialog').click();
+  await p.locator('#toast').evaluate(e=>e.hidden=true);
+  await p.screenshot({path:`/workspace/session-shope-previews/support-${width}.png`,fullPage:true});assert.equal(await p.locator('#purchase-dialog').evaluate(d=>d.open),false);
   assert.equal(await p.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
   await p.locator(`${nav} [data-tab="profile"]`).click();await p.locator('#profile-page [data-language="en"]').click();await p.waitForFunction(()=>document.documentElement.lang==='en');
+  await p.locator('#profile-page [data-share-app]').click();await p.waitForSelector('#app-share-link');
+  assert.equal(await p.locator('#app-share-link').inputValue(),'https://t.me/fixture_bot?start=miniapp');
+  await p.locator('#copy-app-link').click();await p.waitForFunction(()=>window.savedCopy==='https://t.me/fixture_bot?start=miniapp');
+  await p.locator('#send-app-link').click();const shared=new URL(await p.evaluate(()=>window.sharedURL));assert.equal(shared.hostname,'t.me');assert.equal(shared.searchParams.get('url'),'https://t.me/fixture_bot?start=miniapp');assert(!shared.href.includes('ui-fixture'));
+  await p.locator('#close-dialog').click();
   assert((await p.locator('#profile-page h1').innerText()).includes('profile'));assert.equal(await p.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,`profile overflow ${width}`);
   await p.locator(`${nav} [data-tab="home"]`).click();await p.waitForSelector('#recent-section:not([hidden])');
   assert((await p.locator('#home-page h1').innerText()).includes('New account.'));assert.equal(await p.locator('.mobile-nav .active').count(),1);await p.locator('#toast').evaluate(e=>e.hidden=true);
@@ -83,7 +90,7 @@ const root=path.join(__dirname,'../miniapp/static');
   await p.locator(`${nav} [data-tab="catalog"]`).click();await p.waitForSelector('.account-card');assert((await p.locator('[data-add="2"]').innerText()).includes('Add to cart'));assert((await p.locator('.account-card h3').first().innerText()).includes('Chile'));assert((await p.locator('[data-spam-status="2"]').innerText()).includes('Permanent spam restriction'));await p.locator('#toast').evaluate(e=>e.hidden=true);
   await p.screenshot({path:`/workspace/session-shope-previews/redesign-${width}-en.png`,fullPage:true});
   await p.locator(`${nav} [data-tab="profile"]`).click();await p.locator('#profile-page [data-open-admin]').click();await p.waitForSelector('.stat-card');assert.equal(await p.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,`admin overflow ${width}`);
-  await p.screenshot({path:`/workspace/session-shope-previews/redesign-admin-${width}.png`,fullPage:true});await ctx.close();
+  await p.screenshot({path:`/workspace/session-shope-previews/redesign-admin-${width}.png`,fullPage:true});await p.evaluate(()=>document.dispatchEvent(new Event('sband-auth-error')));await p.waitForSelector('#public-open-bot:not([hidden])');assert.equal(await p.locator('#public-open-bot').getAttribute('href'),'https://t.me/fixture_bot?start=miniapp');await ctx.close();
  }
  assert.deepEqual(errors,[]);console.log('PASS: RU/EN at 320,390,768,1440px; country images and safe fallback; product dialog, favorite, cart reservation/total, profile/language and admin; no overflow or JS errors.');
  }finally{await browser.close();}

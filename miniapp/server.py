@@ -85,7 +85,7 @@ def limited(app, user_id, purchase=False):
 
 @web.middleware
 async def authenticate(request, handler):
-    if not request.path.startswith('/api/') or request.path == '/api/health':
+    if not request.path.startswith('/api/') or request.path in {'/api/health','/api/app-info'}:
         return await handler(request)
     authorization = request.headers.get('Authorization', '')
     raw = authorization[4:] if authorization.startswith('tma ') else ''
@@ -466,6 +466,12 @@ async def health(request):
     return response({"status": "ok", "version": BOT_VERSION})
 
 
+async def app_info(request):
+    import re
+    username=request.app[BOT_USERNAME]
+    return response({'bot_username':username if re.fullmatch('[A-Za-z0-9_]{5,32}',username or '') else ''})
+
+
 async def index(request):
     return web.Response(text=(STATIC / 'index.html').read_text(), content_type='text/html')
 
@@ -479,7 +485,7 @@ def create_app(*, token=None, bot=None, bot_username=''):
     from miniapp.public_info import about
     app.add_routes([
         web.get('/about', about),
-        web.get('/', index), web.get('/api/health', health),
+        web.get('/', index), web.get('/api/health', health),web.get('/api/app-info',app_info),
         web.get('/api/referrals',referral_info),web.get('/api/spam-status',spam_statuses),
         web.get('/api/status',shop_status),web.post('/api/preferences/language',save_language),
         web.get('/api/rewards',reward_status),web.post('/api/rewards/claim',reward_claim),

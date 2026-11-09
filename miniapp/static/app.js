@@ -14,10 +14,11 @@
   function notice(text = '') { $('#notice').textContent = text; $('#notice').hidden = !text; }
   function reset(text) {
     document.body.classList.remove('maintenance-mode');
+    publicAppLink();
     if($('#demo-mode-notice'))$('#demo-mode-notice').hidden=true;
     document.querySelectorAll('[data-demo]').forEach(button=>button.hidden=true);
     window.SBAND_USER=null; document.dispatchEvent(new Event('sband-logout')); state.ready = false; state.me = null; state.items = []; state.recentItems=[]; state.supportRows=[]; state.supportTicket=null; state.orders = []; state.invoice = null; state.revision++;
-    $('#header-balance').textContent = '— ₽'; $('#profile-balance').textContent = '— ₽'; $('#home-balance').textContent='— ₽'; $('#home-countries').replaceChildren(); $('#recent-products').replaceChildren(); $('#country-feature').replaceChildren(); $('#catalog-grid').replaceChildren(); $('#orders-list').replaceChildren();
+    $('#header-balance').textContent = '— ₽'; $('#profile-balance').textContent = '— ₽'; $('#home-balance').textContent='— ₽'; $('#home-countries').replaceChildren(); $('#recent-products').replaceChildren(); $('#support-conversation').replaceChildren(); $('#support-list').replaceChildren(); $('#country-feature').replaceChildren(); $('#catalog-grid').replaceChildren(); $('#orders-list').replaceChildren();
     document.querySelectorAll('.page').forEach(el => { el.hidden = true; }); $('#login-panel').hidden = false;
     $('#purchase-dialog').close(); $('#dialog-content').replaceChildren(); $('#sync-state').textContent = SbandT("Нужен вход"); notice(text);
   }
@@ -75,13 +76,24 @@
     const item={category:cat.slug,name:cat.name},name=window.SbandCountryName(item),parts=name.split(' · '),title=parts[0].replace(/[\u{1F1E6}-\u{1F1FF}]{2}/gu,'').trim();
     return `<button class="country-tile ${scene(item)} ${extra}" data-category="${esc(cat.slug)}" aria-label="${esc(name)}"><span class="tile-art" aria-hidden="true"></span>${window.SbandCountryArt(item)}<span class="tile-caption"><strong>${esc(title)}</strong><small>${extra?esc(parts[1]||SbandT('В наличии')):SbandT('В наличии')+': '+(Number(cat.count)||0)}</small></span>${cat.min_price!=null?`<b class="tile-price">${SbandT('от')} ${rub(cat.min_price)}</b>`:''}</button>`;
   }
+  function emoji(name){return `<span class="sband-emoji emoji-${name}" aria-hidden="true"></span>`;}
+  function departmentEmoji(slug){return {email:'mail',gmail:'gmail',chatgpt:'ai',roblox:'game',discord:'support',steam:'steam',spotify:'spotify',youtube:'youtube'}[String(slug).replace('section-','')]||'cards';}
+  function shareApp(){
+    const url=window.SbandSharing.link(state.me?.bot_username);
+    modal(`<h2 id="dialog-title">${SbandT('Поделиться Mini App')}</h2><p>${SbandT('Отправь ссылку другу — он сможет открыть магазин через Telegram.')}</p><label for="app-share-link">${SbandT('Ссылка на магазин')}</label><input id="app-share-link" readonly value="${esc(url)}"><div class="share-actions"><button class="primary-button" id="copy-app-link">${SbandT('Скопировать ссылку')}</button><button class="secondary-button" id="send-app-link">${SbandT('Отправить в Telegram')}</button></div><p id="app-copy-status" role="status"></p>`);
+    $('#copy-app-link').onclick=async()=>{$('#app-copy-status').textContent=SbandT(await window.SbandSharing.copy(url,$('#app-share-link'))?'Ссылка скопирована':'Выделенная ссылка готова для копирования.');};
+    $('#send-app-link').onclick=()=>window.SbandSharing.share(url);
+  }
+  async function publicAppLink(){
+    try{const r=await fetch('/api/app-info',{cache:'no-store'});if(!r.ok)return;const data=await r.json();if(/^[A-Za-z0-9_]{5,32}$/.test(data.bot_username||'')){const a=$('#public-open-bot');a.href=window.SbandSharing.link(data.bot_username);a.hidden=false;}}catch(_){}
+  }
   function productCount(value){
     const n=Number(value)||0;
     if(window.SbandI18n.language==='en')return n+(n===1?' product':' products');
     return n+' '+(n%10===1&&n%100!==11?'товар':[2,3,4].includes(n%10)&&![12,13,14].includes(n%100)?'товара':'товаров');
   }
   function renderDiscovery(){
-    $('#departments-grid').innerHTML=(state.departments||[]).map(d=>`<button class="department-card" data-department="${esc(d.slug)}"><span aria-hidden="true">${esc(d.emoji||'◇')}</span><strong>${esc(SbandT(d.name))}</strong><small class="${d.is_active?'':'pending-department'}">${d.is_active?productCount(d.count):SbandT('В разработке')}</small></button>`).join('');
+    $('#departments-grid').innerHTML=(state.departments||[]).map(d=>`<button class="department-card" data-department="${esc(d.slug)}"><span aria-hidden="true">${emoji(departmentEmoji(d.slug))}</span><strong>${esc(SbandT(d.name))}</strong><small class="${d.is_active?'':'pending-department'}">${d.is_active?productCount(d.count):SbandT('В разработке')}</small></button>`).join('');
     const cats=(state.categories||[]).slice().sort((a,b)=>Number(b.count)-Number(a.count));
     $('#home-countries').innerHTML=cats.filter((c,i,list)=>Number(c.count)>0&&list.findIndex(other=>window.SbandCountryCode({category:other.slug,name:other.name})===window.SbandCountryCode({category:c.slug,name:c.name}))===i).slice(0,3).map(c=>countryTile(c)).join('')||`<p class="muted">${SbandT('Пока ничего не найдено')}</p>`;
     const codes=new Set(cats.map(c=>window.SbandCountryCode({category:c.slug,name:c.name})).filter(c=>c!=='unknown'));
@@ -112,6 +124,9 @@
     state.supportPage=page;state.supportRows=append?[...(state.supportRows||[]),...data.items.slice(0,5)]:data.items.slice(0,5);
     $('#support-list').innerHTML=state.supportRows.map(t=>`<button class="support-thread" data-support-ticket="${t.id}"><strong>${SbandT('Обращение')} #${t.id}</strong><span>${t.purchase_id?SbandT('Заказ')+' #'+t.purchase_id:SbandT('Общий вопрос')}</span><small>${SbandT({open:'Ждёт ответа',waiting_user:'Поддержка ответила',closed:'Закрыто'}[t.status]||'Ждёт ответа')}</small></button>`).join('')||`<p class="muted">${SbandT('Обращений пока нет')}</p>`;
     $('#support-more').hidden=data.items.length<=5;
+    $('#support-new-question').hidden=!state.supportRows.length;
+    if(!state.supportRows.length){$('#support-new').hidden=false;$('#support-conversation').replaceChildren();}
+    if(state.supportRows.length&&!$('#support-reply'))await openSupport(state.supportRows[0].id);
   }
   async function refreshSupport(){
     if(!(state.supportPage>0))await loadSupport();
@@ -126,7 +141,8 @@
       const d=await api('support/'+id+(before?'?before='+before:''));
       if(revision!==state.dialogRevision||!state.ready)return;
       state.supportTicket=id;state.supportBefore=before;state.supportNewest=d.messages[0]?.id||0;
-      modal(`<h2 id="dialog-title">${SbandT('Обращение')} #${id}</h2><p class="muted">${SbandT('Только вы и поддержка SBAND')}</p><button class="secondary-button" id="support-refresh-thread">${SbandT('Обновить')}</button><div class="support-history">${d.messages.slice().reverse().map(m=>`<article class="support-bubble ${m.author_role==='admin'?'support-answer':''}"><small>${SbandT({user:'Вы',admin:'Поддержка',system:'Система'}[m.author_role]||'Система')}</small><p>${esc(m.body)}</p>${m.has_photo?`<small>${SbandT('Скриншот доступен в боте')}</small>`:''}</article>`).join('')}</div>${d.has_more?`<button class="secondary-button" id="support-older">${SbandT('Ранее')}</button>`:''}<form id="support-reply"><label for="reply-body">${SbandT('Сообщение поддержке')}</label><textarea id="reply-body" rows="3" maxlength="500" required></textarea><p id="reply-error" role="alert" hidden></p><button type="submit" class="primary-button">${SbandT('Отправить')}</button></form>`);
+      const showConversation=html=>{if(state.tab==='messages'){state.dialogRevision++;$('#support-conversation').innerHTML=html.replace('id="dialog-title"','class="support-thread-title"');$('#support-new').hidden=true;}else modal(html);};
+      showConversation(`<h2 id="dialog-title">${SbandT('Обращение')} #${id}</h2><p class="muted">${SbandT('Только вы и поддержка SBAND')}</p><button class="secondary-button" id="support-refresh-thread">${SbandT('Обновить')}</button><div class="support-history">${d.messages.slice().reverse().map(m=>`<article class="support-bubble ${m.author_role==='admin'?'support-answer':''}"><small>${SbandT({user:'Вы',admin:'Поддержка',system:'Система'}[m.author_role]||'Система')}</small><p>${esc(m.body)}</p>${m.has_photo?`<small>${SbandT('Скриншот доступен в боте')}</small>`:''}</article>`).join('')}</div>${d.has_more?`<button class="secondary-button" id="support-older">${SbandT('Ранее')}</button>`:''}<form id="support-reply"><label for="reply-body">${SbandT('Сообщение поддержке')}</label><textarea id="reply-body" rows="3" maxlength="500" required></textarea><p id="reply-error" role="alert" hidden></p><button type="submit" class="primary-button">${SbandT('Отправить')}</button></form>`);
       $('#support-refresh-thread').onclick=()=>{if($('#reply-body').value.trim()){toast(SbandT('Сначала отправьте или очистите черновик.'));return;}openSupport(id);};
       if($('#support-older'))$('#support-older').onclick=()=>openSupport(id,d.messages.at(-1).id);
       $('#support-reply').onsubmit=async e=>{e.preventDefault();const form=e.currentTarget,button=form.querySelector('button');button.disabled=true;try{await post('support/'+id+'/reply',{body:$('#reply-body').value});await openSupport(id);if(state.tab==='messages')await loadSupport();}catch(e){const el=$('#reply-error');if(el){el.textContent=e.message;el.hidden=false;}}finally{if(button.isConnected)button.disabled=false;}};
@@ -503,6 +519,7 @@
     if(button.id==='check-maintenance') {button.disabled=true;try{const data=await api('status');if(data.shop_status.maintenance){showMaintenance(data.shop_status);$('#maintenance-feedback').textContent=SbandT("🛠 Работы ещё продолжаются. Статус обновлён.");}else{await initialize();}}catch(e){$('#maintenance-feedback').textContent=e.message;}finally{button.disabled=false;}return;}
     if(button.hasAttribute('data-demo')) { if(state.me?.is_admin){sessionStorage.setItem('sband_test_init',tg?.initData||'');location.assign('/demo'+location.hash);}return; }
     if(button.hasAttribute('data-demo-exit')) { try{await post('demo/exit',{});await loadMe();notice(SbandT("Тестовый режим закрыт. Рабочие операции доступны."));}catch(e){error(e);}return; }
+    if(button.hasAttribute('data-share-app')){shareApp();return;}
     if(button.hasAttribute('data-header-search')){await switchTab('home');$('#home-query').focus();return;}
     if(button.hasAttribute('data-discover')){state.category='';$('#search').value=button.dataset.discover;switchTab('catalog');return;}
     if(button.dataset.department){openDepartment(button.dataset.department);return;}
@@ -543,6 +560,7 @@
     e.preventDefault();const button=e.currentTarget.querySelector('button');button.disabled=true;$('#support-error').hidden=true;$('#support-success').hidden=true;
     try{const data=await post('support',{body:$('#support-body').value});$('#support-body').value='';$('#support-success').hidden=false;await loadSupport();await openSupport(data.ticket_id);}catch(e){$('#support-error').textContent=e.message;$('#support-error').hidden=false;}finally{button.disabled=false;}
   };
+  $('#support-new-question').onclick=()=>{$('#support-new').hidden=!$('#support-new').hidden;if(!$('#support-new').hidden)$('#support-body').focus();};
   $('#refresh-support').onclick=()=>loadSupport().catch(error);
   $('#support-more').onclick=async()=>{const b=$('#support-more');b.disabled=true;try{await loadSupport(true);}catch(e){error(e);}finally{b.disabled=false;}};
   $('#checkout-cart').onclick = checkout;
