@@ -44,12 +44,14 @@ async def catalog(user_id, category='', query='', sort='new', page=0, *, min_pri
         async with conn.cursor(aiomysql.DictCursor) as cur:
             _, discount, _ = await pricing(cur, user_id)
             await cur.execute(
-                "SELECT c.slug,c.name,COUNT(a.id) AS count FROM categories c LEFT JOIN accounts a "
+                "SELECT c.slug,c.name,COUNT(a.id) AS count,MIN(a.price) AS min_price FROM categories c LEFT JOIN accounts a "
                 "ON a.country=c.slug AND a.status='available' AND NOT EXISTS "
                 "(SELECT 1 FROM account_reservations r WHERE r.account_id=a.id AND r.expires_at>UTC_TIMESTAMP() AND r.user_id<>%s) "
                 'WHERE c.is_active=1 GROUP BY c.slug,c.name ORDER BY (COUNT(a.id)>0) DESC,COUNT(a.id) DESC,c.sort_order,c.name', (user_id,),
             )
             categories = list(await cur.fetchall())
+            for cat in categories:
+                cat['min_price'] = str(money(Decimal(str(cat['min_price']))*(1-discount/100))) if cat.get('min_price') is not None else None
             conditions, params = [], [user_id, user_id]
             if account_id is not None:
                 conditions.append('a.id=%s'); params.append(account_id)

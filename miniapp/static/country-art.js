@@ -9,6 +9,7 @@
   const value=auto?.[1] || (emoji ? [...emoji].map(c=>String.fromCharCode(c.codePointAt(0)-0x1F1E6+97)).join('') : category);
   return codes.has(value)?value:'unknown';
  }
+ window.SbandCountryCode=code;
  window.SbandCountryName=item=>{
   const match=String(item.category||'').match(/^auto-([a-z]{2})-(clear|permanent|limited|pending|unverified)$/);
   if(window.SbandI18n?.language!=='en')return item.name;

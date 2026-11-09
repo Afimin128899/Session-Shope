@@ -105,6 +105,8 @@ async def main():
         assert (await row(identities[3]))['country']=='auto-cl-unverified'
         cats=(await storage.catalog(43))['categories']
         assert len(cats)>=35
+        clear_cat=next(c for c in cats if c['slug']=='auto-cl-clear')
+        assert D(clear_cat['min_price'])==100
         from database import bot_store
         bot_categories=[]
         first,total,_=await bot_store.categories(43)

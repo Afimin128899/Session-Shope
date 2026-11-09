@@ -2,8 +2,8 @@
 (() => {
   const $ = s => document.querySelector(s);
   const tg = window.Telegram?.WebApp;
-  const state = { tab: 'catalog', wholesale:{minimum:'500',percent:'15'}, ready: false, me: null, items: [], page: 0, category: '', orderPage: 0, orders: [], busy: false, revision: 0, invoice: null, refreshing: false, dialogRevision: 0 };
-  const labels = { catalog: 'Каталог', favorites: 'Избранное', cart: 'Корзина', orders: 'Покупки', profile: 'Профиль' };
+  const state = { tab: 'home', wholesale:{minimum:'500',percent:'15'}, ready: false, me: null, items: [], page: 0, category: '', orderPage: 0, orders: [], busy: false, revision: 0, invoice: null, refreshing: false, dialogRevision: 0 };
+  const labels = { home:'Главная', catalog: 'Каталог', favorites: 'Избранное', cart: 'Корзина', orders: 'Покупки', profile: 'Профиль' };
   const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const num = v => new Intl.NumberFormat(window.SbandI18n.locale, { maximumFractionDigits: 2 }).format(Number(v || 0));
   const rub = v => num(v) + ' ₽';
@@ -16,8 +16,8 @@
     document.body.classList.remove('maintenance-mode');
     if($('#demo-mode-notice'))$('#demo-mode-notice').hidden=true;
     document.querySelectorAll('[data-demo]').forEach(button=>button.hidden=true);
-    window.SBAND_USER=null; document.dispatchEvent(new Event('sband-logout')); state.ready = false; state.me = null; state.items = []; state.orders = []; state.invoice = null; state.revision++;
-    $('#header-balance').textContent = '— ₽'; $('#profile-balance').textContent = '— ₽'; $('#catalog-grid').replaceChildren(); $('#orders-list').replaceChildren();
+    window.SBAND_USER=null; document.dispatchEvent(new Event('sband-logout')); state.ready = false; state.me = null; state.items = []; state.recentItems=[]; state.orders = []; state.invoice = null; state.revision++;
+    $('#header-balance').textContent = '— ₽'; $('#profile-balance').textContent = '— ₽'; $('#home-balance').textContent='— ₽'; $('#home-countries').replaceChildren(); $('#recent-products').replaceChildren(); $('#country-feature').replaceChildren(); $('#catalog-grid').replaceChildren(); $('#orders-list').replaceChildren();
     document.querySelectorAll('.page').forEach(el => { el.hidden = true; }); $('#login-panel').hidden = false;
     $('#purchase-dialog').close(); $('#dialog-content').replaceChildren(); $('#sync-state').textContent = SbandT("Нужен вход"); notice(text);
   }
@@ -32,13 +32,13 @@
   }
   async function loadMe() {
     const revision=state.meRevision=(state.meRevision||0)+1;
-    const data = await api('me');if(revision!==state.meRevision)return; state.me = data; window.SbandI18n.setLanguage(data.language); updateSalesStatus(data.shop_status); window.SBAND_USER=data; document.dispatchEvent(new CustomEvent('sband-identity',{detail:data}));
+    const data = await api('me');if(revision!==state.meRevision)return; if(state.me?.user?.id!==data.user.id)state.recentItems=[]; state.me = data; window.SbandI18n.setLanguage(data.language); updateSalesStatus(data.shop_status); window.SBAND_USER=data; document.dispatchEvent(new CustomEvent('sband-identity',{detail:data}));
     document.querySelectorAll('[data-demo]').forEach(button=>button.hidden=!data.is_admin);
     if($('#demo-mode-notice'))$('#demo-mode-notice').hidden=!data.test_mode_active;
     const initial = (data.user.first_name || 'S').slice(0, 1).toUpperCase();
     $('#avatar').textContent = initial; $('#profile-avatar').textContent = initial;
     $('#profile-name').textContent = data.user.first_name || SbandT("Покупатель"); $('#profile-username').textContent = data.user.username ? '@' + data.user.username : SbandT("Покупатель Sband ACCS");
-    $('#profile-id').textContent = data.user.id; $('#header-balance').textContent = rub(data.balance); $('#profile-balance').textContent = rub(data.balance);
+    $('#profile-id').textContent = data.user.id; $('#header-balance').textContent = rub(data.balance); $('#profile-balance').textContent = rub(data.balance); $('#home-balance').textContent=rub(data.balance);
     $('#welcome-bonus').hidden = !(Number(data.welcome_bonus) > 0);
     $('#profile-usdt').textContent = num(data.balance_usdt) + ' USDT'; $('#version').textContent = 'v' + data.version;
   }
@@ -67,6 +67,31 @@
     $('#cart-total').textContent = rub(state.items.reduce((n, item) => n + Math.round(Number(item.price) * 100), 0) / 100);
     countdown();
   }
+  function recentKey(){return 'sband_recent_'+state.me?.user?.id;}
+  function recentIds(){try{return JSON.parse(sessionStorage.getItem(recentKey())||'[]').filter(Number.isSafeInteger).slice(0,8);}catch(_){return [];}}
+  function rememberProduct(item){try{sessionStorage.setItem(recentKey(),JSON.stringify([item.id,...recentIds().filter(id=>id!==item.id)].slice(0,8)));}catch(_){} }
+  function scene(item){return 'scene-'+window.SbandCountryCode(item);}
+  function countryTile(cat,extra=''){
+    const item={category:cat.slug,name:cat.name},name=window.SbandCountryName(item),parts=name.split(' · '),title=parts[0].replace(/[\u{1F1E6}-\u{1F1FF}]{2}/gu,'').trim();
+    return `<button class="country-tile ${scene(item)} ${extra}" data-category="${esc(cat.slug)}" aria-label="${esc(name)}"><span class="tile-art" aria-hidden="true"></span>${window.SbandCountryArt(item)}<span class="tile-caption"><strong>${esc(title)}</strong><small>${extra?esc(parts[1]||SbandT('В наличии')):SbandT('В наличии')+': '+(Number(cat.count)||0)}</small></span>${cat.min_price!=null?`<b class="tile-price">${SbandT('от')} ${rub(cat.min_price)}</b>`:''}</button>`;
+  }
+  function renderDiscovery(){
+    const cats=(state.categories||[]).slice().sort((a,b)=>Number(b.count)-Number(a.count));
+    $('#home-countries').innerHTML=cats.filter((c,i,list)=>Number(c.count)>0&&list.findIndex(other=>window.SbandCountryCode({category:other.slug,name:other.name})===window.SbandCountryCode({category:c.slug,name:c.name}))===i).slice(0,3).map(c=>countryTile(c)).join('')||`<p class="muted">${SbandT('Пока ничего не найдено')}</p>`;
+    const codes=new Set(cats.map(c=>window.SbandCountryCode({category:c.slug,name:c.name})).filter(c=>c!=='unknown'));
+    $('#country-count').textContent=codes.size;$('#stock-count').textContent=cats.reduce((n,c)=>n+Number(c.count),0);
+    const featured=cats.find(c=>Number(c.count)>0);
+    $('#country-feature').innerHTML=featured?`<h2>${SbandT('Сейчас в наличии')}</h2>`+countryTile(featured,'featured-country'):'';
+    document.querySelectorAll('#categories .category').forEach(button=>{
+      const cat=cats.find(c=>c.slug===button.dataset.category);if(!cat)return;
+      button.classList.add('scenic-category',scene({category:cat.slug,name:cat.name}));
+      const parts=window.SbandCountryName({category:cat.slug,name:cat.name}).split(' · ');button.setAttribute('aria-label',parts.join(' · '));button.querySelector('span:not(.all-countries-icon)').textContent=parts[0].replace(/[\u{1F1E6}-\u{1F1FF}]{2}/gu,'').trim();button.querySelector('small').textContent=(parts[1]?parts[1]+' · ':'')+cat.count;
+      button.classList.toggle('stock-hidden',!!state.onlyStockCountries&&Number(cat.count)===0);
+    });
+    const recent=recentIds().map(id=>(state.recentItems||[]).find(i=>i.id===id)||state.items.find(i=>i.id===id)).filter(i=>i&&i.available);
+    $('#recent-section').hidden=!recent.length;
+    $('#recent-products').innerHTML=recent.map(item=>`<button class="recent-product ${scene(item)}" data-features="${item.id}"><span class="tile-art" aria-hidden="true"></span>${window.SbandCountryArt(item)}<strong>${esc(window.SbandCountryName(item).split(' · ')[0])}</strong><b>${rub(item.price)}</b></button>`).join('');
+  }
   function countdown() {
     document.querySelectorAll('[data-until]').forEach(el => {
       const seconds = Math.max(0, Math.floor((Date.parse(el.dataset.until) - Date.now()) / 1000));
@@ -75,18 +100,24 @@
     if (state.tab === 'cart') $('#checkout-cart').disabled = !!state.me?.shop_status?.sales_paused || !state.items.length || state.items.some(i => !i.available || !(Date.parse(i.reserved_until) > Date.now()));
   }
   async function loadMarket(append = false) {
-    if (!['catalog', 'favorites', 'cart'].includes(state.tab)) return;
+    if (!['home','catalog', 'favorites', 'cart'].includes(state.tab)) return;
     const rev = ++state.revision, tab = state.tab, page = append ? state.page + 1 : 0;
     const query = new URLSearchParams({ page });
     if (tab === 'catalog') { query.set('category', state.category); query.set('q', $('#search').value); query.set('sort', $('#sort').value); query.set('min_price', $('#min-price').value); query.set('max_price', $('#max-price').value); query.set('premium',$('#premium-filter').value);query.set('min_age',$('#age-filter').value); }
-    const data = await api((tab === 'catalog' ? 'catalog' : tab) + '?' + query);
+    const data = await api((['home','catalog'].includes(tab) ? 'catalog' : tab) + '?' + query);
     if (rev !== state.revision || state.tab !== tab || !state.ready) return;
+    state.categories=data.categories;
     state.page = page; state.items = append ? [...state.items, ...data.items] : data.items;
     $('#total-count').textContent = tab === 'catalog' ? data.categories.reduce((n, c) => n + Number(c.count), 0) : state.items.length;
     $('#categories').innerHTML = [{ slug: '', name: SbandT("Все аккаунты"), count: data.categories.reduce((n, c) => n + Number(c.count), 0) }, ...data.categories.slice().sort((a,b)=>Number(b.count)-Number(a.count))].map(c => `<button class="category ${c.slug === state.category ? 'active' : ''}" data-category="${esc(c.slug)}">${c.slug ? window.SbandCountryArt({category:c.slug,name:c.name}) : '<span class="all-countries-icon" aria-hidden="true">◎</span>'}<span>${esc(window.SbandCountryName({category:c.slug,name:c.name}))}</span><small>${c.count}</small></button>`).join('');
     $('#countries-toggle').textContent=SbandT($('#categories').classList.contains('expanded')?'Свернуть страны ↑':'Все страны ↓');
     $('#countries-toggle').hidden=data.categories.length<6;
-    $('#load-more').hidden = !data.has_more; render();
+    $('#load-more').hidden = !data.has_more; render(); renderDiscovery();
+    if(tab==='home'&&recentIds().length){
+      const results=await Promise.allSettled(recentIds().slice(0,6).map(id=>api('products/'+id)));
+      if(rev!==state.revision||state.tab!==tab||!state.ready)return;
+      state.recentItems=results.filter(r=>r.status==='fulfilled').map(r=>r.value);renderDiscovery();
+    }
   }
   async function loadOrders(append = false) {
     const revision=state.orderRevision=(state.orderRevision || 0)+1;
@@ -97,11 +128,12 @@
     $('#orders-empty').hidden = state.orders.length > 0; $('#more-orders').hidden = !data.has_more;
   }
   function showPage() {
+    document.body.dataset.storeTab=state.tab;
     $('#market-page').hidden = !['catalog', 'favorites', 'cart'].includes(state.tab);
     $('#orders-page').hidden = state.tab !== 'orders'; $('#profile-page').hidden = state.tab !== 'profile';
     document.querySelectorAll('[data-tab]').forEach(el => el.classList.toggle('active', el.dataset.tab === state.tab));
-    $('#breadcrumb').textContent = SbandT(labels[state.tab]); $('#hero').hidden = state.tab !== 'catalog'; $('#benefits').hidden = state.tab !== 'catalog'; $('#filters').hidden = state.tab !== 'catalog';
-    $('#market-title').textContent = state.tab === 'catalog' ? SbandT("Каталог аккаунтов") : SbandT(labels[state.tab]);
+    $('#breadcrumb').textContent = SbandT(labels[state.tab]); $('#home-page').hidden=state.tab!=='home'; $('#benefits').hidden=true; $('#filters').hidden = state.tab !== 'catalog';
+    $('#market-title').textContent = state.tab === 'catalog' ? SbandT("Аккаунты") : SbandT(labels[state.tab]);
     $('#market-kicker').textContent = state.tab === 'cart' ? SbandT("РЕЗЕРВ НА 5 МИНУТ") : state.tab === 'favorites' ? SbandT("ТО, ЧТО НРАВИТСЯ") : SbandT("ВЫБЕРИ СВОЙ");
     $('#collection-note').hidden = state.tab === 'catalog';
     $('#collection-note').textContent = state.tab === 'cart' ? SbandT("Оплата всей корзины за один раз. После истечения резерва нажми ✓ на каждом аккаунте.") : SbandT("Сообщим в боте, если базовая цена снизится. Убери ♡, чтобы отключить уведомления.");
@@ -184,7 +216,7 @@
   async function features(id) {
     const dialogRevision = ++state.dialogRevision;
     try {
-      const item=await api('products/'+id),c=item.characteristics || {};
+      const item=await api('products/'+id),c=item.characteristics || {}; rememberProduct(item);
       if (dialogRevision !== state.dialogRevision) return;
       modal(SbandT("<div class=\"product-cover\">{0}<span>TELEGRAM ACCOUNT</span></div><h2 id=\"dialog-title\">{1}</h2><p>{2} · Telegram ID {3}</p><div class=\"info\"><span>Регистрация</span><b>{4}</b></div><div class=\"info\"><span>Premium</span><b>{5}</b></div><div class=\"info\"><span>2FA</span><b>{6}</b></div><div class=\"info\"><span>Спамблок</span><b>{7}</b></div><p class=\"muted\">{8}. Источник: @SpamBot. Состояние может измениться после проверки.</p><div class=\"info\"><span>Гарантия</span><b>{9}</b></div><p>{10}</p><p>После оплаты данные появятся в покупках. Код входа выдаёт бот. После входа смените пароль и привяжите свою почту. Premium указан на момент проверки и может измениться.</p><button id=\"product-add\" class=\"primary-button\">В корзину · {11}</button><button id=\"share-product\" class=\"secondary-button\">Поделиться товаром</button>",window.SbandCountryArt(item),esc(window.SbandCountryName(item)),esc(item.product_id),esc(item.telegram_user_id || SbandT("Не сохранён")),esc(c.registration_date || SbandT("Не указана")),c.is_premium == null ? SbandT("Не проверено") : c.is_premium ? SbandT("Да") : SbandT("Нет"),esc(SbandT(c.two_fa) || SbandT("Не указано")),esc(spamLabel(c.spam_check)),esc(spamTime(c.spam_check)),c.warranty_hours == null ? SbandT("Не указана") : c.warranty_hours+SbandT(" ч"),esc(c.note),rub(item.price)));
       $('#product-add').onclick=async()=>{try{await post('cart',{account_id:id});$('#purchase-dialog').close();toast(SbandT("Добавлено в корзину"));await loadMarket();}catch(e){error(e);}};
@@ -419,7 +451,7 @@
     finally { state.refreshing=false; }
   }
   async function initialize() {
-    try { await window.SbandI18n.ready; tg?.ready(); tg?.expand(); tg?.setHeaderColor('#09090b'); tg?.setBackgroundColor('#09090b'); await loadMe(); const info=await api('shop-info');state.wholesale=info.wholesale;state.support=info; state.ready = true; document.body.classList.remove('maintenance-mode'); $('#maintenance-page').hidden=true; $('#login-panel').hidden = true; notice(); showPage(); await loadMarket(); $('#sync-state').textContent = SbandT("● Обновлено сейчас"); const start=tg?.initDataUnsafe?.start_param || new URLSearchParams(location.search).get('tgWebAppStartParam') || (new URLSearchParams(location.search).get('product') ? 'product_'+new URLSearchParams(location.search).get('product') : ''); if(/^product_[0-9]{1,10}$/.test(start)) await features(Number(start.slice(8))); }
+    try { await window.SbandI18n.ready; tg?.ready(); tg?.expand(); tg?.setHeaderColor('#101116'); tg?.setBackgroundColor('#1c1d24'); await loadMe(); const info=await api('shop-info');state.wholesale=info.wholesale;state.support=info; state.ready = true; document.body.classList.remove('maintenance-mode'); $('#maintenance-page').hidden=true; $('#login-panel').hidden = true; notice(); showPage(); await loadMarket(); $('#sync-state').textContent = SbandT("● Обновлено сейчас"); const start=tg?.initDataUnsafe?.start_param || new URLSearchParams(location.search).get('tgWebAppStartParam') || (new URLSearchParams(location.search).get('product') ? 'product_'+new URLSearchParams(location.search).get('product') : ''); if(/^product_[0-9]{1,10}$/.test(start)) await features(Number(start.slice(8))); }
     catch (e) { if(e.code==='maintenance')showMaintenance(e.details?.shop_status);else reset(e.message); }
   }
   document.addEventListener('sband-shop',()=>{if(state.ready) { showPage(); synchronize(); }});
@@ -430,6 +462,8 @@
     if(button.id==='check-maintenance') {button.disabled=true;try{const data=await api('status');if(data.shop_status.maintenance){showMaintenance(data.shop_status);$('#maintenance-feedback').textContent=SbandT("🛠 Работы ещё продолжаются. Статус обновлён.");}else{await initialize();}}catch(e){$('#maintenance-feedback').textContent=e.message;}finally{button.disabled=false;}return;}
     if(button.hasAttribute('data-demo')) { if(state.me?.is_admin){sessionStorage.setItem('sband_test_init',tg?.initData||'');location.assign('/demo'+location.hash);}return; }
     if(button.hasAttribute('data-demo-exit')) { try{await post('demo/exit',{});await loadMe();notice(SbandT("Тестовый режим закрыт. Рабочие операции доступны."));}catch(e){error(e);}return; }
+    if(button.hasAttribute('data-header-search')){await switchTab('home');$('#home-query').focus();return;}
+    if(button.hasAttribute('data-discover')){state.category='';$('#search').value=button.dataset.discover;switchTab('catalog');return;}
     if (button.dataset.tab) { switchTab(button.dataset.tab); return; }
     if (button.hasAttribute('data-bot')) openBot();
     if (button.dataset.botOrder) openBot(Number(button.dataset.botOrder));
@@ -441,7 +475,7 @@
     if (button.hasAttribute('data-referrals')) showReferrals();
     if (button.dataset.order) showOrder(Number(button.dataset.order));
     if (button.hasAttribute('data-topup')) topup();
-    if (button.hasAttribute('data-category')) { state.category = button.dataset.category; loadMarket().catch(error); }
+    if (button.hasAttribute('data-category')) { state.category=button.dataset.category; if(state.tab==='home')switchTab('catalog');else loadMarket().catch(error); }
     if (button.dataset.add || button.dataset.favorite || button.dataset.remove) {
       const id = Number(button.dataset.add || button.dataset.favorite || button.dataset.remove), item = state.items.find(i => i.id === id); if (!item) return;
       button.disabled = true;
@@ -458,6 +492,10 @@
     e.currentTarget.setAttribute('aria-expanded',String(expanded));
     e.currentTarget.textContent=SbandT(expanded?'Свернуть страны ↑':'Все страны ↓');
   };
+  $('#home-search').onsubmit=e=>{e.preventDefault();state.category='';$('#search').value=$('#home-query').value;switchTab('catalog');};
+  $('#open-filters').onclick=()=>{const panel=$('.filter-panel');panel.open=!panel.open;if(panel.open)$('#search').focus();};
+  $('#stock-countries').onclick=()=>{state.onlyStockCountries=true;$('#stock-countries').setAttribute('aria-pressed','true');$('#all-countries').setAttribute('aria-pressed','false');renderDiscovery();};
+  $('#all-countries').onclick=()=>{state.onlyStockCountries=false;$('#stock-countries').setAttribute('aria-pressed','false');$('#all-countries').setAttribute('aria-pressed','true');renderDiscovery();};
   $('#checkout-cart').onclick = checkout;
   $('#close-dialog').onclick = () => { if (!state.busy) $('#purchase-dialog').close(); };
   $('#purchase-dialog').addEventListener('cancel', e => { if (state.busy) e.preventDefault(); });
