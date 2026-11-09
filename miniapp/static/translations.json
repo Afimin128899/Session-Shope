@@ -1694,5 +1694,10 @@
   "Поиск и фильтры": "Search & filters",
   "Срок черновика: {3} МСК. Пароли и сессии не отображаются. Назначьте цену готовым строкам. Категория определяется по номеру и проверке @SpamBot. Если спамблок проверить не удалось, товар продаётся с пометкой «Спамблок не проверен».": "Draft expiry: {3} MSK. Passwords and sessions are hidden. Set prices for ready rows. Categories follow the phone country and SpamBot result. Failed checks are sold with an explicit unverified status.",
   ". Страна определяется по номеру из сессии, спамблок — через @SpamBot. До первого результата аккаунт скрыт. При ошибке проверки он продаётся с пометкой «Спамблок не проверен». Выбранная вручную категория также проверяется и затем уточняется автоматически:": ". The country comes from the session phone number and the spam status from @SpamBot. The first check runs before listing. If it fails, the item is sold as “Spam status unverified”. A manually selected category is also checked and adjusted automatically:",
-  "{0} · Нет в наличии": "{0} · Out of stock"
+  "{0} · Нет в наличии": "{0} · Out of stock",
+  "Нужный аккаунт.": "The account you need.",
+  "Без лишних шагов.": "Without the extra steps.",
+  "Выбери страну, сравни характеристики.": "Choose a country. Compare the details.",
+  "Оплати и получи данные в своих покупках.": "Pay and find your account in Purchases.",
+  "Перейти в каталог": "Explore accounts"
 }
