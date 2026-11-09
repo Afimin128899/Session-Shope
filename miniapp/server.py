@@ -395,7 +395,7 @@ async def warranty_claim(request):
 
 async def departments(request):
     from database.sections import listing
-    return response({'items':await listing()})
+    return response({'items':await listing(request['user']['id'])})
 
 
 async def support_list(request):

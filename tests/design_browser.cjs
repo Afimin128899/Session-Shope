@@ -59,6 +59,7 @@ const root=path.join(__dirname,'../miniapp/static');
   await p.screenshot({path:`/workspace/session-shope-previews/redesign-${width}-ru.png`,fullPage:true});
   assert.equal(await p.locator('.department-card').count(),8);
   await p.locator('[data-department="section-gmail"]').click();await p.waitForSelector('#dialog-title');assert((await p.locator('#dialog-content').innerText()).includes('в разработке'));await p.locator('#close-dialog').click();
+  departments[1].is_active=1;departments[1].count=0;await p.locator('#refresh').click();await p.waitForFunction(()=>document.querySelector('[data-department="section-gmail"] small').textContent==='0 товаров');
   await p.screenshot({path:`/workspace/session-shope-previews/sections-${width}.png`,fullPage:true});
   await p.locator('[data-features="1"]').click();await p.waitForSelector('#dialog-title');assert(await p.locator('.product-cover .country-image').isVisible());await p.locator('#close-dialog').click();
   await p.locator('[data-favorite="1"]').click();await p.waitForFunction(()=>document.querySelector('[data-favorite="1"]').getAttribute('aria-pressed')==='true');

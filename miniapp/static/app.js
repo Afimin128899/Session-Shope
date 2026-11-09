@@ -75,8 +75,13 @@
     const item={category:cat.slug,name:cat.name},name=window.SbandCountryName(item),parts=name.split(' · '),title=parts[0].replace(/[\u{1F1E6}-\u{1F1FF}]{2}/gu,'').trim();
     return `<button class="country-tile ${scene(item)} ${extra}" data-category="${esc(cat.slug)}" aria-label="${esc(name)}"><span class="tile-art" aria-hidden="true"></span>${window.SbandCountryArt(item)}<span class="tile-caption"><strong>${esc(title)}</strong><small>${extra?esc(parts[1]||SbandT('В наличии')):SbandT('В наличии')+': '+(Number(cat.count)||0)}</small></span>${cat.min_price!=null?`<b class="tile-price">${SbandT('от')} ${rub(cat.min_price)}</b>`:''}</button>`;
   }
+  function productCount(value){
+    const n=Number(value)||0;
+    if(window.SbandI18n.language==='en')return n+(n===1?' product':' products');
+    return n+' '+(n%10===1&&n%100!==11?'товар':[2,3,4].includes(n%10)&&![12,13,14].includes(n%100)?'товара':'товаров');
+  }
   function renderDiscovery(){
-    $('#departments-grid').innerHTML=(state.departments||[]).map(d=>`<button class="department-card" data-department="${esc(d.slug)}"><span aria-hidden="true">${esc(d.emoji||'◇')}</span><strong>${esc(SbandT(d.name))}</strong><small class="${d.is_active?'':'pending-department'}">${SbandT(d.is_active?'Открыта':'В разработке')}</small></button>`).join('');
+    $('#departments-grid').innerHTML=(state.departments||[]).map(d=>`<button class="department-card" data-department="${esc(d.slug)}"><span aria-hidden="true">${esc(d.emoji||'◇')}</span><strong>${esc(SbandT(d.name))}</strong><small class="${d.is_active?'':'pending-department'}">${d.is_active?productCount(d.count):SbandT('В разработке')}</small></button>`).join('');
     const cats=(state.categories||[]).slice().sort((a,b)=>Number(b.count)-Number(a.count));
     $('#home-countries').innerHTML=cats.filter((c,i,list)=>Number(c.count)>0&&list.findIndex(other=>window.SbandCountryCode({category:other.slug,name:other.name})===window.SbandCountryCode({category:c.slug,name:c.name}))===i).slice(0,3).map(c=>countryTile(c)).join('')||`<p class="muted">${SbandT('Пока ничего не найдено')}</p>`;
     const codes=new Set(cats.map(c=>window.SbandCountryCode({category:c.slug,name:c.name})).filter(c=>c!=='unknown'));
@@ -97,7 +102,7 @@
     try{
       const d=(await api('departments')).items?.find(item=>item.slug===slug);
       if(!d)return;
-      modal(`<h2 id="dialog-title">${esc(SbandT(d.name))}</h2><p>${SbandT(d.is_active?'Пока нет товаров. Загляните позже.':'Раздел в разработке. Скоро здесь появятся товары.')}</p>`);
+      modal(`<h2 id="dialog-title">${esc(SbandT(d.name))}</h2><p>${d.is_active?productCount(d.count):SbandT('Раздел в разработке. Скоро здесь появятся товары.')}</p>`);
     }catch(e){error(e);}
   }
   async function loadSupport(append=false){

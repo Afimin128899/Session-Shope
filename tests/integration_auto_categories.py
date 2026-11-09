@@ -166,6 +166,12 @@ async def main():
             assert enabled.status==200,(enabled.status,await enabled.text())
             d=await (await client.get(base+'departments',headers=own)).json()
             assert next(i for i in d['items'] if i['slug']=='section-gmail')['is_active']==1
+            assert next(i for i in d['items'] if i['slug']=='section-gmail')['count']==0
+            await sql("INSERT INTO accounts(country,number,price,data,telegram_user_id) VALUES('section-gmail','+56912340555',100,'SECTION_COUNT_TEST',95555)")
+            assert next(i for i in await sections.listing(43) if i['slug']=='section-gmail')['count']==1
+            await sql("UPDATE accounts SET status='sold' WHERE data='SECTION_COUNT_TEST'")
+            assert next(i for i in await sections.listing(43) if i['slug']=='section-gmail')['count']==0
+
             assert not any(c['slug'].startswith('section-') for c in (await storage.catalog(43))['categories'])
             assert not any(c['slug'].startswith('section-') for c in (await bot_store.categories(43))[0])
             async with conn.cursor() as cur:await sections.seed(cur)

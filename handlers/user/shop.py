@@ -253,18 +253,17 @@ async def enter_purchase_promo(message: Message, state: FSMContext):
 
 @shop_router.callback_query(F.data.startswith('all_categories:'))
 async def all_categories(call, state):
-    from database.db import get_all_categories
+    from database.sections import listing,stock_label
     await state.clear()
     try:page=page_index(call.data.split(':')[1])
     except (ValueError,IndexError):
         await answer_safe(call,tr('Некорректная страница.'),show_alert=True);return
-    cats=await get_all_categories()
-    visible=[c for c in cats if c['is_active'] or c['slug'].startswith('section-')]
+    visible=await listing(call.from_user.id)
     page=min(page,max(0,(len(visible)-1)//8))
     rows=[]
     for c in visible[page*8:(page+1)*8]:
         if c['slug'].startswith('section-'):
-            suffix=tr('Открыта') if c['is_active'] else tr('В разработке')
+            suffix=stock_label(c.get('count',0)) if c['is_active'] else tr('В разработке')
             rows.append(button(c['name']+' · '+suffix,'department:'+c['slug']))
         else:rows.append(button(c['name'],'buy_'+c['slug']))
     rows+=pagination(page,len(visible),8,'all_categories')
@@ -276,9 +275,10 @@ async def all_categories(call, state):
 @shop_router.callback_query(F.data.startswith('department:'))
 async def department(call):
     slug=call.data.split(':',1)[1]
-    row=await get_category(slug)
+    from database.sections import listing,stock_label
+    row=next((c for c in await listing(call.from_user.id) if c['slug']==slug),None)
     if not row or not slug.startswith('section-'):
         await answer_safe(call,tr('Категория недоступна.'),show_alert=True);return
-    status=tr('Пока нет товаров. Загляните позже.') if row['is_active'] else tr('Раздел в разработке. Скоро здесь появятся товары.')
+    status=stock_label(row.get('count',0)) if row['is_active'] else tr('Раздел в разработке. Скоро здесь появятся товары.')
     await edit_message_safe(call,'<b>'+escape(row['name'])+'</b>\n\n'+status,reply_markup=InlineKeyboardMarkup(inline_keyboard=[button(tr('Все категории'),'all_categories:0')]))
     await answer_safe(call)

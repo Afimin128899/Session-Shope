@@ -106,13 +106,13 @@ class FlowTests(unittest.IsolatedAsyncioTestCase):
             self.assertNotIn('₽',button.text)
 
     async def test_all_categories_exposes_disabled_departments_in_separate_menu(self):
-        from database import db
+        from database import sections
         self.call.data='all_categories:0'
         rows=[{'slug':'us','name':'США','is_active':1},{'slug':'section-gmail','name':'Gmail','is_active':0}]
-        with patch.object(db,'get_all_categories',AsyncMock(return_value=rows)), patch.object(shop,'edit_message_safe',AsyncMock()) as edit, patch.object(shop,'answer_safe',AsyncMock()):
+        with patch.object(sections,'listing',AsyncMock(return_value=[rows[1]])), patch.object(shop,'edit_message_safe',AsyncMock()) as edit, patch.object(shop,'answer_safe',AsyncMock()):
             await shop.all_categories(self.call,self.state)
             buttons=[b for row in edit.call_args.kwargs['reply_markup'].inline_keyboard for b in row]
-            self.assertTrue(any(b.callback_data=='buy_us' for b in buttons))
+            self.assertFalse(any(b.callback_data=='buy_us' for b in buttons))
             self.assertTrue(any(b.callback_data=='department:section-gmail' and 'В разработке' in b.text for b in buttons))
 
     async def test_invalid_promo_keeps_form_open_and_does_not_credit(self):

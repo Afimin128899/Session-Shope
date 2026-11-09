@@ -1749,5 +1749,7 @@
   "<b>Все категории</b>\n\nВыберите раздел. Новые направления помечены «В разработке».": "<b>All categories</b>\n\nChoose a section. New categories are marked Coming soon.",
   "Поддержка ответила на ваше обращение. Переписка доступна в Mini App и боте.": "Support replied to your request. The conversation is available in the Mini App and bot.",
   "🛟 <b>Обращение #{0} · Общий вопрос</b>\nСтатус: <b>{1}</b>\n\n": "🛟 <b>Request #{0} · General question</b>\nStatus: <b>{1}</b>\n\n",
-  "{0} · Покупатель {1} · {2}": "{0} · Customer {1} · {2}"
+  "{0} · Покупатель {1} · {2}": "{0} · Customer {1} · {2}",
+  "{0} товар": "{0} product",
+  "{0} товаров": "{0} products"
 }
