@@ -158,6 +158,18 @@ async def main():
             foreign={'Authorization':'tma '+signed_data(44)}
             admin={'Authorization':'tma '+signed_data(42)}
             base='http://127.0.0.1:8093/api/'
+            # Real rows verify ownership, cursor pagination and exclusion of rewards/refunds.
+            await sql("INSERT INTO payment_logs(user_id,amount,currency,method,reference) VALUES(43,10,'RUB','crypto_pay','private-own'),(44,999,'RUB','crypto_pay','private-foreign'),(43,3,'RUB','referral_signup','reward'),(43,-10,'RUB','stars_refund','refund'),(43,20,'RUB','lave_pay','private-lave')")
+            history=await (await client.get(base+'payment-history?user_id=44',headers=own)).json()
+            assert [item['method'] for item in history['items']]==['lave_pay','crypto_pay']
+            assert all(isinstance(item['created_at'],int) for item in history['items'])
+            assert not any('reference' in item or 'user_id' in item for item in history['items'])
+            older=await (await client.get(base+'payment-history?before='+str(history['items'][0]['id']),headers=own)).json()
+            assert len(older['items'])==1 and older['items'][0]['method']=='crypto_pay' and not older['has_more']
+            foreign_history=await (await client.get(base+'payment-history',headers=foreign)).json()
+            assert len(foreign_history['items'])==1 and D(foreign_history['items'][0]['amount'])==999
+            assert (await client.get(base+'payment-history')).status==401
+            report('Top-up history isolates users, supports cursors, includes Lava and excludes rewards/refunds and private references')
             d=await (await client.get(base+'departments',headers=own)).json()
             assert len(d['items'])==8 and all(not item['is_active'] for item in d['items'])
             denied=await client.post(base+'admin/categories',headers=own,json={'slug':'section-gmail','name':'Gmail','active':True})

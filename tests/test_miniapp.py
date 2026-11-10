@@ -71,8 +71,41 @@ class MiniAppAPITests(unittest.IsolatedAsyncioTestCase):
     async def test_static_shell_and_health_are_public_but_api_requires_auth(self):
         for path in ['/', '/assets/style.css', '/assets/app.js', '/api/health']:
             self.assertEqual((await self.client.get(path)).status, 200)
-        for path in ['/api/me', '/api/catalog', '/api/orders', '/api/orders/1']:
+        for path in ['/api/me', '/api/catalog', '/api/orders', '/api/orders/1', '/api/payment-history']:
             self.assertEqual((await self.client.get(path)).status, 401)
+
+    async def test_topup_history_uses_verified_owner_and_bounded_cursor(self):
+        cur = MagicMock(execute=AsyncMock(), fetchall=AsyncMock(return_value=[
+            {'id': i, 'amount': Decimal('120'), 'currency': 'RUB', 'method': 'stars_pay', 'created_at': '2026-11-10 10:00:00'}
+            for i in range(49, 23, -1)
+        ]))
+        conn = MagicMock()
+        conn.cursor.return_value.__aenter__.return_value = cur
+        pool = MagicMock()
+        pool.acquire.return_value.__aenter__.return_value = conn
+        with patch.object(db, '_get_pool', return_value=pool):
+            result = await self.client.get('/api/payment-history?before=50&user_id=99', headers=self.headers)
+        self.assertEqual(result.status, 200)
+        data = await result.json()
+        self.assertEqual(len(data['items']), 25)
+        self.assertTrue(data['has_more'])
+        query, args = cur.execute.call_args.args
+        self.assertEqual(args, (42, 50))
+        self.assertIn('WHERE user_id=%s', query)
+        self.assertIn('AND id<%s', query)
+        self.assertIn('amount>0', query)
+        self.assertIn("'stars_pay'", query)
+        self.assertNotIn('reference', query)
+        self.assertTrue(query.endswith('ORDER BY id DESC LIMIT 26'))
+        self.assertEqual(result.headers['Cache-Control'], 'no-store')
+
+    async def test_topup_history_rejects_invalid_cursor_before_database_access(self):
+        with patch.object(db, '_get_pool') as pool:
+            for cursor in ['', '-1', '1.5', '١', '1 OR 1=1', '10000000000']:
+                with self.subTest(cursor=cursor):
+                    result = await self.client.get('/api/payment-history', params={'before': cursor}, headers=self.headers)
+                    self.assertEqual(result.status, 400)
+            pool.assert_not_called()
 
     async def test_me_uses_verified_telegram_identity(self):
         res = await self.client.get('/api/me?user_id=99', headers=self.headers)

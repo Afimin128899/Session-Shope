@@ -505,7 +505,7 @@
   "Мои покупки": "My purchases",
   "Мой кошелёк": "My wallet",
   "Мой профиль": "My profile",
-  "На баланс": "Credit balance",
+  "На баланс": "To balance",
   "На баланс бота:": "To the bot balance:",
   "На баланс будет зачислено": "Your balance will be credited with",
   "На баланс зачислено": "Balance credited with",
@@ -1762,5 +1762,18 @@
   "Открыть Mini App в Telegram": "Open Mini App in Telegram",
   "Откройте магазин по кнопке ниже.": "Open the store using the button below.",
   "Новый вопрос": "New question",
-  "Только поддержка SBAND": "SBAND support only"
+  "Только поддержка SBAND": "SBAND support only",
+  "Маркет": "Market",
+  "Новые": "Newest",
+  "Дешевле": "Price: low",
+  "Дороже": "Price: high",
+  "Доступно": "Available",
+  "Язык": "Language",
+  "История пополнений": "Top-up history",
+  "Пополнений пока нет": "No top-ups yet",
+  "Продолжить": "Continue",
+  "От {0} до {1} ₽": "From {0} to {1} RUB",
+  "ID скопирован": "ID copied",
+  "Скопировать ID": "Copy ID",
+  "Поиск по каталогу": "Search the catalog"
 }

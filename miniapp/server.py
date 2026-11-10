@@ -466,6 +466,26 @@ async def health(request):
     return response({"status": "ok", "version": BOT_VERSION})
 
 
+async def payment_history(request):
+    import aiomysql
+    before = request.query.get('before', '0')
+    if not before.isascii() or not before.isdigit() or len(before) > 10:
+        raise ValueError
+    cursor = int(before)
+    query = '''SELECT id,amount,currency,method,UNIX_TIMESTAMP(created_at) AS created_at FROM payment_logs
+               WHERE user_id=%s AND amount>0 AND method IN
+               ('crypto_pay','xrocket_pay','lave_pay','laveshka_pay','platega_pay','stars_pay')'''
+    args = (request['user']['id'],)
+    if cursor:
+        query += ' AND id<%s'
+        args += (cursor,)
+    async with db._get_pool().acquire() as conn:
+        async with conn.cursor(aiomysql.DictCursor) as cur:
+            await cur.execute(query + ' ORDER BY id DESC LIMIT 26', args)
+            rows = list(await cur.fetchall())
+    return response({'items': rows[:25], 'has_more': len(rows) > 25})
+
+
 async def app_info(request):
     import re
     username=request.app[BOT_USERNAME]
@@ -486,6 +506,7 @@ def create_app(*, token=None, bot=None, bot_username=''):
     app.add_routes([
         web.get('/about', about),
         web.get('/', index), web.get('/api/health', health),web.get('/api/app-info',app_info),
+        web.get('/api/payment-history', payment_history),
         web.get('/api/referrals',referral_info),web.get('/api/spam-status',spam_statuses),
         web.get('/api/status',shop_status),web.post('/api/preferences/language',save_language),
         web.get('/api/rewards',reward_status),web.post('/api/rewards/claim',reward_claim),

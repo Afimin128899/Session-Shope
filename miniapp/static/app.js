@@ -2,11 +2,12 @@
 (() => {
   const $ = s => document.querySelector(s);
   const tg = window.Telegram?.WebApp;
-  const state = { tab: 'home', wholesale:{minimum:'500',percent:'15'}, ready: false, me: null, items: [], page: 0, category: '', orderPage: 0, orders: [], busy: false, revision: 0, invoice: null, refreshing: false, dialogRevision: 0 };
-  const labels = { home:'Главная', messages:'Сообщения', catalog: 'Каталог', favorites: 'Избранное', cart: 'Корзина', orders: 'Покупки', profile: 'Профиль' };
+  const state = { tab: 'catalog', wholesale:{minimum:'500',percent:'15'}, ready: false, me: null, items: [], page: 0, category: '', orderPage: 0, orders: [], busy: false, revision: 0, invoice: null, refreshing: false, dialogRevision: 0 };
+  const labels = { home:'Главная', messages:'Сообщения', catalog: 'Маркет', favorites: 'Избранное', cart: 'Корзина', orders: 'Покупки', profile: 'Профиль' };
   const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const num = v => new Intl.NumberFormat(window.SbandI18n.locale, { maximumFractionDigits: 2 }).format(Number(v || 0));
   const rub = v => num(v) + ' ₽';
+  const compactName = item => window.SbandCountryName(item).split(' · ')[0].replace(/[\u{1F1E6}-\u{1F1FF}]{2}/gu,'').trim();
   const spamLabel = check => check?.running ? SbandT('Проверяется…') : check?.status === 'clear' ? SbandT('Нет спамблока') : check?.status === 'limited' ? SbandT('Есть спамблок') : check?.status === 'permanent' ? SbandT('Вечный спамблок') : (check?.label || SbandT('Не проверен'));
   const spamTime = check => check?.checked_at ? new Date(check.checked_at).toLocaleString(window.SbandI18n.locale,{timeZone:'Europe/Moscow'})+SbandT(" МСК") : SbandT("Пока не проверялся");
   let toastTimer, searchTimer;
@@ -58,7 +59,7 @@
     $('#sync-state').textContent=SbandT("🛠 Технические работы");notice();
   }
   function render() {
-    $('#catalog-grid').innerHTML = state.items.map(item => SbandT("<article class=\"account-card\"><div class=\"card-head\"><span class=\"flag\" aria-hidden=\"true\">{0}</span><div class=\"card-head-right\">{1}<button class=\"heart {2}\" data-favorite=\"{3}\" aria-label=\"{4}\" aria-pressed=\"{5}\">{6}</button></div></div><h3>{7}</h3><span class=\"stock-tag {8}\">{9}</span><button class=\"feature-link\" data-features=\"{10}\">Характеристики {11}</button><div class=\"card-phone\">{12}</div><div class=\"spam-line {13}\" data-spam-status=\"{10}\" aria-live=\"polite\" title=\"{14}\">Спамблок: {15}</div><div class=\"ids\"><div><span>Товар</span><b>{16}</b></div><div><span>Telegram ID</span><b>{17}</b></div></div><div class=\"card-bottom\"><div>{18}<span class=\"card-price\">{19}<small>₽</small></span></div><button class=\"buy-button {20}\" data-add=\"{21}\" {22} aria-label=\"{23} {24}\">{25}</button></div>{26}</article>",window.SbandCountryArt(item),item.characteristics?.is_premium ? '<span class="premium-badge">Premium</span>' : '',item.favorite ? 'selected' : '',item.id,item.favorite ? SbandT("Убрать из избранного") : SbandT("В избранное"),item.favorite,item.favorite ? '♥' : '♡',esc(window.SbandCountryName(item)),item.available ? '' : 'unavailable',item.available ? SbandT("В наличии") : SbandT("Недоступен"),item.id,item.characteristics?.warranty_hours ? '· '+item.characteristics.warranty_hours+SbandT(" ч гарантии") : '↗',esc(item.phone),['limited','permanent'].includes(item.characteristics?.spam_check?.status) ? 'spam-limited' : ['unknown','error'].includes(item.characteristics?.spam_check?.status) ? 'spam-unverified' : '',esc(spamTime(item.characteristics?.spam_check)),esc(spamLabel(item.characteristics?.spam_check)),esc(item.product_id),esc(item.telegram_user_id || SbandT("Не сохранён")),Number(item.discount)>0 ? `<span class="old-price"><s>${rub(item.original_price)}</s><span class="discount-badge">−${num(item.discount)}%</span></span>` : '',num(item.price),item.in_cart ? 'added' : '',item.id,!item.available || state.me?.shop_status?.sales_paused ? 'disabled' : '',item.in_cart ? SbandT("Обновить резерв") : SbandT("В корзину"),esc(window.SbandCountryName(item)),item.in_cart ? '✓ '+SbandT('В корзине') : '+ '+SbandT('В корзину'),item.in_cart ? SbandT("<div class=\"reserve\" data-until=\"{0}\"></div><button class=\"remove-button\" data-remove=\"{1}\">Убрать из корзины</button>",esc(item.reserved_until || ''),item.id) : '')).join('');
+    $('#catalog-grid').innerHTML = state.items.map(item => SbandT("<article class=\"account-card\"><div class=\"card-head\"><span class=\"flag\" aria-hidden=\"true\">{0}</span><div class=\"card-head-right\">{1}<button class=\"heart {2}\" data-favorite=\"{3}\" aria-label=\"{4}\" aria-pressed=\"{5}\">{6}</button></div></div><h3>{7}</h3><span class=\"stock-tag {8}\">{9}</span><button class=\"feature-link\" data-features=\"{10}\">Характеристики {11}</button><div class=\"card-phone\">{12}</div><div class=\"spam-line {13}\" data-spam-status=\"{10}\" aria-live=\"polite\" title=\"{14}\">{15}</div><div class=\"ids\"><div><span>Товар</span><b>{16}</b></div><div><span>Telegram ID</span><b>{17}</b></div></div><div class=\"card-bottom\"><div>{18}<span class=\"card-price\">{19}<small>₽</small></span></div><button class=\"buy-button {20}\" data-add=\"{21}\" {22} aria-label=\"{23} {24}\">{25}</button></div>{26}</article>",window.SbandCountryArt(item),item.characteristics?.is_premium ? '<span class="premium-badge">Premium</span>' : '',item.favorite ? 'selected' : '',item.id,item.favorite ? SbandT("Убрать из избранного") : SbandT("В избранное"),item.favorite,item.favorite ? '♥' : '♡',esc(compactName(item))+' <small class="product-number">'+esc(item.product_id)+'</small>',item.available ? '' : 'unavailable',item.available ? SbandT("В наличии") : SbandT("Недоступен"),item.id,item.characteristics?.warranty_hours ? '· '+item.characteristics.warranty_hours+SbandT(" ч гарантии") : '↗',esc(item.phone),['limited','permanent'].includes(item.characteristics?.spam_check?.status) ? 'spam-limited' : ['unknown','error'].includes(item.characteristics?.spam_check?.status) ? 'spam-unverified' : '',esc(spamTime(item.characteristics?.spam_check)),esc(spamLabel(item.characteristics?.spam_check)),esc(item.product_id),esc(item.telegram_user_id || SbandT("Не сохранён")),Number(item.discount)>0 ? `<span class="old-price"><s>${rub(item.original_price)}</s><span class="discount-badge">−${num(item.discount)}%</span></span>` : '',num(item.price),item.in_cart ? 'added' : '',item.id,!item.available || state.me?.shop_status?.sales_paused ? 'disabled' : '',item.in_cart ? SbandT("Обновить резерв") : SbandT("В корзину"),esc(window.SbandCountryName(item)),item.in_cart ? '✓ '+SbandT('В корзине') : '+ '+SbandT('В корзину'),item.in_cart ? SbandT("<div class=\"reserve\" data-until=\"{0}\"></div><button class=\"remove-button\" data-remove=\"{1}\">Убрать из корзины</button>",esc(item.reserved_until || ''),item.id) : '')).join('');
     $('#catalog-empty').hidden = state.items.length > 0;
     const empty = state.tab === 'cart' ? [SbandT("Корзина пока пуста"), SbandT("Добавь аккаунт — он будет зарезервирован на 5 минут.")] : state.tab === 'favorites' ? [SbandT("Сохрани то, что нравится"), SbandT("Нажми ♡ в каталоге. О снижении цены сообщим в боте.")] : [SbandT("Пока ничего не найдено"), SbandT("Попробуй изменить фильтры или загляни позже.")];
     $('#empty-title').textContent = empty[0]; $('#empty-copy').textContent = empty[1];
@@ -108,7 +109,7 @@
     });
     const recent=recentIds().map(id=>(state.recentItems||[]).find(i=>i.id===id)||state.items.find(i=>i.id===id)).filter(i=>i&&i.available);
     $('#recent-section').hidden=!recent.length;
-    $('#recent-products').innerHTML=recent.map(item=>`<button class="recent-product ${scene(item)}" data-features="${item.id}"><span class="tile-art" aria-hidden="true"></span>${window.SbandCountryArt(item)}<strong>${esc(window.SbandCountryName(item).split(' · ')[0])}</strong><b>${rub(item.price)}</b></button>`).join('');
+    $('#recent-products').innerHTML=recent.map(item=>`<button class="recent-product ${scene(item)}" data-features="${item.id}"><span class="tile-art" aria-hidden="true"></span>${window.SbandCountryArt(item)}<strong>${esc(compactName(item))}</strong><b>${rub(item.price)}</b></button>`).join('');
   }
   async function openDepartment(slug){
     try{
@@ -158,6 +159,7 @@
   async function loadMarket(append = false) {
     if (!['home','catalog', 'favorites', 'cart'].includes(state.tab)) return;
     const rev = ++state.revision, tab = state.tab, page = append ? state.page + 1 : 0;
+    document.querySelectorAll('[data-sort]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.sort === $('#sort').value)));
     const query = new URLSearchParams({ page });
     if (tab === 'catalog') { query.set('category', state.category); query.set('q', $('#search').value); query.set('sort', $('#sort').value); query.set('min_price', $('#min-price').value); query.set('max_price', $('#max-price').value); query.set('premium',$('#premium-filter').value);query.set('min_age',$('#age-filter').value); }
     const [data,departments]=await Promise.all([api((['home','catalog'].includes(tab)?'catalog':tab)+'?'+query),api('departments')]);
@@ -190,7 +192,7 @@
     $('#orders-page').hidden = state.tab !== 'orders'; $('#profile-page').hidden = state.tab !== 'profile'; $('#messages-page').hidden=state.tab!=='messages';
     document.querySelectorAll('[data-tab]').forEach(el => el.classList.toggle('active', el.dataset.tab === state.tab));
     $('#breadcrumb').textContent = SbandT(labels[state.tab]); $('#home-page').hidden=state.tab!=='home'; $('#benefits').hidden=true; $('#filters').hidden = state.tab !== 'catalog';
-    $('#market-title').textContent = state.tab === 'catalog' ? SbandT("Аккаунты") : SbandT(labels[state.tab]);
+    $('#market-title').textContent = state.tab === 'catalog' ? SbandT("Маркет") : SbandT(labels[state.tab]);
     $('#market-kicker').textContent = state.tab === 'cart' ? SbandT("РЕЗЕРВ НА 5 МИНУТ") : state.tab === 'favorites' ? SbandT("ТО, ЧТО НРАВИТСЯ") : SbandT("ВЫБЕРИ СВОЙ");
     $('#collection-note').hidden = state.tab === 'catalog';
     $('#collection-note').textContent = state.tab === 'cart' ? SbandT("Оплата всей корзины за один раз. После истечения резерва нажми ✓ на каждом аккаунте.") : SbandT("Сообщим в боте, если базовая цена снизится. Убери ♡, чтобы отключить уведомления.");
@@ -347,6 +349,28 @@
       };
     }catch(e){error(e);}
   }
+  async function paymentHistory(before = 0, append = false) {
+    if (state.historyLoading) return;
+    const revision = ++state.dialogRevision, more = $('#history-more');
+    state.historyLoading = true;
+    if (more) more.disabled = true;
+    try {
+      const data = await api('payment-history' + (before ? '?before=' + before : ''));
+      if (revision !== state.dialogRevision || !state.ready) return;
+      const names = {crypto_pay:'Crypto Pay',xrocket_pay:'xRocket Pay',lave_pay:'Lava Pay',laveshka_pay:'Lava Pay',platega_pay:'СБП · Platega',stars_pay:'Telegram Stars'};
+      const rows = data.items.map(payment => {
+        const raw = String(payment.created_at || '').replace(' ', 'T');
+        const date = /^\d{10}(?:\.\d+)?$/.test(raw) ? new Date(Number(raw) * 1000) : new Date(/(?:Z|[+-]\d{2}:\d{2})$/.test(raw) ? raw : raw + 'Z');
+        const time = Number.isNaN(date.getTime()) ? '' : date.toLocaleString(window.SbandI18n.locale, {timeZone:'Europe/Moscow'});
+        return `<div class="history-row"><span>${esc(names[payment.method] || payment.method)}<small>${esc(time)} ${SbandT('МСК')}</small></span><b>+${num(payment.amount)} ${esc(payment.currency)}</b></div>`;
+      }).join('');
+      if (append && $('#history-rows')) $('#history-rows').insertAdjacentHTML('beforeend', rows);
+      else modal(`<h2 id="dialog-title">${SbandT('История пополнений')}</h2><div id="history-rows">${rows || SbandT('Пополнений пока нет')}</div><button class="secondary-button" id="history-more">${SbandT('Показать ещё')}</button>`);
+      $('#history-more').hidden = !data.has_more || !data.items.length;
+      $('#history-more').onclick = () => paymentHistory(data.items.at(-1).id, true);
+    } catch (e) { error(e); }
+    finally { state.historyLoading = false; if (more?.isConnected) more.disabled = false; }
+  }
   async function topup() {
     const dialogRevision = ++state.dialogRevision;
     if (!state.ready || state.busy) return;
@@ -355,7 +379,7 @@
       const data = await api('payment-methods'), methods = data.items.filter(m => m.enabled);
       if (dialogRevision !== state.dialogRevision) return;
       if (!methods.length) { modal(SbandT("<h2 id=\"dialog-title\">Пополнение баланса</h2><p>Платёжные сервисы пока не настроены. Обратись к администратору через Telegram-бота.</p><button class=\"primary-button\" data-bot>Открыть бота <svg class=\"arrow\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M6 18 18 6M6 6h12v12\"/></svg></button>")); return; }
-      modal(SbandT("<h2 id=\"dialog-title\">Пополнить баланс</h2><p>Баланс обновится после подтверждения оплаты.</p><label for=\"topup-method\">Способ оплаты</label><select id=\"topup-method\">{0}</select><label for=\"topup-amount\" id=\"topup-amount-label\">Сумма, ₽</label><input id=\"topup-amount\" type=\"number\" inputmode=\"decimal\" min=\"10\" max=\"1000000\" step=\"0.01\" value=\"500\"><p id=\"topup-quote\" class=\"muted\" aria-live=\"polite\"></p><p id=\"dialog-error\" class=\"dialog-error\" role=\"alert\" hidden></p><button class=\"primary-button\" id=\"create-invoice\">Создать счёт <svg class=\"arrow\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M6 18 18 6M6 6h12v12\"/></svg></button>",methods.map(m => `<option value="${esc(m.id)}">${esc(m.name)}</option>`).join('')));
+      modal(`<h2 id="dialog-title">${SbandT('Пополнить баланс')}</h2><label for="topup-amount" id="topup-amount-label">${SbandT('Сумма, ₽')}</label><input id="topup-amount" type="number" inputmode="decimal" min="10" max="1000000" step="0.01" value="500"><div class="amount-presets">${[100,300,500,1000].map(v=>`<button type="button" data-topup-preset="${v}">${num(v)}</button>`).join('')}</div><h3 class="payment-heading">${SbandT('Способ оплаты')}</h3><select id="topup-method" class="native-method" tabindex="-1" aria-hidden="true">${methods.map(m=>`<option value="${esc(m.id)}">${esc(m.name)}</option>`).join('')}</select><div class="payment-choices" role="radiogroup" aria-label="${SbandT('Способ оплаты')}">${methods.map(m=>`<button type="button" role="radio" data-payment-choice="${esc(m.id)}" aria-checked="false"><span class="provider-mark" aria-hidden="true">${esc(({crypto:'C',xrocket:'X',lave:'L',platega:'₽',stars:'★'})[m.id]||'◇')}</span><span class="provider-name">${esc(m.name)}<small>${m.id==='stars'?SbandT('1 ⭐ = 1,20 ₽'):SbandT('От {0} до {1} ₽',num(m.min),num(m.max))}</small></span><i aria-hidden="true"></i></button>`).join('')}</div><p id="topup-quote" class="muted" aria-live="polite"></p><div class="topup-checkout"><div class="topup-summary"><span>${SbandT('На баланс')}</span><strong id="topup-total"></strong></div><p id="dialog-error" class="dialog-error" role="alert" hidden></p><button class="primary-button" id="create-invoice">${SbandT('Продолжить')}</button></div>`);
       const amountInput = $('#topup-amount'), methodInput = $('#topup-method'), createButton = $('#create-invoice');
       const remembered = { rub: '500', stars: '100' };
       let currentUnit = null;
@@ -371,16 +395,31 @@
         amountInput.min = String(selectedMethod().min); amountInput.max = String(selectedMethod().max); amountInput.step = stars ? '1' : '0.01'; amountInput.inputMode = stars ? 'numeric' : 'decimal';
         const valid = stars ? starCount() : amountInput.checkValidity() && Number(amountInput.value) >= Number(amountInput.min) && Number(amountInput.value) <= Number(amountInput.max);
         $('#topup-quote').textContent = stars ? (valid ? SbandT("{0} ⭐ → {1} ₽ на баланс. Курс: 1 ⭐ = 1,20 ₽.",num(amountInput.value),Number(amountInput.value * 120 / 100).toLocaleString(window.SbandI18n.locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })) : SbandT("Введите целое число от 1 до 10 000 ⭐.")) : SbandT('Сумма пополнения: от {0} до {1} ₽.',num(amountInput.min),num(amountInput.max));
-        createButton.textContent = methodInput.value === 'platega' ? SbandT('Оплатить {0} ₽',num(amountInput.value)) : SbandT('Создать счёт');
+        createButton.textContent = methodInput.value === 'platega' ? SbandT('Оплатить {0} ₽',num(amountInput.value)) : SbandT('Продолжить');
+        $('#topup-total').textContent=valid?rub(stars?Number(amountInput.value)*1.2:amountInput.value):'—';
+        document.querySelectorAll('[data-payment-choice]').forEach(b=>{b.setAttribute('aria-checked',String(b.dataset.paymentChoice===methodInput.value));b.disabled=state.busy;b.tabIndex=b.dataset.paymentChoice===methodInput.value?0:-1;});
+        document.querySelectorAll('[data-topup-preset]').forEach(b=>{b.disabled=state.busy;b.setAttribute('aria-pressed',String(b.dataset.topupPreset===amountInput.value));b.textContent=num(b.dataset.topupPreset)+(stars?' ⭐':' ₽');});
         createButton.disabled = state.busy || !valid;
       };
-      methodInput.onchange = updateQuote; amountInput.oninput = updateQuote; updateQuote();
+      const clearTopupError=()=>{$('#dialog-error').hidden=true;};
+      document.querySelectorAll('[data-payment-choice]').forEach(b=>b.onclick=()=>{if(state.busy)return;methodInput.value=b.dataset.paymentChoice;clearTopupError();updateQuote();});
+      document.querySelectorAll('[data-topup-preset]').forEach(b=>b.onclick=()=>{if(state.busy)return;amountInput.value=b.dataset.topupPreset;clearTopupError();updateQuote();});
+      $('.payment-choices').onkeydown = event => {
+        const choices = [...document.querySelectorAll('[data-payment-choice]')];
+        const index = choices.indexOf(event.target);
+        if (state.busy || index < 0 || !['ArrowDown','ArrowRight','ArrowUp','ArrowLeft','Home','End'].includes(event.key)) return;
+        event.preventDefault();
+        const next = event.key === 'Home' ? 0 : event.key === 'End' ? choices.length - 1 : (index + (['ArrowDown','ArrowRight'].includes(event.key) ? 1 : -1) + choices.length) % choices.length;
+        choices[next].click(); choices[next].focus();
+      };
+      methodInput.onchange = () => {clearTopupError();updateQuote();};
+      amountInput.oninput = () => {clearTopupError();updateQuote();}; updateQuote();
       createButton.onclick = async () => {
         if (state.busy || !amountInput.checkValidity() || (methodInput.value === 'stars' && !starCount())) return;
         const provider = methodInput.value;
         const body = provider === 'stars' ? { provider, stars: Number(amountInput.value) } : { provider, amount: amountInput.value };
         const revision = state.dialogRevision;
-        state.busy = true; createButton.disabled = true; amountInput.disabled = true; methodInput.disabled = true;
+        state.busy = true; amountInput.disabled = true; methodInput.disabled = true; updateQuote();
         try {
           state.invoice = await post('invoices', body);
           if (revision === state.dialogRevision) showInvoice();
@@ -508,7 +547,7 @@
     finally { state.refreshing=false; }
   }
   async function initialize() {
-    try { await window.SbandI18n.ready; tg?.ready(); tg?.expand(); tg?.setHeaderColor('#101116'); tg?.setBackgroundColor('#1c1d24'); await loadMe(); const info=await api('shop-info');state.wholesale=info.wholesale;state.support=info; state.ready = true; document.body.classList.remove('maintenance-mode'); $('#maintenance-page').hidden=true; $('#login-panel').hidden = true; notice(); showPage(); if(state.tab==='messages')await loadSupport();else await loadMarket(); $('#sync-state').textContent = SbandT("● Обновлено сейчас"); const start=tg?.initDataUnsafe?.start_param || new URLSearchParams(location.search).get('tgWebAppStartParam') || (new URLSearchParams(location.search).get('product') ? 'product_'+new URLSearchParams(location.search).get('product') : ''); if(/^product_[0-9]{1,10}$/.test(start)) await features(Number(start.slice(8))); }
+    try { await window.SbandI18n.ready; tg?.ready(); tg?.expand(); tg?.setHeaderColor('#101114'); tg?.setBackgroundColor('#101114'); await loadMe(); const info=await api('shop-info');state.wholesale=info.wholesale;state.support=info; state.ready = true; document.body.classList.remove('maintenance-mode'); $('#maintenance-page').hidden=true; $('#login-panel').hidden = true; notice(); showPage(); if(state.tab==='messages')await loadSupport();else await loadMarket(); $('#sync-state').textContent = SbandT("● Обновлено сейчас"); const start=tg?.initDataUnsafe?.start_param || new URLSearchParams(location.search).get('tgWebAppStartParam') || (new URLSearchParams(location.search).get('product') ? 'product_'+new URLSearchParams(location.search).get('product') : ''); if(/^product_[0-9]{1,10}$/.test(start)) await features(Number(start.slice(8))); }
     catch (e) { if(e.code==='maintenance')showMaintenance(e.details?.shop_status);else reset(e.message); }
   }
   document.addEventListener('sband-shop',()=>{if(state.ready) { showPage(); synchronize(); }});
@@ -519,8 +558,9 @@
     if(button.id==='check-maintenance') {button.disabled=true;try{const data=await api('status');if(data.shop_status.maintenance){showMaintenance(data.shop_status);$('#maintenance-feedback').textContent=SbandT("🛠 Работы ещё продолжаются. Статус обновлён.");}else{await initialize();}}catch(e){$('#maintenance-feedback').textContent=e.message;}finally{button.disabled=false;}return;}
     if(button.hasAttribute('data-demo')) { if(state.me?.is_admin){sessionStorage.setItem('sband_test_init',tg?.initData||'');location.assign('/demo'+location.hash);}return; }
     if(button.hasAttribute('data-demo-exit')) { try{await post('demo/exit',{});await loadMe();notice(SbandT("Тестовый режим закрыт. Рабочие операции доступны."));}catch(e){error(e);}return; }
+    if(button.hasAttribute('data-payment-history')){paymentHistory();return;}
     if(button.hasAttribute('data-share-app')){shareApp();return;}
-    if(button.hasAttribute('data-header-search')){await switchTab('home');$('#home-query').focus();return;}
+    if(button.hasAttribute('data-header-search')){await switchTab('catalog');$('#search').focus();return;}
     if(button.hasAttribute('data-discover')){state.category='';$('#search').value=button.dataset.discover;switchTab('catalog');return;}
     if(button.dataset.department){openDepartment(button.dataset.department);return;}
     if(button.dataset.supportTicket){openSupport(Number(button.dataset.supportTicket));return;}
@@ -553,7 +593,7 @@
     e.currentTarget.textContent=SbandT(expanded?'Свернуть страны ↑':'Все страны ↓');
   };
   $('#home-search').onsubmit=e=>{e.preventDefault();state.category='';$('#search').value=$('#home-query').value;switchTab('catalog');};
-  $('#open-filters').onclick=()=>{const panel=$('.filter-panel');panel.open=!panel.open;if(panel.open)$('#search').focus();};
+  $('#open-filters').onclick=()=>{const panel=$('.filter-panel');panel.open=!panel.open;$('#open-filters').setAttribute('aria-expanded',String(panel.open));if(panel.open)$('#premium-filter').focus();};
   $('#stock-countries').onclick=()=>{state.onlyStockCountries=true;$('#stock-countries').setAttribute('aria-pressed','true');$('#all-countries').setAttribute('aria-pressed','false');renderDiscovery();};
   $('#all-countries').onclick=()=>{state.onlyStockCountries=false;$('#stock-countries').setAttribute('aria-pressed','false');$('#all-countries').setAttribute('aria-pressed','true');renderDiscovery();};
   $('#support-new').onsubmit=async e=>{
@@ -563,6 +603,8 @@
   $('#support-new-question').onclick=()=>{$('#support-new').hidden=!$('#support-new').hidden;if(!$('#support-new').hidden)$('#support-body').focus();};
   $('#refresh-support').onclick=()=>loadSupport().catch(error);
   $('#support-more').onclick=async()=>{const b=$('#support-more');b.disabled=true;try{await loadSupport(true);}catch(e){error(e);}finally{b.disabled=false;}};
+  document.querySelectorAll('[data-sort]').forEach(b=>b.onclick=()=>{$('#sort').value=b.dataset.sort;document.querySelectorAll('[data-sort]').forEach(other=>other.setAttribute('aria-pressed',String(other===b)));loadMarket().catch(error);});
+  $('#copy-profile-id').onclick=async()=>{const id=String(state.me?.user?.id||'');try{await navigator.clipboard.writeText(id);toast(SbandT('ID скопирован'));}catch(_){toast('ID '+id);}};
   $('#checkout-cart').onclick = checkout;
   $('#close-dialog').onclick = () => { if (!state.busy) $('#purchase-dialog').close(); };
   $('#purchase-dialog').addEventListener('cancel', e => { if (state.busy) e.preventDefault(); });

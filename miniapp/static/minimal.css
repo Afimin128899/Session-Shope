@@ -1,0 +1,213 @@
+/* SBAND minimal storefront: graphite, fine separators and electric lime actions. */
+:root{--bg:#101114;--panel:#1b1d21;--raised:#24262b;--line:#393c43;--accent:#c4fc46;--muted:#a2a5ad;background:#101114}
+body{background:#101114}
+.shell>aside,.shell>main>header{background:#101114}
+.content{max-width:1060px;padding-top:28px}
+.brand img{width:29px;height:29px}
+.brand b{color:#eee}
+.header-tool[data-wheel]{display:none}
+.side-nav button.active{background:none;color:#d1f68e;border-bottom:2px solid #c4fc46;border-radius:0}
+.home-hero{padding-top:10px;background:none}
+.welcome-line,.quick-searches,.home-countries,.home-countries+.discovery-heading,#recent-section,.home-shortcuts,.catalog-intro,.discovery-stats,.departments-section,#country-feature,.country-heading,#categories,#countries-toggle,#benefits,#market-kicker{display:none!important}
+.home-hero h1{font-size:40px;line-height:1.15;letter-spacing:-1.3px;margin-bottom:24px}
+.home-hero em{color:#f3f3f5;background:none;padding:0}
+.discovery-search{border-color:#4a4e55;border-radius:10px;background:#1d1f24;padding:5px 6px 5px 14px}
+.discovery-search input{font-size:14px}
+.discovery-search>.nav-icon{width:19px;height:19px}
+.discovery-search .primary-button{border-radius:7px;min-height:38px;font-size:11px}
+.home-wallet{background:none;border:0;border-top:1px solid #3b3f46;border-bottom:1px solid #3b3f46;border-radius:0;padding:18px 0;margin:22px 0}
+.home-wallet h2{position:static;font-size:12px;letter-spacing:0;color:#a5a9b1;margin:0 0 8px}
+.home-wallet .wallet-glyph{display:none}
+.home-wallet>div{min-height:0;gap:12px}
+.home-wallet strong{font-size:30px;padding:0}
+.home-wallet .secondary-button{border-radius:7px;font-size:12px;min-height:40px}
+.home-wallet small{display:none}
+.discovery-heading h2{font-size:22px}
+.discovery-heading h2:before{display:none}
+
+.home-share{margin-top:20px}
+.primary-button,.buy-button{background:#c4fc46;border:1px solid #d7ff8d;border-radius:8px;box-shadow:none;font-weight:650}
+.secondary-button{border-radius:8px;border-color:#4c5159;background:#25282e}
+.nav-icon,.flat-icon{width:21px;height:21px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.section-heading{margin:5px 0 24px}
+.section-heading h2{font-size:32px}
+.market-search{display:flex;gap:10px;margin-bottom:18px}
+.market-search>.search-box{flex:1;background:#1c1f24;border:1px solid #484d56;border-radius:9px;min-height:44px}
+.market-search input{width:100%;font-size:13px}
+.market-search #open-filters{font-size:12px;white-space:nowrap;min-height:44px}
+.sort-tabs{display:flex;gap:0;border-bottom:1px solid #42464e;margin:0 0 4px}
+.sort-tabs button{flex:1;font-size:13px;min-height:44px;padding:12px;border-bottom:2px solid transparent;border-radius:0}
+.sort-tabs [aria-pressed=true]{border-color:#c4fc46;color:#d9eeaf}
+.filter-panel{border-radius:8px;background:#191d22;border-color:#424850;margin:14px 0}
+.filter-panel:not([open]){display:none}
+.filter-panel>summary{display:none}
+.toolbar{padding:12px}
+.account-grid{display:block;background:#1b1d21;border:1px solid #373b42;border-radius:12px;padding:0 18px}
+.account-card{display:grid;position:relative;grid-template-columns:48px minmax(0,1fr) auto;gap:8px 15px;align-items:center;padding:22px 0;margin:0;border:0;border-bottom:1px solid #3b4047;border-radius:0;background:none;box-shadow:none}
+.account-card:last-child{border-bottom:0}
+.account-card:hover{border-color:#3b4047}
+.card-head{display:contents}
+.card-head .flag{grid-column:1;grid-row:1/4;align-self:start;padding-top:4px}
+.card-head .country-image{width:43px;height:33px;border:0;border-radius:5px;box-shadow:none}
+.card-head-right{position:absolute;right:0;top:13px}
+.heart{width:27px;height:27px;min-width:27px;font-size:20px;background:none;border:0;border-radius:5px}
+.premium-badge{font-size:7px;padding:3px}
+.account-card h3{grid-column:2;grid-row:1;font-size:16px;margin:0 25px 0 0;font-weight:650;line-height:1.35}
+.stock-tag,.card-phone,.ids,.old-price{display:none}
+.spam-line{grid-column:2;grid-row:2;font-size:11px;line-height:1.5;padding:0;margin:0;border:0;min-height:0}
+.feature-link{grid-column:2;grid-row:3;font-size:10px;min-height:29px;margin:0;color:#b3b9c1}
+.card-bottom{display:contents}
+.card-bottom>div{grid-column:3;grid-row:2;justify-self:end}
+.card-price{font-size:23px;white-space:nowrap;letter-spacing:-.6px}
+.card-price small{font-size:11px}
+.buy-button{grid-column:3;grid-row:3;min-height:34px;padding:7px 12px;width:auto;font-size:10px;border-radius:7px}
+.reserve,.remove-button{grid-column:2/4;font-size:11px}
+.buy-button.added{background:#303b25;border-color:#718951}
+.profile-identity{display:flex;align-items:center;gap:16px;padding:23px 0;border-bottom:1px solid #42464e}
+.profile-identity .avatar{width:48px;height:48px;font-size:20px;background:#242930;border:1px solid #4b5662}
+.profile-identity h2{font-size:21px;letter-spacing:-.5px;margin:0 0 5px;overflow-wrap:anywhere}
+.profile-identity>div{min-width:0}
+.profile-identity .muted{font-size:12px;overflow-wrap:anywhere}
+.profile-identity>button{margin-left:auto;font-size:11px;color:#b2bac4;min-height:40px;text-align:right;overflow-wrap:anywhere}
+.profile-funds{display:flex;align-items:center;justify-content:space-between;gap:15px;padding:24px 0;border-bottom:1px solid #42464e;background:#1b1e23;border-radius:10px;margin:12px 0}
+.profile-funds>div{padding-left:16px;display:grid;gap:8px}
+.profile-funds>div>span{font-size:12px;color:#b1b5bd}
+.profile-funds strong{font-size:32px;line-height:1.2;letter-spacing:-1px}
+.profile-funds small{font-size:10px;color:#9da6b3}
+.profile-funds .primary-button{font-size:12px;min-height:42px;padding:12px 18px;margin-right:15px}
+.profile-action{background:none;border:0;border-bottom:1px solid #393e47;border-radius:0;padding:16px 4px;min-height:52px;margin:0;max-width:none;font-size:14px}
+.profile-action:hover{background:#1d2127;border-color:#404853}
+.profile-action>span{font-size:16px;color:#bec7d0}
+.profile-menu{margin-top:8px}
+.language-control{border-bottom:1px solid #393e47;padding:15px 4px;font-size:14px}
+.language-control>div{gap:3px;padding:3px;background:#242930;border-radius:8px}
+.language-control button{padding:7px 13px;border:0;border-radius:6px;min-height:32px;font-size:11px}
+.language-control button.selected{background:#c4fc46;color:#19220e}
+#profile-page>h1{font-size:34px}
+#welcome-bonus{font-size:12px;color:#bedb9b;line-height:1.6}
+.order-row{background:none;border:0;border-bottom:1px solid #3a414a;border-radius:0;padding:22px 0}
+.order-row h3{font-size:16px}
+.order-row p{font-size:12px}
+.order-row button{background:none;border:0;padding:9px;color:#d3dcdf;font-size:12px}
+.order-row>div{min-width:0}
+dialog{border-radius:15px;background:#181c22;border-color:#535e6a;padding:25px}
+dialog h2{font-size:27px}
+.dialog-top>.eyebrow{color:#abb4be}
+.native-method{position:absolute!important;width:1px!important;height:1px!important;opacity:0;clip-path:inset(50%);padding:0!important;margin:0!important}
+.amount-presets{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:13px 0 25px}
+.amount-presets button{min-height:36px;padding:8px;font-size:11px;border:1px solid #4b5664;border-radius:6px;background:#222831}
+.payment-heading{font-size:16px;letter-spacing:0;margin:22px 0 7px}
+.payment-choices{border-top:1px solid #414b58}
+.payment-choices button{display:flex;align-items:center;justify-content:space-between;gap:15px;width:100%;min-height:62px;padding:14px 2px;border:0;border-bottom:1px solid #414b58;border-radius:0;text-align:left;font-size:14px;color:#e5edf6}
+.payment-choices small{display:block;margin-top:5px;font-size:10px;color:#aeb8c5}
+.payment-choices i{width:18px;height:18px;border:1px solid #b9c7d1;border-radius:50%;position:relative;flex-shrink:0}
+.payment-choices [aria-checked=true] i{background:#c4fc46;border-color:#c4fc46}
+.payment-choices [aria-checked=true] i:after{content:'';position:absolute;left:4px;top:2px;width:5px;height:9px;border-right:2px solid #19250f;border-bottom:2px solid #19250f;transform:rotate(45deg)}
+#topup-amount{width:100%;min-height:48px;font-size:25px;font-weight:650;padding:11px;border:1px solid #586777;border-radius:8px;margin-top:8px}
+#topup-quote{font-size:11px;line-height:1.6;margin-top:18px}
+.topup-summary{display:flex;align-items:center;justify-content:space-between;border-top:1px solid #43505e;padding:17px 0;margin-top:18px;font-size:12px}
+.topup-summary strong{font-size:22px}
+#create-invoice{width:100%;min-height:45px;margin-top:10px}
+.mobile-nav{background:#13171bf5;border:0;border-top:1px solid #3a444e;border-radius:0;left:0;right:0;bottom:0;box-shadow:none;padding:9px 12px max(12px,env(safe-area-inset-bottom))}
+.mobile-nav button,.mobile-nav button.active{background:none;box-shadow:none;border-radius:0;border-bottom:2px solid transparent;color:#c0c8cf;font-size:10px;min-height:52px}
+.mobile-nav button.active{color:#c4fc46;border-bottom-color:#c4fc46}
+.mobile-nav button>span{height:23px;line-height:23px}
+.mobile-nav .nav-icon{width:21px;height:21px}
+.header-tool>.sband-emoji{display:none}
+.header-tool[data-wheel]{display:none}
+.home-share button{font-size:11px}
+.footer-note,.legal-footer{border-color:#323b44}
+@media(max-width:700px){.content{padding:22px 16px 110px}
+.home-hero h1{font-size:33px}
+.home-wallet{padding:18px 0}
+.home-wallet strong{font-size:28px}
+
+.section-heading h2{font-size:30px}
+.market-search{gap:8px}
+.market-search input{font-size:12px}
+.market-search #open-filters{font-size:10px;padding:9px 11px}
+.account-grid{padding:0 13px}
+.account-card{grid-template-columns:35px minmax(0,1fr) auto;gap:7px 10px;padding:19px 0}
+.card-head .country-image{width:33px;height:25px}
+.account-card h3{font-size:14px}
+.spam-line{font-size:10px}
+.feature-link{font-size:9px;min-height:28px}
+.card-price{font-size:22px}
+.buy-button{font-size:10px;padding:7px 9px;min-height:34px}
+.profile-identity{gap:12px}
+.profile-identity h2{font-size:18px}
+.profile-identity>button{font-size:10px}
+.profile-identity .avatar{width:42px;height:42px;font-size:17px}
+.profile-funds strong{font-size:30px}
+.profile-funds .primary-button{font-size:11px;padding:10px 13px;margin-right:12px}
+.profile-action{font-size:13px}
+.language-control{font-size:13px}
+dialog{padding:21px;border-radius:14px}
+dialog h2{font-size:26px}
+.payment-choices button{font-size:13px}
+.order-row{padding:18px 0}
+.order-row h3{font-size:15px}
+.order-row button{font-size:11px}}
+@media(max-width:359px){.content{padding-left:13px;padding-right:13px}
+.account-card{grid-template-columns:30px minmax(0,1fr) auto;gap:7px}
+.card-head .country-image{width:28px;height:22px}
+.account-card h3{font-size:12px}
+.card-price{font-size:20px}
+.spam-line{font-size:9px}
+.buy-button{font-size:9px;padding:7px}
+.feature-link{font-size:8px}
+.profile-identity{gap:9px}
+.profile-identity h2{font-size:16px}
+.profile-funds strong{font-size:27px}
+.home-hero h1{font-size:30px}}
+
+/* Keep product IDs and discounts visible in the compact list. */
+.product-number{font-size:10px;font-weight:450;color:#9ea7b4;white-space:nowrap}
+.old-price{display:block;font-size:10px;text-align:right;margin:0 0 3px}
+.history-row{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:17px 0;border-bottom:1px solid #3b4149;font-size:13px}
+.history-row small{display:block;color:#a5afbb;font-size:10px;margin-top:7px}
+.history-row b{white-space:nowrap;font-size:15px}
+.amount-presets button[aria-pressed=true]{background:#324127;border-color:#c4fc46;color:#e3fac0}
+.reviews-strip{font-size:11px;margin:0 0 19px}
+.reviews-strip .text-button{font-size:11px}
+.account-grid:empty{display:none}
+
+/* Larger touch targets, with a restrained two-tab navigation. */
+.card-head .flag{padding-top:5px}
+.card-head-right{top:7px;right:-6px}
+.heart{width:40px;height:40px;min-width:40px;font-size:23px}
+.account-card h3{font-size:17px}
+.spam-line{font-size:12px}
+.feature-link{font-size:12px;min-height:40px}
+.buy-button{font-size:12px;min-height:40px;padding:9px 15px}
+.card-price{font-size:25px}
+.profile-action{font-size:15px;min-height:56px}
+.profile-identity>button{font-size:12px;min-width:44px}
+.provider-name{flex:1;min-width:0}
+.provider-mark{display:grid;place-items:center;flex-shrink:0;width:30px;height:30px;border:1px solid #495559;border-radius:8px;color:#d9efb4;font-size:16px;font-weight:650;background:#252d2c}
+.payment-choices button{min-height:59px;gap:12px}
+.payment-choices [aria-checked=true] .provider-name{color:#deefbe}
+.topup-checkout{position:sticky;bottom:-21px;background:#181c22;padding:0 0 20px;box-shadow:0 -10px 20px #181c22}
+.topup-checkout .topup-summary{padding:12px 0;margin-top:13px}
+.topup-checkout .dialog-error{margin:6px 0;font-size:11px;padding:9px}
+#create-invoice{min-height:46px}
+.mobile-nav button{font-size:12px;gap:8px}
+@media(max-width:700px){.account-card h3{font-size:16px}
+.spam-line{font-size:11px}
+.feature-link{font-size:10px;min-height:36px}
+.buy-button{font-size:11px;padding:8px 12px;min-height:38px}
+.card-price{font-size:24px}
+.profile-action{font-size:14px}
+.provider-mark{width:29px;height:29px}
+.amount-presets button{font-size:12px;padding:7px 4px}
+.profile-funds .primary-button{font-size:13px}
+.profile-funds small{font-size:11px}
+.profile-identity h2{font-size:20px}}
+@media(max-width:359px){.account-card h3{font-size:14px}
+.spam-line{font-size:10px}
+.feature-link{font-size:9px}
+.buy-button{font-size:10px;padding:8px 10px}
+.card-price{font-size:22px}
+.profile-funds .primary-button{font-size:12px}
+.profile-identity h2{font-size:18px}
+.amount-presets button{font-size:11px}}
