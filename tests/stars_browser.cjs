@@ -1,4 +1,4 @@
-// Standalone offline UI regression. All API/payment responses and Telegram SDK are fixtures.
+// Offline Mini App UI regression. All API/payment responses and Telegram SDK are fixtures.
 const {chromium} = require('playwright');
 const assert = require('node:assert/strict');
 const http = require('node:http');
@@ -33,7 +33,8 @@ const server = http.createServer((req, res) => {
     if (url.pathname === '/api/me') data = {user:{id:42,first_name:'Fixture',username:'fixture'},balance:state.balance,balance_usdt:'0',version:'fixture',bot_username:'fixture_bot',is_admin:false};
     else if (url.pathname === '/api/shop-info') data = {wholesale:{minimum:'500',percent:'15'},support_hours:'Fixture',response_time:'Fixture'};
     else if (url.pathname === '/api/catalog') data = {categories:[],items:[],has_more:false};
-    else if (url.pathname === '/api/payment-methods') data = {items:[{id:'crypto',name:'Crypto Pay',enabled:true},{id:'stars',name:'Telegram Stars ⭐',enabled:true,unit:'XTR',rate:'1.20',min:1,max:10000}]};
+    else if (url.pathname === '/api/departments') data = {items:[]};
+    else if (url.pathname === '/api/payment-methods') data = {items:[{id:'crypto',name:'Crypto Pay',enabled:true,min:10,max:1000000},{id:'stars',name:'Telegram Stars ⭐',enabled:true,unit:'XTR',rate:'1.20',min:1,max:10000}]};
     else if (url.pathname === '/api/invoices' && request.method() === 'POST') {
      const body=request.postDataJSON();state.body.push(body);state.sequence++;
      data = body.provider === 'stars' ? {provider:'stars',invoice_id:'fixture-stars-'+state.sequence,pay_url:'https://t.me/$fixture'+state.sequence,stars:body.stars,amount:(body.stars*120/100).toFixed(2),rate:'1.20',currency:'XTR'} : {provider:body.provider,invoice_id:'fixture-crypto',pay_url:'https://t.me/fixture_external_invoice',amount:body.amount};
@@ -45,8 +46,8 @@ const server = http.createServer((req, res) => {
    page.on('pageerror', e => errors.push(e.message));
    await page.goto('http://127.0.0.1:'+server.address().port);
    await page.waitForFunction(() => document.querySelector('#header-balance').textContent.includes('10'));
-   await page.locator('[data-topup]').first().click();await page.waitForSelector('#topup-method');
-   await page.locator('#topup-method').selectOption('stars');
+   await page.waitForSelector('#market-page:not([hidden])');await page.locator('.mobile-nav [data-tab="profile"]').click();await page.locator('#profile-page [data-topup]').click();await page.waitForSelector('#topup-amount');
+   await page.locator('[data-payment-choice="stars"]').click();
    return {context,page,state,errors};
   }
   const first=await fixture(),p=first.page;
@@ -61,12 +62,17 @@ const server = http.createServer((req, res) => {
    assert.equal(await p.locator('#create-invoice').isDisabled(),true);
   }
   assert.equal(first.state.body.length,0);
-  await p.locator('#topup-amount').fill('100');await p.locator('#create-invoice').click();await p.waitForSelector('#pay-stars');
-  assert.deepEqual(first.state.body,[{provider:'stars',stars:100}]);
+  await p.locator('#topup-amount').fill('30');assert.equal(await p.locator('#create-invoice').innerText(),'Оплатить 30 ⭐');await p.locator('#create-invoice').click();await p.waitForSelector('#pay-stars');
+  assert.deepEqual(first.state.body,[{provider:'stars',stars:30}]);
   assert((await p.locator('#dialog-content').textContent()).includes('1 ⭐ = 1,20 ₽'));
-  await p.locator('#pay-stars').click();
+  await p.waitForFunction(()=>window.STAR_CALLS.length===1);
   assert.deepEqual(await p.evaluate(()=>window.STAR_CALLS),['https://t.me/$fixture1']);
+  assert.equal(await p.locator('#pay-stars').innerText(),'Оплатить 30 ⭐');
+  assert.equal(await p.locator('#another-invoice').isDisabled(),true);
+  await p.locator('#pay-stars').evaluate(button=>button.click());
+  assert.equal(await p.evaluate(()=>window.STAR_CALLS.length),1);
   assert.equal(await p.locator('#pay-stars').isDisabled(),true);
+  await p.locator('#close-dialog').click();await p.locator('#profile-page [data-topup]').click();await p.waitForSelector('#pay-stars');assert.equal(await p.evaluate(()=>window.STAR_CALLS.length),1);assert(await p.locator('#pay-stars').isDisabled());
   await p.evaluate(()=>window.INVOICE_CALLBACK('cancelled'));
   assert.equal(await p.locator('#pay-stars').isEnabled(),true);
   await p.locator('#pay-stars').click();
@@ -74,11 +80,11 @@ const server = http.createServer((req, res) => {
   await p.waitForFunction(()=>document.querySelector('#invoice-state').textContent.includes('Проверяем'));
   assert((await p.locator('#header-balance').textContent()).includes('10'));
   assert(!(await p.locator('#invoice-state').textContent()).includes('Баланс пополнен'));
-  first.state.status='credited';first.state.balance='130.00';
+  first.state.status='credited';first.state.balance='46.00';
   await p.locator('#verify-invoice').click();await p.waitForFunction(()=>document.querySelector('#invoice-state').textContent.includes('Баланс пополнен'));
-  assert((await p.locator('#header-balance').textContent()).includes('130'));
+  assert((await p.locator('#header-balance').textContent()).includes('46'));
   assert.equal(await p.locator('#pay-stars').isDisabled(),true);
-  await p.locator('#another-invoice').click();await p.waitForSelector('#topup-method');
+  await p.locator('#another-invoice').click();await p.waitForSelector('#topup-amount');
   await p.locator('#topup-amount').fill('50.25');await p.locator('#create-invoice').click();await p.waitForSelector('.payment-link');
   assert.deepEqual(first.state.body.at(-1),{provider:'crypto',amount:'50.25'});
   assert.equal(await p.locator('.payment-link').getAttribute('href'),'https://t.me/fixture_external_invoice');
@@ -90,6 +96,11 @@ const server = http.createServer((req, res) => {
   assert((await f.locator('.payment-link').textContent()).includes('100 ⭐'));
   assert.equal(await f.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
   assert.deepEqual(fallback.errors,[]);
-  console.log('PASS: exact Stars quote and integer bounds, native payment, no optimistic credit, server-only settlement, external RUB invoices and Telegram-link fallback');
+  const failed=await fixture(),broken=failed.page;
+  await broken.evaluate(()=>{window.Telegram.WebApp.openInvoice=()=>{throw new Error('SDK unavailable');};});
+  await broken.locator('#topup-amount').fill('30');await broken.locator('#create-invoice').click();await broken.waitForSelector('#stars-payment-link:not([hidden])');
+  assert.equal(await broken.locator('#stars-payment-link').getAttribute('href'),'https://t.me/$fixture1');
+  assert(await broken.locator('#pay-stars').isEnabled());assert(await broken.locator('#another-invoice').isEnabled());assert.deepEqual(failed.errors,[]);
+  console.log('PASS: exact Stars quote and integer bounds, immediate native 30-Star popup, duplicate-open guard/reopen/cancel, SDK-error fallback, no optimistic credit, server-only settlement, external RUB invoices and Telegram-link fallback');
  } finally {await browser.close();await new Promise(resolve=>server.close(resolve));}
 })().catch(e=>{console.error(e);process.exit(1)});

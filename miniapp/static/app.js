@@ -395,7 +395,7 @@
         amountInput.min = String(selectedMethod().min); amountInput.max = String(selectedMethod().max); amountInput.step = stars ? '1' : '0.01'; amountInput.inputMode = stars ? 'numeric' : 'decimal';
         const valid = stars ? starCount() : amountInput.checkValidity() && Number(amountInput.value) >= Number(amountInput.min) && Number(amountInput.value) <= Number(amountInput.max);
         $('#topup-quote').textContent = stars ? (valid ? SbandT("{0} ⭐ → {1} ₽ на баланс. Курс: 1 ⭐ = 1,20 ₽.",num(amountInput.value),Number(amountInput.value * 120 / 100).toLocaleString(window.SbandI18n.locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })) : SbandT("Введите целое число от 1 до 10 000 ⭐.")) : SbandT('Сумма пополнения: от {0} до {1} ₽.',num(amountInput.min),num(amountInput.max));
-        createButton.textContent = methodInput.value === 'platega' ? SbandT('Оплатить {0} ₽',num(amountInput.value)) : SbandT('Продолжить');
+        createButton.textContent = stars ? SbandT('Оплатить {0} ⭐',num(amountInput.value)) : methodInput.value === 'platega' ? SbandT('Оплатить {0} ₽',num(amountInput.value)) : SbandT('Продолжить');
         $('#topup-total').textContent=valid?rub(stars?Number(amountInput.value)*1.2:amountInput.value):'—';
         document.querySelectorAll('[data-payment-choice]').forEach(b=>{b.setAttribute('aria-checked',String(b.dataset.paymentChoice===methodInput.value));b.disabled=state.busy;b.tabIndex=b.dataset.paymentChoice===methodInput.value?0:-1;});
         document.querySelectorAll('[data-topup-preset]').forEach(b=>{b.disabled=state.busy;b.setAttribute('aria-pressed',String(b.dataset.topupPreset===amountInput.value));b.textContent=num(b.dataset.topupPreset)+(stars?' ⭐':' ₽');});
@@ -422,13 +422,13 @@
         state.busy = true; amountInput.disabled = true; methodInput.disabled = true; updateQuote();
         try {
           state.invoice = await post('invoices', body);
-          if (revision === state.dialogRevision) showInvoice();
+          if (revision === state.dialogRevision) showInvoice(provider === 'stars');
         } catch (e) { dialogError(e); }
         finally { state.busy = false; if (createButton.isConnected) { amountInput.disabled = false; methodInput.disabled = false; updateQuote(); } }
       };
     } catch (e) { error(e); }
   }
-  function showInvoice() {
+  function showInvoice(openStars = false) {
     const i = state.invoice; if (!i) return;
     let url;
     try { url = new URL(i.pay_url); } catch (_) { state.invoice = null; throw new Error(SbandT("Не удалось открыть ссылку счёта. Создай новый счёт.")); }
@@ -441,21 +441,31 @@
     modal(SbandT("<h2 id=\"dialog-title\">{0}</h2>{1}{2}<p id=\"invoice-state\" role=\"status\">Ожидаем оплату…</p><p id=\"dialog-error\" class=\"dialog-error\" role=\"alert\" hidden></p>{3}<p>Можно закрыть это окно: проверка продолжится на сервере.</p><button id=\"another-invoice\" class=\"secondary-button\">Создать другой счёт</button>",stars ? SbandT("Счёт на {0} ⭐",num(i.stars)) : SbandT("Счёт на {0}",rub(i.amount)),stars ? SbandT("<div class=\"info\"><span>На баланс</span><b>{0}</b></div><p>Курс: 1 ⭐ = 1,20 ₽. Зачисление произойдёт после подтверждения оплаты Telegram.</p>",rub(i.amount)) : SbandT("<p>Перейди к оплате. Баланс обновится автоматически после подтверждения платёжным сервисом.</p>"),paymentControl,stars ? SbandT("<button id=\"verify-invoice\" class=\"secondary-button\">Проверить зачисление</button>") : ''));
     if (nativeStars) {
       const button = $('#pay-stars');
+      button.dataset.invoiceId = String(i.invoice_id);
+      button.disabled = !!state.nativeStarsInvoice;
       button.onclick = () => {
-        if (button.disabled || state.invoice !== i) return;
+        if (button.disabled || state.invoice !== i || state.nativeStarsInvoice) return;
+        state.nativeStarsInvoice = i;
         button.disabled = true;
+        $('#another-invoice').disabled = true;
         try {
           tg.openInvoice(url.href, async status => {
+            if (state.nativeStarsInvoice === i) state.nativeStarsInvoice = null;
             if (state.invoice !== i) return;
-            button.disabled = false;
-            const label = $('#invoice-state');
+            const currentButton = $('#pay-stars');
+            const sameDialog = currentButton?.dataset.invoiceId === String(i.invoice_id);
+            if (sameDialog) currentButton.disabled = false;
+            if (sameDialog && $('#another-invoice')) $('#another-invoice').disabled = false;
+            const label = sameDialog ? $('#invoice-state') : null;
             if (label) label.textContent = status === 'paid' || status === 'pending' ? SbandT("Проверяем подтверждение оплаты Telegram…") : status === 'cancelled' ? SbandT("Оплата отменена. Можно открыть счёт снова.") : SbandT("Оплата не завершена. Проверь статус счёта или попробуй снова.");
             if (status === 'paid' || status === 'pending') {
               try { await checkInvoice(); await loadMe(); } catch (e) { dialogError(e); }
             }
           });
         } catch (_) {
+          if (state.nativeStarsInvoice === i) state.nativeStarsInvoice = null;
           button.disabled = false;
+          $('#another-invoice').disabled = false;
           $('#stars-payment-link').hidden = false;
           $('#invoice-state').textContent = SbandT("Не удалось открыть оплату в приложении. Воспользуйся ссылкой на счёт в Telegram.");
         }
@@ -466,7 +476,9 @@
       try { await checkInvoice(); await loadMe(); } catch (e) { dialogError(e); }
       finally { if (button.isConnected && state.invoice === i) button.disabled = false; }
     };
-    $('#another-invoice').onclick = () => { state.invoice = null; topup(); };
+    $('#another-invoice').disabled = !!state.nativeStarsInvoice;
+    $('#another-invoice').onclick = () => { if (state.nativeStarsInvoice) return; state.invoice = null; topup(); };
+    if (openStars && nativeStars) $('#pay-stars').click();
   }
   async function checkInvoice() {
     const i = state.invoice; if (!i) return;
