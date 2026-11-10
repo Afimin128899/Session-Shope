@@ -1,7 +1,7 @@
-/* SBAND minimal storefront: graphite, fine separators and electric lime actions. */
-:root{--bg:#101114;--panel:#1b1d21;--raised:#24262b;--line:#393c43;--accent:#c4fc46;--muted:#a2a5ad;background:#101114}
-body{background:#101114}
-.shell>aside,.shell>main>header{background:#101114}
+/* SBAND minimal storefront: true black, fine separators and electric lime actions. */
+:root{--bg:#000000;--panel:#000000;--raised:#000000;--line:#292929;--accent:#c4fc46;--muted:#a2a5ad;background:#000000}
+body{background:#000000}
+.shell>aside,.shell>main>header{background:#000000}
 .content{max-width:1060px;padding-top:28px}
 .brand img{width:29px;height:29px}
 .brand b{color:#eee}
@@ -11,7 +11,7 @@ body{background:#101114}
 .welcome-line,.quick-searches,.home-countries,.home-countries+.discovery-heading,#recent-section,.home-shortcuts,.catalog-intro,.discovery-stats,.departments-section,#country-feature,.country-heading,#categories,#countries-toggle,#benefits,#market-kicker{display:none!important}
 .home-hero h1{font-size:40px;line-height:1.15;letter-spacing:-1.3px;margin-bottom:24px}
 .home-hero em{color:#f3f3f5;background:none;padding:0}
-.discovery-search{border-color:#4a4e55;border-radius:10px;background:#1d1f24;padding:5px 6px 5px 14px}
+.discovery-search{border-color:#4a4e55;border-radius:10px;background:#000000;padding:5px 6px 5px 14px}
 .discovery-search input{font-size:14px}
 .discovery-search>.nav-icon{width:19px;height:19px}
 .discovery-search .primary-button{border-radius:7px;min-height:38px;font-size:11px}
@@ -27,22 +27,22 @@ body{background:#101114}
 
 .home-share{margin-top:20px}
 .primary-button,.buy-button{background:#c4fc46;border:1px solid #d7ff8d;border-radius:8px;box-shadow:none;font-weight:650}
-.secondary-button{border-radius:8px;border-color:#4c5159;background:#25282e}
+.secondary-button{border-radius:8px;border-color:#4c5159;background:#000000}
 .nav-icon,.flat-icon{width:21px;height:21px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
 .section-heading{margin:5px 0 24px}
 .section-heading h2{font-size:32px}
 .market-search{display:flex;gap:10px;margin-bottom:18px}
-.market-search>.search-box{flex:1;background:#1c1f24;border:1px solid #484d56;border-radius:9px;min-height:44px}
+.market-search>.search-box{flex:1;background:#000000;border:1px solid #484d56;border-radius:9px;min-height:44px}
 .market-search input{width:100%;font-size:13px}
 .market-search #open-filters{font-size:12px;white-space:nowrap;min-height:44px}
 .sort-tabs{display:flex;gap:0;border-bottom:1px solid #42464e;margin:0 0 4px}
 .sort-tabs button{flex:1;font-size:13px;min-height:44px;padding:12px;border-bottom:2px solid transparent;border-radius:0}
 .sort-tabs [aria-pressed=true]{border-color:#c4fc46;color:#d9eeaf}
-.filter-panel{border-radius:8px;background:#191d22;border-color:#424850;margin:14px 0}
+.filter-panel{border-radius:8px;background:#000000;border-color:#424850;margin:14px 0}
 .filter-panel:not([open]){display:none}
 .filter-panel>summary{display:none}
 .toolbar{padding:12px}
-.account-grid{display:block;background:#1b1d21;border:1px solid #373b42;border-radius:12px;padding:0 18px}
+.account-grid{display:block;background:#000000;border:1px solid #373b42;border-radius:12px;padding:0 18px}
 .account-card{display:grid;position:relative;grid-template-columns:48px minmax(0,1fr) auto;gap:8px 15px;align-items:center;padding:22px 0;margin:0;border:0;border-bottom:1px solid #3b4047;border-radius:0;background:none;box-shadow:none}
 .account-card:last-child{border-bottom:0}
 .account-card:hover{border-color:#3b4047}
@@ -62,25 +62,25 @@ body{background:#101114}
 .card-price small{font-size:11px}
 .buy-button{grid-column:3;grid-row:3;min-height:34px;padding:7px 12px;width:auto;font-size:10px;border-radius:7px}
 .reserve,.remove-button{grid-column:2/4;font-size:11px}
-.buy-button.added{background:#303b25;border-color:#718951}
+.buy-button.added{background:#000000;border-color:#718951}
 .profile-identity{display:flex;align-items:center;gap:16px;padding:23px 0;border-bottom:1px solid #42464e}
-.profile-identity .avatar{width:48px;height:48px;font-size:20px;background:#242930;border:1px solid #4b5662}
+.profile-identity .avatar{width:48px;height:48px;font-size:20px;background:#000000;border:1px solid #4b5662}
 .profile-identity h2{font-size:21px;letter-spacing:-.5px;margin:0 0 5px;overflow-wrap:anywhere}
 .profile-identity>div{min-width:0}
 .profile-identity .muted{font-size:12px;overflow-wrap:anywhere}
 .profile-identity>button{margin-left:auto;font-size:11px;color:#b2bac4;min-height:40px;text-align:right;overflow-wrap:anywhere}
-.profile-funds{display:flex;align-items:center;justify-content:space-between;gap:15px;padding:24px 0;border-bottom:1px solid #42464e;background:#1b1e23;border-radius:10px;margin:12px 0}
+.profile-funds{display:flex;align-items:center;justify-content:space-between;gap:15px;padding:24px 0;border-bottom:1px solid #42464e;background:#000000;border-radius:10px;margin:12px 0}
 .profile-funds>div{padding-left:16px;display:grid;gap:8px}
 .profile-funds>div>span{font-size:12px;color:#b1b5bd}
 .profile-funds strong{font-size:32px;line-height:1.2;letter-spacing:-1px}
 .profile-funds small{font-size:10px;color:#9da6b3}
 .profile-funds .primary-button{font-size:12px;min-height:42px;padding:12px 18px;margin-right:15px}
 .profile-action{background:none;border:0;border-bottom:1px solid #393e47;border-radius:0;padding:16px 4px;min-height:52px;margin:0;max-width:none;font-size:14px}
-.profile-action:hover{background:#1d2127;border-color:#404853}
+.profile-action:hover{background:#000000;border-color:#404853}
 .profile-action>span{font-size:16px;color:#bec7d0}
 .profile-menu{margin-top:8px}
 .language-control{border-bottom:1px solid #393e47;padding:15px 4px;font-size:14px}
-.language-control>div{gap:3px;padding:3px;background:#242930;border-radius:8px}
+.language-control>div{gap:3px;padding:3px;background:#000000;border-radius:8px}
 .language-control button{padding:7px 13px;border:0;border-radius:6px;min-height:32px;font-size:11px}
 .language-control button.selected{background:#c4fc46;color:#19220e}
 #profile-page>h1{font-size:34px}
@@ -90,12 +90,12 @@ body{background:#101114}
 .order-row p{font-size:12px}
 .order-row button{background:none;border:0;padding:9px;color:#d3dcdf;font-size:12px}
 .order-row>div{min-width:0}
-dialog{border-radius:15px;background:#181c22;border-color:#535e6a;padding:25px}
+dialog{border-radius:15px;background:#000000;border-color:#535e6a;padding:25px}
 dialog h2{font-size:27px}
 .dialog-top>.eyebrow{color:#abb4be}
 .native-method{position:absolute!important;width:1px!important;height:1px!important;opacity:0;clip-path:inset(50%);padding:0!important;margin:0!important}
 .amount-presets{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:13px 0 25px}
-.amount-presets button{min-height:36px;padding:8px;font-size:11px;border:1px solid #4b5664;border-radius:6px;background:#222831}
+.amount-presets button{min-height:36px;padding:8px;font-size:11px;border:1px solid #4b5664;border-radius:6px;background:#000000}
 .payment-heading{font-size:16px;letter-spacing:0;margin:22px 0 7px}
 .payment-choices{border-top:1px solid #414b58}
 .payment-choices button{display:flex;align-items:center;justify-content:space-between;gap:15px;width:100%;min-height:62px;padding:14px 2px;border:0;border-bottom:1px solid #414b58;border-radius:0;text-align:left;font-size:14px;color:#e5edf6}
@@ -108,7 +108,7 @@ dialog h2{font-size:27px}
 .topup-summary{display:flex;align-items:center;justify-content:space-between;border-top:1px solid #43505e;padding:17px 0;margin-top:18px;font-size:12px}
 .topup-summary strong{font-size:22px}
 #create-invoice{width:100%;min-height:45px;margin-top:10px}
-.mobile-nav{background:#13171bf5;border:0;border-top:1px solid #3a444e;border-radius:0;left:0;right:0;bottom:0;box-shadow:none;padding:9px 12px max(12px,env(safe-area-inset-bottom))}
+.mobile-nav{background:#000000;border:0;border-top:1px solid #3a444e;border-radius:0;left:0;right:0;bottom:0;box-shadow:none;padding:9px 12px max(12px,env(safe-area-inset-bottom))}
 .mobile-nav button,.mobile-nav button.active{background:none;box-shadow:none;border-radius:0;border-bottom:2px solid transparent;color:#c0c8cf;font-size:10px;min-height:52px}
 .mobile-nav button.active{color:#c4fc46;border-bottom-color:#c4fc46}
 .mobile-nav button>span{height:23px;line-height:23px}
@@ -167,7 +167,7 @@ dialog h2{font-size:26px}
 .history-row{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:17px 0;border-bottom:1px solid #3b4149;font-size:13px}
 .history-row small{display:block;color:#a5afbb;font-size:10px;margin-top:7px}
 .history-row b{white-space:nowrap;font-size:15px}
-.amount-presets button[aria-pressed=true]{background:#324127;border-color:#c4fc46;color:#e3fac0}
+.amount-presets button[aria-pressed=true]{background:#000000;border-color:#c4fc46;color:#e3fac0}
 .reviews-strip{font-size:11px;margin:0 0 19px}
 .reviews-strip .text-button{font-size:11px}
 .account-grid:empty{display:none}
@@ -184,10 +184,10 @@ dialog h2{font-size:26px}
 .profile-action{font-size:15px;min-height:56px}
 .profile-identity>button{font-size:12px;min-width:44px}
 .provider-name{flex:1;min-width:0}
-.provider-mark{display:grid;place-items:center;flex-shrink:0;width:30px;height:30px;border:1px solid #495559;border-radius:8px;color:#d9efb4;font-size:16px;font-weight:650;background:#252d2c}
+.provider-mark{display:grid;place-items:center;flex-shrink:0;width:30px;height:30px;border:1px solid #495559;border-radius:8px;color:#d9efb4;font-size:16px;font-weight:650;background:#000000}
 .payment-choices button{min-height:59px;gap:12px}
 .payment-choices [aria-checked=true] .provider-name{color:#deefbe}
-.topup-checkout{position:sticky;bottom:-21px;background:#181c22;padding:0 0 20px;box-shadow:0 -10px 20px #181c22}
+.topup-checkout{position:sticky;bottom:-21px;background:#000000;padding:0 0 20px;box-shadow:0 -10px 20px #000000}
 .topup-checkout .topup-summary{padding:12px 0;margin-top:13px}
 .topup-checkout .dialog-error{margin:6px 0;font-size:11px;padding:9px}
 #create-invoice{min-height:46px}
@@ -211,3 +211,20 @@ dialog h2{font-size:26px}
 .profile-funds .primary-button{font-size:12px}
 .profile-identity h2{font-size:18px}
 .amount-presets button{font-size:11px}}
+
+/* Pure black surfaces, including inherited form and dialog styles. */
+input,select,textarea,.search-box,.product-cover,.wallet,.icon-button,.header-tool,
+.avatar,.profile-identity .avatar,.profile-card,.balance-panel,.empty-state,
+.stat-card,.admin-callout,.admin-user-card,.admin-table th,.admin-tabs button,
+.admin-quick button,.admin-pagination button,#toast{
+  background:#000000;
+  border-color:#303030;
+}
+.profile-action:hover,.secondary-button:hover{background:#000000!important}
+.language-control>div{border:1px solid #303030}
+.account-grid,.account-card,.profile-identity,.profile-funds,.profile-action,
+.sort-tabs,.payment-choices,.payment-choices button,.history-row{
+  border-color:#292929;
+}
+.sort-tabs [aria-pressed=true]{border-bottom-color:#c4fc46}
+dialog::backdrop{background:#000000cc}
