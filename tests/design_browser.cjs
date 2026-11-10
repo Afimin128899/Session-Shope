@@ -5,7 +5,7 @@ const root=path.join(__dirname,'../miniapp/static');
  const browser=await chromium.launch({executablePath:'/usr/bin/chromium',headless:true,args:['--no-sandbox']});
  const errors=[];fs.mkdirSync('/workspace/session-shope-previews',{recursive:true});
  try{for(const width of [320,390,768,1440]){
-  const ctx=await browser.newContext({viewport:{width,height:900}});let language='ru';const departments=['email','gmail','chatgpt','roblox','discord','steam','spotify','youtube'].map(slug=>({slug:'section-'+slug,name:slug==='email'?'Почта':slug==='chatgpt'?'ChatGPT':slug==='gmail'?'Gmail':slug[0].toUpperCase()+slug.slice(1),emoji:'◇',is_active:0}));const supportMessages=[];
+  const ctx=await browser.newContext({viewport:{width,height:900}});let language='ru',catalogueDelay=0,catalogueRequests=0;const departments=['email','gmail','chatgpt','roblox','discord','steam','spotify','youtube'].map(slug=>({slug:'section-'+slug,name:slug==='email'?'Почта':slug==='chatgpt'?'ChatGPT':slug==='gmail'?'Gmail':slug[0].toUpperCase()+slug.slice(1),emoji:'◇',is_active:0}));const supportMessages=[];
   const items=[['auto-cl-clear','Чили 🇨🇱 · Без спамблока',120],['auto-us-permanent','США 🇺🇸 · Вечный спамблок',90],['fr','Франция 🇫🇷',250],['unknown','Другая страна',80]].map(([category,name,price],i)=>({id:i+1,category,name,price,original_price:price+20,discount:10,available:true,product_id:'#0'+(i+1),telegram_user_id:123456789+i,phone:'+56 ••• •• 2345',characteristics:{is_premium:i===2,warranty_hours:24,two_fa:'Да',spam_check:{status:i===1?'permanent':'clear',label:i===1?'Вечный спамблок':'Нет спамблока',checked_at:'2026-11-08T10:00:00Z'}}}));
   const categories=[{slug:'de',name:'Германия 🇩🇪',count:0},...items.map(i=>({slug:i.category,name:i.name,count:1,min_price:i.price})),...['es','gb','tr','kz','id','br','in','jp','ca','pl'].map(slug=>({slug,name:slug.toUpperCase(),count:0}))];
   await ctx.addInitScript(()=>{window.Telegram={WebApp:{initData:'ui-fixture',ready(){},expand(){},setHeaderColor(){},setBackgroundColor(){},openTelegramLink(url){window.sharedURL=url;}}};Object.defineProperty(navigator,'clipboard',{value:{async writeText(value){window.savedCopy=value;}},configurable:true});});
@@ -25,7 +25,7 @@ const root=path.join(__dirname,'../miniapp/static');
     else if(key==='shop-info')data={wholesale:{minimum:500,percent:15}};
     else if(key==='cart'&&route.request().method()==='POST'){Object.assign(items.find(i=>i.id===body.account_id),{in_cart:true,reserved_until:new Date(Date.now()+300000).toISOString()});}
     else if(key==='favorites'&&route.request().method()==='POST'){items.find(i=>i.id===body.account_id).favorite=body.enabled;}
-    else if(['catalog','favorites','cart'].includes(key)){data={items:items.filter(i=>key==='cart'?i.in_cart:key==='favorites'?i.favorite:true),categories,has_more:false};}
+    else if(['catalog','favorites','cart'].includes(key)){if(key==='catalog'){catalogueRequests++;if(catalogueDelay)await new Promise(resolve=>setTimeout(resolve,catalogueDelay));}data={items:items.filter(i=>key==='cart'?i.in_cart:key==='favorites'?i.favorite:true),categories,has_more:false};}
     else if(key.startsWith('products/'))data=items.find(i=>i.id===Number(key.split('/')[1]));
     else if(key==='admin/categories')data={items:categories};
     else if(key==='admin/overview')data={stock:4,orders:12,tickets:2,users:64,approvals:0,sales:[]};
@@ -45,6 +45,21 @@ const root=path.join(__dirname,'../miniapp/static');
   assert.equal(await p.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,`home overflow ${width}`);
   await p.screenshot({path:`/workspace/session-shope-previews/approved-home-${width}-ru.png`,fullPage:true});
   await p.locator(`${nav} [data-tab="catalog"]`).click();await p.waitForSelector('.account-card');
+  if(width===390){
+    const refresh=p.locator('#refresh');await refresh.scrollIntoViewIfNeeded();const box=await refresh.boundingBox(),prior=catalogueRequests;
+    catalogueDelay=500;
+    await p.mouse.move(box.x+box.width/2,box.y+box.height/2);await p.mouse.down();
+    await p.waitForFunction(()=>new DOMMatrix(getComputedStyle(document.querySelector('#refresh')).transform).a<.99);
+    await p.mouse.up();await p.waitForSelector('#refresh.is-loading[aria-busy="true"]');
+    assert(await refresh.isDisabled());await refresh.evaluate(button=>button.click());
+    assert.equal(await refresh.getAttribute('aria-label'),'Обновить');
+    const during=await refresh.evaluate(b=>b.offsetWidth);assert(Math.abs(during-box.width)<.2);
+    await p.waitForSelector('#refresh:not(:disabled):not(.is-loading)');assert.equal(catalogueRequests,prior+1);assert.equal(await refresh.getAttribute('aria-busy'),null);
+    await p.emulateMedia({reducedMotion:'reduce'});await refresh.focus();await p.keyboard.down('Space');
+    assert.equal(await refresh.evaluate(b=>getComputedStyle(b).transform),'none');await p.keyboard.up('Space');await p.waitForSelector('#refresh.is-loading');
+    assert.equal(await refresh.evaluate(b=>getComputedStyle(b,'::after').animationName),'none');
+    await p.waitForSelector('#refresh:not(:disabled):not(.is-loading)');catalogueDelay=0;await p.emulateMedia({reducedMotion:'no-preference'});
+  }
   assert.equal(await p.locator('.account-card .country-image').count(),4);assert(await p.locator('#country-feature .featured-country').isVisible());
   await p.locator('#stock-countries').click();assert.equal(await p.locator('.category.stock-hidden:visible').count(),0);await p.locator('#all-countries').click();
   assert.equal(await p.locator('.category').nth(1).getAttribute('data-category'),'auto-cl-clear');

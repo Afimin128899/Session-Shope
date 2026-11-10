@@ -573,7 +573,9 @@
   $('#order-search').oninput=()=>{clearTimeout(searchTimer);searchTimer=setTimeout(()=>loadOrders().catch(error),300);};
   $('#load-more').onclick = async () => { $('#load-more').disabled = true; try { await loadMarket(true); } catch (e) { error(e); } finally { $('#load-more').disabled = false; } };
   $('#more-orders').onclick = async () => { $('#more-orders').disabled = true; try { await loadOrders(true); } catch (e) { error(e); } finally { $('#more-orders').disabled = false; } };
-  $('#refresh').onclick = () => loadMarket().then(() => notice()).catch(error); $('#refresh-orders').onclick = () => loadOrders().catch(error); $('#retry-login').onclick = initialize;
+  $('#refresh').onclick = async e => {const b=e.currentTarget;b.disabled=true;try{await loadMarket();notice();}catch(e){error(e);}finally{b.disabled=false;}};
+  $('#refresh-orders').onclick = async e => {const b=e.currentTarget;b.disabled=true;try{await loadOrders();}catch(e){error(e);}finally{b.disabled=false;}};
+  $('#retry-login').onclick = initialize;
   document.addEventListener('visibilitychange', () => { if (!document.hidden) synchronize(); }); window.addEventListener('online', synchronize);
   window.addEventListener('offline', () => notice(SbandT("Нет соединения. Подключись к интернету, чтобы обновить данные.")));
   setInterval(countdown, 1000); setInterval(synchronize, 15000); setInterval(refreshSpam, 5000); initialize();

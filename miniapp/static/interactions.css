@@ -1,0 +1,52 @@
+/* Button feedback never delays event handlers or changes layout. */
+button {
+  transform-origin: center;
+  transition: transform 120ms cubic-bezier(.2,.7,.3,1), background-color 160ms ease,
+              border-color 160ms ease, color 160ms ease, opacity 160ms ease;
+}
+button:active:not(:disabled) { transform: scale(.975); }
+.icon-button:active:not(:disabled), .header-tool:active:not(:disabled),
+.heart:active:not(:disabled) { transform: scale(.92); }
+.country-tile:active:not(:disabled), .category:active:not(:disabled),
+.recent-product:active:not(:disabled), .department-card:active:not(:disabled) {
+  transform: scale(.985);
+}
+.mobile-nav button { transition-duration: 110ms, 180ms, 180ms, 180ms, 160ms; }
+.mobile-nav button .sband-emoji { transition: opacity 160ms ease; }
+button.is-loading {
+  position: relative;
+  color: transparent !important;
+  opacity: .8;
+  cursor: progress;
+  transform: none;
+}
+button.is-loading > * { visibility: hidden; }
+button.is-loading::after {
+  content: '';
+  position: absolute;
+  box-sizing: border-box;
+  width: 16px;
+  height: 16px;
+  left: calc(50% - 8px);
+  top: calc(50% - 8px);
+  border: 2px solid #87968155;
+  border-top-color: #d0efaa;
+  border-radius: 50%;
+  animation: sband-button-loading 750ms linear infinite;
+  pointer-events: none;
+}
+.primary-button.is-loading::after, .buy-button.is-loading::after {
+  border-color: #17220b35;
+  border-top-color: #17220b;
+}
+@keyframes sband-button-loading { to { transform: rotate(360deg); } }
+@media (hover: none) {
+  .primary-button:hover:not(:disabled), .buy-button:hover:not(:disabled) { background: #c8f76b; }
+  .buy-button.added:hover:not(:disabled) { background: #354326; }
+  .secondary-button:hover { background: #2a2f33; }
+}
+@media (prefers-reduced-motion: reduce) {
+  button, .mobile-nav button, .mobile-nav button .sband-emoji { transition: none !important; }
+  button:active:not(:disabled) { transform: none !important; }
+  button.is-loading::after { animation: none !important; }
+}
