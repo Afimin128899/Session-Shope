@@ -166,3 +166,18 @@ async def disable_promo(admin, code):
             raise ValueError(tr('Промокод не найден.'))
         await cur.execute('UPDATE promocodes SET max_uses=uses WHERE code=%s', (code,))
         await _record(cur, admin, 'web_promo_disable', 'promo', code[:64], {})
+
+
+async def payment_invoices(query='', status='', page=0):
+    conditions, args = ['1=1'], []
+    if status:
+        conditions.append('p.status=%s')
+        args.append(status)
+    if query:
+        conditions.append('(CAST(p.user_id AS CHAR)=%s OR p.invoice_id=%s OR u.username LIKE %s)')
+        args += [query, query, '%' + query + '%']
+    items = await rows('SELECT p.provider,p.invoice_id,p.user_id,p.amount_rub,p.credited_amount,p.status,'
+                       'p.created_at,p.expires_at,u.username FROM payment_invoices p '
+                       'LEFT JOIN users u ON u.id=p.user_id WHERE ' + ' AND '.join(conditions) +
+                       ' ORDER BY p.created_at DESC,p.provider,p.invoice_id LIMIT 31 OFFSET %s', (*args, page * 30))
+    return {'items': items[:30], 'has_more': len(items) > 30}

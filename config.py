@@ -27,6 +27,9 @@ ADMIN_IDS = [
     if value.strip().isdigit()
 ]
 
+HELEKET_MERCHANT_ID = os.getenv("HELEKET_MERCHANT_ID", "").strip()
+HELEKET_PAYMENT_KEY = os.getenv("HELEKET_PAYMENT_KEY", "").strip()
+
 PLATEGA_MERCHANT_ID = os.getenv("PLATEGA_MERCHANT_ID", "").strip()
 PLATEGA_SECRET = os.getenv("PLATEGA_SECRET", "").strip()
 

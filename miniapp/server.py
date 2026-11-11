@@ -186,7 +186,7 @@ async def catalog(request):
     sort = request.query.get('sort', 'new')
     category = request.query.get('category', '')
     query = request.query.get('q', '').strip()
-    if sort not in {'new', 'price_asc', 'price_desc', 'discount'} or len(category) > 64 or len(query) > 100:
+    if sort not in {'popular', 'new', 'price_asc', 'price_desc', 'discount'} or len(category) > 64 or len(query) > 100:
         raise ValueError
     bounds = []
     for key in ('min_price', 'max_price'):
@@ -347,6 +347,23 @@ async def invoice_status(request):
     return response({key: row[key] for key in ('status', 'amount_rub', 'credited_amount')})
 
 
+async def verify_invoice(request):
+    if limited(request.app, request['user']['id'], purchase=True):
+        return response({'error': tr('Подождите перед повтором.'), 'code': 'rate_limited'}, 429)
+    provider, identity = request.match_info['provider'], request.match_info['invoice']
+    if provider not in {*payments.PROVIDERS, 'stars'} or not 1 <= len(identity) <= 128:
+        raise ValueError
+    row = await commerce.invoice(provider, identity, request['user']['id'])
+    if not row:
+        return response({'error': tr('Счёт не найден.'), 'code': 'not_found'}, 404)
+    if provider != 'stars' and row['status'] == 'pending':
+        try:
+            await payments.check_invoice(request['user']['id'], provider, identity)
+        except ValueError as exc:
+            raise storage.CheckoutError(str(exc), 'invoice_unavailable') from None
+    return await invoice_status(request)
+
+
 async def promo_preview(request):
     body=await json_body(request)
     try:
@@ -466,6 +483,16 @@ async def health(request):
     return response({"status": "ok", "version": BOT_VERSION})
 
 
+async def wallet_summary(request):
+    from miniapp.wallet import summary
+    return response(await summary(request['user']['id']))
+
+
+async def wallet_transactions(request):
+    from database.activity import history
+    return response(await history(request['user']['id'], page_number(request)))
+
+
 async def payment_history(request):
     import aiomysql
     before = request.query.get('before', '0')
@@ -474,7 +501,7 @@ async def payment_history(request):
     cursor = int(before)
     query = '''SELECT id,amount,currency,method,UNIX_TIMESTAMP(created_at) AS created_at FROM payment_logs
                WHERE user_id=%s AND amount>0 AND method IN
-               ('crypto_pay','xrocket_pay','lave_pay','laveshka_pay','platega_pay','stars_pay')'''
+               ('crypto_pay','xrocket_pay','lave_pay','laveshka_pay','platega_pay','stars_pay','heleket_pay')'''
     args = (request['user']['id'],)
     if cursor:
         query += ' AND id<%s'
@@ -507,6 +534,8 @@ def create_app(*, token=None, bot=None, bot_username=''):
         web.get('/about', about),
         web.get('/', index), web.get('/api/health', health),web.get('/api/app-info',app_info),
         web.get('/api/payment-history', payment_history),
+        web.post('/api/invoices/{provider}/{invoice}/check', verify_invoice),
+        web.get('/api/wallet/summary', wallet_summary),web.get('/api/wallet/transactions', wallet_transactions),
         web.get('/api/referrals',referral_info),web.get('/api/spam-status',spam_statuses),
         web.get('/api/status',shop_status),web.post('/api/preferences/language',save_language),
         web.get('/api/rewards',reward_status),web.post('/api/rewards/claim',reward_claim),

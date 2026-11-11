@@ -8,18 +8,18 @@ from uuid import uuid4
 
 import config
 from database import commerce, db
-from services import cryptopay, xrocket, lavepay, platega
+from services import cryptopay, xrocket, lavepay, platega, heleket
 from utils.commerce_policy import MAX_NEW_STARS
 from services.exchange import convert_rub_to_usdt
 from services.operations import payment_health
 
 logger=logging.getLogger(__name__)
-PROVIDERS={'crypto':cryptopay,'xrocket':xrocket,'lave':lavepay,'platega':platega}
+PROVIDERS={'crypto':cryptopay,'xrocket':xrocket,'lave':lavepay,'platega':platega,'heleket':heleket}
 
 
 def methods(*, sbp_stub=False):
     return [{'id':key,'name':name,'enabled':bool(getattr(config,variable,'')),'currency':'RUB','min':10,'max':1000000} for key,name,variable in [
-        ('crypto','Crypto Pay','CRYPTO_PAY_TOKEN'),('xrocket','xRocket','XROCKET_API_KEY'),('lave','Laveshka (Lava Pay)','LAVE_PAY_API_KEY')]] + [{'id':'platega','name':tr('СБП · Рубли'),'enabled':sbp_stub or bool(getattr(config,'PLATEGA_MERCHANT_ID','') and getattr(config,'PLATEGA_SECRET','')),'currency':'RUB','min':1,'max':10000,'stub':sbp_stub}] + [{'id':'stars','name':'Telegram Stars ⭐','enabled':bool(getattr(config,'BOT_TOKEN','')),'unit':'XTR','rate':'1.20','min':1,'max':MAX_NEW_STARS}]
+        ('crypto','Crypto Pay','CRYPTO_PAY_TOKEN'),('xrocket','xRocket','XROCKET_API_KEY'),('lave','Laveshka (Lava Pay)','LAVE_PAY_API_KEY')]] + [{'id':'heleket','name':'Криптовалюта (Heleket)','enabled':bool(getattr(config,'HELEKET_MERCHANT_ID','') and getattr(config,'HELEKET_PAYMENT_KEY','')),'currency':'RUB','min':50,'max':1000000}] + [{'id':'platega','name':tr('СБП · Рубли'),'enabled':sbp_stub or bool(getattr(config,'PLATEGA_MERCHANT_ID','') and getattr(config,'PLATEGA_SECRET','')),'currency':'RUB','min':1,'max':10000,'stub':sbp_stub}] + [{'id':'stars','name':'Telegram Stars ⭐','enabled':bool(getattr(config,'BOT_TOKEN','')),'unit':'XTR','rate':'1.20','min':1,'max':MAX_NEW_STARS}]
 
 
 class PaymentUnavailable(ValueError):
@@ -44,7 +44,7 @@ def invoice_payload(provider, invoice):
 
 
 def parse_amount(value, provider=None):
-    minimum, maximum = (Decimal('1'), Decimal('10000')) if provider == 'platega' else (Decimal('10'), Decimal('1000000'))
+    minimum, maximum = (Decimal('1'), Decimal('10000')) if provider == 'platega' else (Decimal('50') if provider == 'heleket' else Decimal('10'), Decimal('1000000'))
     try:
         if isinstance(value, bool) or len(str(value)) > 40:
             raise ValueError
@@ -52,7 +52,7 @@ def parse_amount(value, provider=None):
         if not amount.is_finite() or not minimum <= amount <= maximum or amount != amount.quantize(Decimal('.01')):
             raise ValueError
     except (InvalidOperation, ValueError):
-        raise ValueError(tr('Сумма должна быть от {0} до {1} ₽, до двух знаков после запятой.', '1' if provider == 'platega' else '10', '10 000' if provider == 'platega' else '1 000 000')) from None
+        raise ValueError(tr('Сумма должна быть от {0} до {1} ₽, до двух знаков после запятой.', '1' if provider == 'platega' else '50' if provider == 'heleket' else '10', '10 000' if provider == 'platega' else '1 000 000')) from None
     return amount
 
 
@@ -70,6 +70,10 @@ async def create_deposit(user_id, username, provider, amount):
         url = invoice.get('bot_invoice_url') if invoice else None
     elif provider == 'platega':
         invoice = await platega.create_invoice(amount, f'Пополнение SBAND ACCS на {amount:.2f} ₽', payload, user_id)
+        invoice_id = invoice.get('id') if invoice else None
+        url = invoice.get('pay_url') if invoice else None
+    elif provider == 'heleket':
+        invoice = await heleket.create_invoice(amount, order_id, payload)
         invoice_id = invoice.get('id') if invoice else None
         url = invoice.get('pay_url') if invoice else None
     elif provider == 'xrocket':
@@ -121,6 +125,8 @@ async def settle_invoice(row, invoice):
         raise ValueError('Invoice identity mismatch')
     if provider == 'platega':
         platega.verify(invoice, row)
+    elif provider == 'heleket':
+        heleket.verify(invoice, row)
     payload=invoice_payload(provider,invoice)
     try:
         prefix,user,amount=payload.split(':')

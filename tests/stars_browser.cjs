@@ -33,6 +33,8 @@ const server = http.createServer((req, res) => {
     if (url.pathname === '/api/me') data = {user:{id:42,first_name:'Fixture',username:'fixture'},balance:state.balance,balance_usdt:'0',version:'fixture',bot_username:'fixture_bot',is_admin:false};
     else if (url.pathname === '/api/shop-info') data = {wholesale:{minimum:'500',percent:'15'},support_hours:'Fixture',response_time:'Fixture'};
     else if (url.pathname === '/api/catalog') data = {categories:[],items:[],has_more:false};
+    else if (url.pathname === '/api/wallet/summary') data = {deposited:'0',spent:'0',purchase_count:0,missing_amounts:0};
+    else if (url.pathname === '/api/orders') data = {items:[],has_more:false};
     else if (url.pathname === '/api/departments') data = {items:[]};
     else if (url.pathname === '/api/payment-methods') data = {items:[{id:'crypto',name:'Crypto Pay',enabled:true,min:10,max:1000000},{id:'stars',name:'Telegram Stars ⭐',enabled:true,unit:'XTR',rate:'1.20',min:1,max:10000}]};
     else if (url.pathname === '/api/invoices' && request.method() === 'POST') {

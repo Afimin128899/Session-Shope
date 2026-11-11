@@ -48,7 +48,7 @@ class AdminAPI(unittest.IsolatedAsyncioTestCase):
     asyncTearDown=test_miniapp.MiniAppAPITests.asyncTearDown
     async def test_every_admin_route_rejects_non_admin_before_database_work(self):
         with patch.object(admin_web,'overview',AsyncMock()) as get,patch.object(imports,'create',AsyncMock()) as create:
-            for method,path in [('GET','overview'),('GET','stock'),('GET','orders'),('GET','tickets'),('GET','users'),('GET','settings'),('GET','audit'),('GET','imports'),('POST','imports'),('POST','approvals/1'),('POST','users/1/balance'),('PATCH','stock/1'),('DELETE','stock/1')]:
+            for method,path in [('GET','overview'),('GET','stock'),('GET','orders'),('GET','tickets'),('GET','users'),('GET','settings'),('GET','payments'),('POST','payments/check'),('GET','audit'),('GET','imports'),('POST','imports'),('POST','approvals/1'),('POST','users/1/balance'),('PATCH','stock/1'),('DELETE','stock/1')]:
                 r=await self.client.request(method,'/api/admin/'+path,headers=self.headers)
                 self.assertEqual(r.status,403,(method,path))
             get.assert_not_awaited();create.assert_not_awaited()

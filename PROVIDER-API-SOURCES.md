@@ -52,3 +52,12 @@ python -m unittest discover -s tests -p test_provider_apis.py
 Проверен опубликованный в PyPI сторонний SDK [platega==0.1.5](https://pypi.org/project/platega/0.1.5/), исходники [komarukomaru/platega](https://github.com/komarukomaru/platega): `client.py` (адрес `https://app.platega.io`, X-MerchantId/X-Secret, POST `/transaction/process`, GET `/transaction/{id}`), `models.py` (СБП=2, статус `CONFIRMED`, UUID, redirect, paymentDetails, payload). Это сторонний SDK, не доказательство доступности текущего боевого API.
 
 Загруженная владельцем PDF «памятка почты.pdf» подтверждает `metadata.user_email` и постоянный Telegram ID в формате `ID@telegram.org` (правило на стр. 1; пример стр. 2 использует `@t.me`). Положения `paymentMethod` в SDK и примере PDF различаются; запрос содержит одинаковое значение 2 в обоих местах, без повторного POST или переключения API. Официальный сайт документации и страницы Telegra.ph были недоступны в среде (CONNECT 403). Рабочие ключи и реальные оплаченные счета не использовались. Подробности и настройка: [PLATEGA.md](PLATEGA.md).
+
+
+## Heleket
+
+Прямое чтение https://doc.heleket.com/methods/payments/creating-invoice в этой облачной среде вернуло 403. Проверены опубликованные исходники официального npm-пакета **@heleket-payment/sdk 0.1.0**, репозиторий [Heleket/nodejs-sdk](https://github.com/Heleket/nodejs-sdk), gitHead `c2579e5c384f5638c53c3040ee9a0cc102d323b3`. Пакет только прочитан, в зависимости проекта не добавлен.
+
+Контракт: `https://api.heleket.com`, POST `/v1/payment` и POST `/v1/payment/info`, заголовки `merchant` и `sign`; подпись `md5(base64(точные байты JSON) + payment_key)`, эти же байты отправляются в HTTP. Счёт содержит `amount`, `currency: RUB`, уникальный `order_id`, `additional_data` с привязкой к владельцу и сумме, `lifetime: 3600`, `accuracy_payment_percent: 0`. Ответ `{state:0,result:{uuid,...}}`. Опрос по UUID; оплата принимается только при `paid`/`paid_over` и `is_final: true`, совпадении UUID, RUB, суммы и привязки к владельцу. Переплата не увеличивает локальную заявленную сумму.
+
+Проверки используют тестовые HTTP-ответы и одноразовую MariaDB. Рабочие ключи и реальные оплаченные счета не использовались. До открытия кассы необходимо проверить реальный счёт с ключом своего мерчанта на VPS.

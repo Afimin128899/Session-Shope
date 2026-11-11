@@ -170,6 +170,53 @@ async def main():
             assert len(foreign_history['items'])==1 and D(foreign_history['items'][0]['amount'])==999
             assert (await client.get(base+'payment-history')).status==401
             report('Top-up history isolates users, supports cursors, includes Lava and excludes rewards/refunds and private references')
+            summary=await (await client.get(base+'wallet/summary?user_id=44',headers=own)).json()
+            assert D(summary['deposited'])==30 and D(summary['spent'])==200 and summary['purchase_count']==2,summary
+            other_summary=await (await client.get(base+'wallet/summary',headers=foreign)).json()
+            assert D(other_summary['deposited'])==999 and D(other_summary['spent'])==0
+            ledger=await (await client.get(base+'wallet/transactions?user_id=44',headers=own)).json()
+            assert {event['kind'] for event in ledger['items']} >= {'purchase','payment','adjustment'},ledger
+            assert not any(event['amount'] is not None and D(event['amount'])==999 for event in ledger['items'])
+            assert 'private-own' not in str(ledger) and 'private-foreign' not in str(ledger)
+            assert (await client.get(base+'wallet/summary')).status==401
+            assert (await client.get(base+'wallet/transactions?page=-1',headers=own)).status==400
+            popular=await (await client.get(base+'catalog?sort=popular',headers=own)).json()
+            sold_counts=dict(await sql("SELECT a.country,COUNT(*) FROM purchases p JOIN accounts a ON a.id=p.account_id WHERE p.status<>'refunded' GROUP BY a.country"))
+            ranks=[int(sold_counts.get(item['category'],0)) for item in popular['items']]
+            assert ranks==sorted(ranks,reverse=True)
+            report('Wallet totals are owner-scoped and exclude bonuses; full history includes own adjustments; popularity uses real purchases')
+            from database import commerce
+            from unittest.mock import patch,AsyncMock
+            await commerce.register_invoice('crypto','verified-fixture',43,D(50))
+            assert (await client.post(base+'invoices/crypto/verified-fixture/check')).status==401
+            assert (await client.post(base+'invoices/crypto/verified-fixture/check',headers=foreign,json={})).status==404
+            before=await balance(43)
+            provider_reply={'invoice_id':'verified-fixture','status':'paid','payload':'rub_topup:43:50.00','currency_type':'fiat','fiat':'RUB','amount':'50.00'}
+            with patch.object(payments.cryptopay,'get_invoice',AsyncMock(return_value=provider_reply)) as get:
+                verified=await client.post(base+'invoices/crypto/verified-fixture/check',headers=own,json={})
+                assert verified.status==200 and (await verified.json())['status']=='credited'
+                after=await balance(43);assert after-before==55
+                assert (await client.post(base+'invoices/crypto/verified-fixture/check',headers=own,json={})).status==200
+                assert await balance(43)==after and get.await_count==1
+            assert (await client.get(base+'admin/payments',headers=own)).status==403
+            admin_payments=await (await client.get(base+'admin/payments?q=43',headers=admin)).json()
+            assert admin_payments['items'][0]['status']=='credited'
+            assert (await client.post(base+'admin/payments/check',headers=own,json={'provider':'crypto','invoice_id':'verified-fixture'})).status==403
+            report('Manual payment verification authenticates owner and credits one confirmed payment once; payment administration is admin-only')
+            heleket_id='11111111-1111-4111-8111-111111111111'
+            await commerce.register_invoice('heleket',heleket_id,43,D(50))
+            heleket_row=await commerce.invoice('heleket',heleket_id,43)
+            heleket_paid={'id':heleket_id,'uuid':heleket_id,'status':'paid','is_final':True,'amount':'50.00','currency':'RUB','payload':'rub_topup:43:50.00'}
+            before=await balance(43)
+            assert await payments.settle_invoice(heleket_row,heleket_paid)==(50.0,0.0)
+            assert await payments.settle_invoice(heleket_row,heleket_paid) is None
+            assert await balance(43)==before+50
+            assert (await sql("SELECT COUNT(*) FROM payment_logs WHERE user_id=43 AND method='heleket_pay'"))[0][0]==1
+            refreshed=await (await client.get(base+'wallet/summary',headers=own)).json()
+            assert D(refreshed['deposited'])==130
+            report('Confirmed Heleket payment credits exactly once through the existing ledger, with correct wallet totals')
+
+
             d=await (await client.get(base+'departments',headers=own)).json()
             assert len(d['items'])==8 and all(not item['is_active'] for item in d['items'])
             denied=await client.post(base+'admin/categories',headers=own,json={'slug':'section-gmail','name':'Gmail','active':True})

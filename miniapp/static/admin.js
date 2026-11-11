@@ -3,8 +3,8 @@
  const $=s=>document.querySelector(s), esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
  const money=v=>new Intl.NumberFormat(window.SbandI18n.locale,{maximumFractionDigits:2}).format(Number(v||0));
  const A={enabled:false,view:'overview',page:0,q:'',status:'available',rows:[],categories:[],selected:new Set(),batch:null,poll:null,revision:0,busy:false};
- const titles={overview:'Обзор',stock:'Товары',imports:'Массовый импорт',orders:'Заказы',tickets:'Поддержка',approvals:'Согласование возвратов',users:'Покупатели',categories:'Категории',promos:'Промокоды',settings:'Настройки магазина',audit:'Журнал действий'};
- const statusLabel={available:'В продаже',review:'На проверке',sold:'Продан',refunded:'Возвращён',replaced:'Заменён',checking:'Проверяется',ready:'Готов',error:'Ошибка',duplicate:'Дубликат',imported:'Импортирован',committed:'Опубликован',discarded:'Отменён',failed:'Не завершён',expired:'Истёк',open:'Открыто',waiting_user:'Ждёт покупателя',closed:'Закрыто',issued:'Выдан',completed:'Завершён'};
+ const titles={payments:'Платежи',overview:'Обзор',stock:'Товары',imports:'Массовый импорт',orders:'Заказы',tickets:'Поддержка',approvals:'Согласование возвратов',users:'Покупатели',categories:'Категории',promos:'Промокоды',settings:'Настройки магазина',audit:'Журнал действий'};
+ const statusLabel={pending:'Ожидает оплаты',credited:'Зачислен',available:'В продаже',review:'На проверке',sold:'Продан',refunded:'Возвращён',replaced:'Заменён',checking:'Проверяется',ready:'Готов',error:'Ошибка',duplicate:'Дубликат',imported:'Импортирован',committed:'Опубликован',discarded:'Отменён',failed:'Не завершён',expired:'Истёк',open:'Открыто',waiting_user:'Ждёт покупателя',closed:'Закрыто',issued:'Выдан',completed:'Завершён'};
  const date=(v,utc=false)=>{if(!v)return '—';const raw=String(v),iso=raw.replace(' ','T');const stamp=new Date(/[Zz]$|[+-]\d\d:\d\d$/.test(iso)?iso:iso+(utc?'Z':'+03:00'));return Number.isFinite(stamp.getTime())?stamp.toLocaleString(window.SbandI18n.locale,{timeZone:'Europe/Moscow',dateStyle:'short',timeStyle:'short'}):raw;};
  const badge=v=>`<span class="admin-badge ${['ready','available','committed'].includes(v)?'good':['error','failed','duplicate','refunded'].includes(v)?'warn':''}">${esc(SbandT(statusLabel[v]||v))}</span>`;
  function notice(text=''){$('#admin-notice').textContent=text;$('#admin-notice').hidden=!text;}
@@ -65,6 +65,11 @@
    }else if(view==='settings'){
     const d=await request('settings');if(rev!==A.revision)return;A.settings=d;html=head()+SbandT("<div class=\"admin-callout\"><div><h3>Условия магазина</h3><p>Опт {0}% от {1} ₽.<br>Согласование возвратов от {2} ₽.<br>Низкий остаток: {3} шт.</p></div><button class=\"primary-button\" id=\"admin-edit-settings\">Изменить</button></div><div class=\"admin-callout\"><div><h3>Поддержка</h3><p>{4}<br>{5}</p><p>🛠 Технические работы: {6}</p><p>⏸ Продажи: {7}</p><p data-no-translate>{8}<br>{9}<br>{10}</p></div></div>",money(d.wholesale_pct),money(d.wholesale_min_total),money(d.refund_approval_threshold),esc(d.low_stock_limit||'3'),esc(d.support_hours||SbandT("График не указан")),esc(d.support_eta||SbandT("Срок ответа не указан")),d.maintenance_mode==='1'?SbandT("включены"):SbandT("выключены"),d.sales_paused==='1'?SbandT("приостановлены"):SbandT("открыты"),esc(d.maintenance_reason||''),esc(d.maintenance_eta||''),esc(d.sales_pause_reason||''));
     html += SbandT('<button class="secondary-button" id="admin-referral-blocks">Блокировки наград</button>');
+   }else if(view==='payments'){
+    const d=await request('payments?'+new URLSearchParams({q:A.q,status:A.status,page:A.page}));if(rev!==A.revision)return;
+    const methods={crypto:'Crypto Pay',xrocket:'xRocket',lave:'Lava Pay',platega:'СБП',stars:'Telegram Stars',heleket:'Heleket'};
+    const options=[['','Все статусы'],['pending','Ожидает оплаты'],['credited','Зачислен'],['expired','Истёк'],['refunded','Возвращён']];
+    html=head()+search(`<select name="status" aria-label="${SbandT('Статус платежа')}">${options.map(([value,label])=>`<option value="${value}" ${A.status===value?'selected':''}>${esc(SbandT(label))}</option>`).join('')}</select>`)+table([SbandT('Счёт'),SbandT('Покупатель'),SbandT('Сумма'),SbandT('Статус'),SbandT('Создан МСК'),''],d.items.map(row=>`<tr><td>${esc(methods[row.provider]||row.provider)}<small>${esc(row.invoice_id)}</small></td><td>${row.user_id}<small>${esc(row.username?'@'+row.username:'')}</small></td><td>${money(row.amount_rub)} ₽${row.credited_amount!=null?`<small>${SbandT('Зачислено')}: ${money(row.credited_amount)} ₽</small>`:''}</td><td>${badge(row.status)}</td><td>${esc(date(row.created_at,true))}</td><td>${row.status==='pending'?button(SbandT('Проверить'),'data-check-payment',row.provider+':'+row.invoice_id):'—'}</td></tr>`))+pages(d.has_more);
    }else if(view==='promos'){
     const d=await request('promos');if(rev!==A.revision)return;html=head(SbandT("<button class=\"primary-button\" id=\"admin-promo-create\">+ Промокод</button>"))+table([SbandT("Код"),SbandT("Условия"),SbandT("Использовано"),''],d.items.map(r=>`<tr><td>${esc(r.code)}</td><td>${money(r.value)} ${r.kind==='discount'?SbandT("% скидки"):SbandT("₽ на баланс")}</td><td>${r.uses} / ${r.max_uses}</td><td>${Number(r.uses)<Number(r.max_uses)?button(SbandT("Отключить"),'data-disable-promo',r.code):SbandT("Отключён")}</td></tr>`));
    }else if(view==='audit'){
@@ -78,7 +83,7 @@
   finally{if(rev===A.revision)$('#admin-content').setAttribute('aria-busy','false');}
  }
  function bindView(){
-  const searchForm=$('#admin-search');if(searchForm)searchForm.onsubmit=e=>{e.preventDefault();const d=new FormData(searchForm);A.q=String(d.get('q')||'');A.status=String(d.get('status')||A.status);A.page=0;load();};
+  const searchForm=$('#admin-search');if(searchForm)searchForm.onsubmit=e=>{e.preventDefault();const d=new FormData(searchForm);A.q=String(d.get('q')||'');A.status=d.get('status')===null?A.status:String(d.get('status'));A.page=0;load();};
   if($('#admin-zip'))$('#admin-zip').onchange=async e=>{
    const file=e.target.files[0];if(!file)return;if(file.size>8*1024*1024){notice(SbandT("Максимальный размер ZIP — 8 МБ."));return;}if(A.busy)return;
    A.busy=true;$('#admin-zip').disabled=true;$('#import-progress').textContent=SbandT("Загружаем архив…");
@@ -86,7 +91,7 @@
    catch(e){notice(e.message);if($('#admin-zip'))$('#admin-zip').disabled=false;}finally{A.busy=false;}
   };
  }
- function changeView(view){if(!titles[view])return;A.view=view;A.page=0;A.q='';A.status=view==='tickets'?'open':'available';A.before=0;A.batch=null;load();}
+ function changeView(view){if(!titles[view])return;A.view=view;A.page=0;A.q='';A.status=view==='tickets'?'open':view==='payments'?'':'available';A.before=0;A.batch=null;load();}
  async function showBatch(batch){
   const revision=++A.revision;A.batch=batch;clearTimeout(A.poll);
   try{
@@ -149,6 +154,7 @@
   if(b.dataset.spamCheck){b.disabled=true;try{const r=await post('stock/'+Number(b.dataset.spamCheck)+'/spam-check');await load();notice(r.queued?SbandT("Проверка поставлена в очередь. Обновите раздел после её обработки."):SbandT("Проверка уже выполняется или повтор пока недоступен."));}catch(e){notice(e.message);}finally{b.disabled=false;}}
   if(b.dataset.editStock)editStock(Number(b.dataset.editStock));
   if(b.dataset.reviewStock){const r=A.rows.find(r=>r.id===Number(b.dataset.reviewStock));if(r){const enabled=r.status==='available';form(enabled?SbandT("🔎 Отправить на проверку"):SbandT("▶ Вернуть в продажу"),enabled?SbandT("Аккаунт исчезнет из каталога. Резерв и запись в корзине будут отменены без списания денег."):SbandT("Товар вернётся в активную категорию. Проверка спамблока будет поставлена в очередь."),input(SbandT("Причина решения"),'reason','','text','required minlength="3" maxlength="500"'),v=>post('stock/'+r.id+'/review',{enabled,reason:v.reason}),SbandT("Подтвердить решение"));}}
+  if(b.dataset.checkPayment){if(A.busy)return;A.busy=true;b.disabled=true;try{const value=b.dataset.checkPayment,separator=value.indexOf(':');await post('payments/check',{provider:value.slice(0,separator),invoice_id:value.slice(separator+1)});await load();notice(SbandT('Статус платежа обновлён.'));}catch(e){notice(e.message);}finally{A.busy=false;if(b.isConnected)b.disabled=false;}return;}
   if(b.dataset.adminOrder)orderDetail(Number(b.dataset.adminOrder));
   if(b.dataset.adminTicket)ticketDetail(Number(b.dataset.adminTicket));
   if(b.dataset.ticketOlder){const [id,before]=b.dataset.ticketOlder.split(':').map(Number);ticketDetail(id,before);}

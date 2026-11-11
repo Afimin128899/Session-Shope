@@ -4,7 +4,8 @@ import aiomysql
 from database.db import _get_pool
 
 LABELS = {'purchase':'Покупка','payment':'Пополнение','refund':'Возврат',
-          'balance_code':'Промокод на баланс','discount_code':'Промокод скидки'}
+          'balance_code':'Промокод на баланс','discount_code':'Промокод скидки',
+          'welcome':'Приветственный бонус','reward':'Бонус','adjustment':'Корректировка баланса'}
 
 
 async def init_schema(cur):
@@ -45,8 +46,21 @@ async def history(user_id,page=0):
                 UNION ALL
                 SELECT CONCAT('promo:',id),kind,reference,amount,currency,created_at
                     FROM customer_events WHERE user_id=%s
+                UNION ALL
+                SELECT CONCAT('welcome:',user_id),'welcome','',amount,'RUB',created_at
+                    FROM welcome_bonuses WHERE user_id=%s
+                UNION ALL
+                SELECT CONCAT('reward:',id),'reward','',amount,'RUB',created_at
+                    FROM reward_claims WHERE user_id=%s
+                UNION ALL
+                SELECT CONCAT('adjustment:',id),'adjustment','',
+                    IF(JSON_VALID(details),CAST(JSON_UNQUOTE(JSON_EXTRACT(details,'$.after')) AS DECIMAL(18,8))-
+                    CAST(JSON_UNQUOTE(JSON_EXTRACT(details,'$.before')) AS DECIMAL(18,8)),NULL),
+                    IF(JSON_VALID(details),JSON_UNQUOTE(JSON_EXTRACT(details,'$.currency')),NULL),created_at
+                    FROM admin_audit_log WHERE target_type='user' AND target_id=%s
+                    AND action IN ('balance_add','balance_set') AND JSON_VALID(details)
             ) events ORDER BY occurred_at DESC,event_key DESC LIMIT 21 OFFSET %s''',
-            (user_id,user_id,user_id,user_id,max(0,min(page,1000))*20))
+            (user_id,user_id,user_id,user_id,user_id,user_id,str(user_id),max(0,min(page,1000))*20))
             rows=list(await cur.fetchall())
             for row in rows[:20]:
                 row['label']=LABELS.get(row['kind'],'Операция')
@@ -56,4 +70,4 @@ async def history(user_id,page=0):
                     except ValueError: stamp=None
                 row['occurred_at']=stamp.replace(tzinfo=timezone.utc).isoformat() if stamp else None
             return {'items':rows[:20],'has_more':len(rows)>20,
-                    'note':'История промокодов сохраняется с версии 4.1. Пополнения указаны без бонусов. Старые даты без точного времени не восстанавливаются.'}
+                    'note':'Показаны сохранённые операции. Покупки без сохранённой суммы отмечены отдельно; старые даты без точного времени не восстанавливаются. Дополнительные бонусы к внешним пополнениям включены в баланс, но могут отсутствовать отдельной строкой.'}

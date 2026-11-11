@@ -445,7 +445,7 @@ async def credit_paid_deposit(
         amount = amount.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
     except InvalidOperation as exc:
         raise ValueError("Invalid deposit amount") from exc
-    if provider not in {"lave", "xrocket", "crypto", "platega"} or not invoice_id:
+    if provider not in {"lave", "xrocket", "crypto", "platega", "heleket"} or not invoice_id:
         raise ValueError("Invalid payment reference")
     comment_key = f"{provider}_{invoice_id}"
     if len(comment_key) > 255:

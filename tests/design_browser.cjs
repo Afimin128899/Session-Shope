@@ -15,7 +15,7 @@ const root=path.join(__dirname,'../miniapp/static');
    if(p.startsWith('/api/')){
     let data={};const key=p.slice(5),body=route.request().postDataJSON();
     if(key==='app-info')data={bot_username:'fixture_bot'};
-    else if(key==='payment-methods')data={items:[{id:'crypto',name:'Crypto Pay',enabled:true,min:'10',max:'1000000'},{id:'xrocket',name:'xRocket',enabled:true,min:'10',max:'1000000'},{id:'lave',name:'Laveshka (Lava Pay)',enabled:true,min:'10',max:'1000000'},{id:'platega',name:'СБП · Рубли',enabled:true,min:'1',max:'10000'},{id:'stars',name:'Telegram Stars',enabled:true,min:'1',max:'10000'}]};
+    else if(key==='payment-methods')data={items:[{id:'crypto',name:'Crypto Pay',enabled:true,min:'10',max:'1000000'},{id:'xrocket',name:'xRocket',enabled:true,min:'10',max:'1000000'},{id:'lave',name:'Laveshka (Lava Pay)',enabled:true,min:'10',max:'1000000'},{id:'platega',name:'СБП · Рубли',enabled:true,min:'1',max:'10000'},{id:'heleket',name:'Криптовалюта (Heleket)',enabled:true,min:'50',max:'1000000'},{id:'stars',name:'Telegram Stars',enabled:true,min:'1',max:'10000'}]};
     else if(key==='invoices'){invoiceRequests++;assert.equal(body.provider,'platega');assert.equal(body.amount,'1');return route.fulfill({status:409,contentType:'application/json',body:JSON.stringify({error:'Оплата пока недоступна',code:'payment_unavailable'})});}
     else if(key==='payment-history')data={items:u.searchParams.has('before')?[{id:1,method:'crypto_pay',amount:'10',currency:'RUB',created_at:'2026-11-01 10:00:00'}]:[{id:2,method:'stars_pay',amount:'120',currency:'RUB',created_at:1794132000}],has_more:!u.searchParams.has('before')};
     else if(key==='departments')data={items:departments};
@@ -25,14 +25,18 @@ const root=path.join(__dirname,'../miniapp/static');
     else if(key==='support/77/reply'){supportMessages.unshift({id:supportMessages.length+1,author_role:'user',body:body.body});data={ok:true};}
     else if(key==='preferences/language'){language=body.language;data={language};}
     else if(key==='me')data={language,user:{id:42,first_name:'Alex',username:'alex'},balance:1250,balance_usdt:0,welcome_bonus:4,version:'5.11.0',is_admin:true,bot_username:'fixture_bot',shop_status:{}};
+    else if(key==='wallet/summary')data={deposited:'500',spent:'120',purchase_count:1,missing_amounts:0};
+    else if(key==='wallet/transactions')data={items:[{kind:'purchase',reference:'77',label:'Покупка',amount:'120',currency:'RUB',occurred_at:'2026-11-11T10:00:00Z'}],has_more:false,note:'Сохранённые операции'};
     else if(key==='shop-info')data={wholesale:{minimum:500,percent:15}};
     else if(key==='cart'&&route.request().method()==='POST'){Object.assign(items.find(i=>i.id===body.account_id),{in_cart:true,reserved_until:new Date(Date.now()+300000).toISOString()});}
     else if(key==='favorites'&&route.request().method()==='POST'){items.find(i=>i.id===body.account_id).favorite=body.enabled;}
-    else if(['catalog','favorites','cart'].includes(key)){if(key==='catalog'){catalogueRequests++;if(catalogueDelay)await new Promise(resolve=>setTimeout(resolve,catalogueDelay));}data={items:items.filter(i=>key==='cart'?i.in_cart:key==='favorites'?i.favorite:true),categories,has_more:false};}
+    else if(['catalog','favorites','cart'].includes(key)){if(key==='catalog'){catalogueRequests++;if(catalogueDelay)await new Promise(resolve=>setTimeout(resolve,catalogueDelay));}data={items:items.filter(i=>(key==='cart'?i.in_cart:key==='favorites'?i.favorite:true)&&(!u.searchParams.get('category')||i.category===u.searchParams.get('category'))),categories,has_more:false};}
     else if(key.startsWith('products/'))data=items.find(i=>i.id===Number(key.split('/')[1]));
+    else if(key==='admin/payments')data={items:[{provider:'crypto',invoice_id:'fixture',user_id:42,amount_rub:'100',status:'pending',created_at:'2026-11-11 10:00:00'}],has_more:false};
+    else if(key==='admin/payments/check')data={status:'pending'};
     else if(key==='admin/categories')data={items:categories};
     else if(key==='admin/overview')data={stock:4,orders:12,tickets:2,users:64,approvals:0,sales:[]};
-    else if(key==='orders')data={items:[],has_more:false};
+    else if(key==='orders')data={items:[{id:77,name:'Чили',status_label:'Выдан',date:'2026-11-11 13:00:00',currency:'RUB',paid_amount:'120'}],has_more:false};
     return route.fulfill({contentType:'application/json',body:JSON.stringify(data)});
    }
    const file=p==='/'?path.join(root,'index.html'):path.join(root,p.replace('/assets/',''));
@@ -42,8 +46,8 @@ const root=path.join(__dirname,'../miniapp/static');
   });
   const p=await ctx.newPage();p.on('pageerror',e=>errors.push(e.message));await p.goto('https://sband.test/');await p.waitForSelector('.account-card');
   const nav=width<=700?'.mobile-nav':'.side-nav';
-  assert.equal(await p.locator('body').evaluate(e=>getComputedStyle(e).backgroundColor),'rgb(0, 0, 0)');
-  assert.equal(await p.locator('#catalog-grid').evaluate(e=>getComputedStyle(e).backgroundColor),'rgb(0, 0, 0)');
+  assert.equal(await p.locator('body').evaluate(e=>getComputedStyle(e).backgroundColor),'rgb(16, 16, 16)');
+  assert.equal(await p.locator('#catalog-grid').evaluate(e=>getComputedStyle(e).backgroundColor),'rgb(25, 25, 25)');
   assert.equal(await p.locator('[data-tab="messages"]').count(),0);
   assert.equal(await p.locator('.mobile-nav button').count(),2);
   await p.locator(`${nav} [data-tab="catalog"]`).click();await p.waitForSelector('.account-card');
@@ -70,8 +74,8 @@ const root=path.join(__dirname,'../miniapp/static');
   await p.locator('[data-sort="price_asc"]').click();
   assert.equal(await p.locator('#sort').inputValue(),'price_asc');
   assert.equal(await p.locator('[data-sort="price_asc"]').getAttribute('aria-pressed'),'true');
-  await p.locator('#open-filters').click();assert(await p.locator('#premium-filter').isVisible());await p.locator('#sort').selectOption('discount');await p.waitForFunction(()=>![...document.querySelectorAll('[data-sort]')].some(b=>b.getAttribute('aria-pressed')==='true'));
-  await p.locator('#open-filters').click();assert.equal(await p.locator('#premium-filter').isVisible(),false);await p.locator('[data-sort="new"]').click();
+  await p.locator('#open-filters').click();assert(await p.locator('#premium-filter').isVisible());await p.locator('#country-filter').selectOption('auto-cl-clear');await p.waitForFunction(()=>document.querySelectorAll('.account-card').length===1);await p.locator('#country-filter').selectOption('de');await p.waitForSelector('#catalog-empty:not([hidden])');await p.locator('[data-clear-filters]').click();await p.waitForFunction(()=>document.querySelectorAll('.account-card').length===4);await p.locator('#open-filters').click();await p.locator('#sort').selectOption('discount');await p.waitForFunction(()=>![...document.querySelectorAll('[data-sort]')].some(b=>b.getAttribute('aria-pressed')==='true'));
+  await p.locator('#open-filters').click();assert.equal(await p.locator('#premium-filter').isVisible(),false);await p.locator('[data-sort="popular"]').click();
   await p.locator('.country-image').evaluateAll(images=>images.forEach(i=>i.loading='eager'));
   await p.waitForFunction(()=>[...document.querySelectorAll('.country-image')].every(i=>i.complete&&i.naturalWidth>0));
   assert((await p.locator('.account-card .country-image').first().getAttribute('src')).endsWith('/cl.svg'));
@@ -83,18 +87,20 @@ const root=path.join(__dirname,'../miniapp/static');
   await p.locator('[data-add="1"]').click();await p.waitForFunction(()=>document.querySelector('[data-add="1"]').textContent.includes('В корзине'));
   await p.locator(`${nav} [data-tab="profile"]`).click();await p.locator('#profile-page [data-tab="cart"]').click();await p.waitForSelector('#cart-summary:not([hidden])');assert((await p.locator('#cart-total').innerText()).includes('120'));
   await p.locator(`${nav} [data-tab="profile"]`).click();
-  assert.equal(await p.locator('.profile-funds').evaluate(e=>getComputedStyle(e).backgroundColor),'rgb(0, 0, 0)');
+  assert.equal(await p.locator('.profile-funds').evaluate(e=>getComputedStyle(e).backgroundColor),'rgb(25, 25, 25)');
   await p.locator('#copy-profile-id').click();assert.equal(await p.evaluate(()=>window.savedCopy),'42');
   await p.locator('#toast').evaluate(e=>e.hidden=true);
   await p.screenshot({path:`/workspace/session-shope-previews/minimal-profile-${width}-ru.png`,fullPage:true});
+  assert((await p.locator('#profile-deposited').innerText()).includes('500'));assert((await p.locator('#profile-spent').innerText()).includes('120'));assert.equal(await p.locator('#profile-orders [data-order]').count(),1);
+  await p.locator('[data-transactions]').click();await p.waitForSelector('#transaction-rows');assert((await p.locator('#transaction-rows').innerText()).includes('−120'));await p.locator('#close-dialog').click();
   await p.locator('[data-payment-history]').click();await p.waitForSelector('#history-rows');
   assert((await p.locator('#history-rows').innerText()).includes('Telegram Stars'));
   await p.locator('#history-more').click();await p.waitForFunction(()=>document.querySelectorAll('.history-row').length===2);
   assert.equal(await p.locator('#history-more').isVisible(),false);await p.locator('#close-dialog').click();
   await p.locator('#profile-page [data-topup]').click();await p.waitForSelector('#topup-amount');
-  assert.equal(await p.locator('#purchase-dialog').evaluate(e=>getComputedStyle(e).backgroundColor),'rgb(0, 0, 0)');
-  assert.equal(await p.locator('[data-payment-choice]').count(),5);
-  await p.locator('[data-topup-preset="300"]').click();assert.equal(await p.locator('#topup-amount').inputValue(),'300');
+  assert.equal(await p.locator('#purchase-dialog').evaluate(e=>getComputedStyle(e).backgroundColor),'rgb(25, 25, 25)');
+  assert.equal(await p.locator('[data-payment-choice]').count(),6);
+  await p.locator('[data-topup-preset="300"]').click();assert.equal(await p.locator('#topup-amount').inputValue(),'300');await p.locator('#amount-minus').click();assert.equal(await p.locator('#topup-amount').inputValue(),'290');await p.locator('#amount-plus').click();assert.equal(await p.locator('#topup-amount').inputValue(),'300');
   await p.locator('[data-payment-choice="crypto"]').focus();await p.keyboard.press('ArrowRight');assert.equal(await p.locator('#topup-method').inputValue(),'xrocket');
   await p.locator('[data-payment-choice="stars"]').click();await p.locator('#topup-amount').fill('1');
   assert((await p.locator('#topup-quote').innerText()).includes('1,20'));
@@ -107,7 +113,7 @@ const root=path.join(__dirname,'../miniapp/static');
   assert.equal(invoiceRequests,1);assert((await p.locator('#dialog-error').innerText()).includes('недоступна'));
   await p.locator('[data-payment-choice="crypto"]').click();await p.locator('[data-topup-preset="300"]').click();
   assert.equal(await p.locator('#dialog-error').isVisible(),false);assert(await p.locator('#create-invoice').isVisible());
-  await p.screenshot({path:`/workspace/session-shope-previews/minimal-topup-${width}-ru.png`,fullPage:true});
+  await p.locator('#purchase-dialog').evaluate(d=>d.scrollTop=0);await p.screenshot({path:`/workspace/session-shope-previews/minimal-topup-${width}-ru.png`,fullPage:true});
   assert.equal(await p.evaluate(()=>document.querySelector('#purchase-dialog').scrollWidth>document.querySelector('#purchase-dialog').clientWidth),false,`topup overflow ${width}`);
   await p.locator('#close-dialog').click();
   await p.locator(`${nav} [data-tab="profile"]`).click();await p.locator('#profile-page [data-language="en"]').click();await p.waitForFunction(()=>document.documentElement.lang==='en');
@@ -116,13 +122,13 @@ const root=path.join(__dirname,'../miniapp/static');
   await p.locator('#copy-app-link').click();await p.waitForFunction(()=>window.savedCopy==='https://t.me/fixture_bot?start=miniapp');
   await p.locator('#send-app-link').click();const shared=new URL(await p.evaluate(()=>window.sharedURL));assert.equal(shared.hostname,'t.me');assert.equal(shared.searchParams.get('url'),'https://t.me/fixture_bot?start=miniapp');assert(!shared.href.includes('ui-fixture'));
   await p.locator('#close-dialog').click();
-  assert((await p.locator('#profile-page h1').innerText()).includes('profile'));assert.equal(await p.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,`profile overflow ${width}`);
-  await p.screenshot({path:`/workspace/session-shope-previews/minimal-profile-${width}-en.png`,fullPage:true});await p.locator('[data-header-search]').click();await p.waitForSelector('#market-page:not([hidden])');await p.waitForFunction(()=>document.activeElement===document.querySelector('#search'));
+  assert((await p.locator('#profile-page h1').innerText()).toLowerCase().includes('profile'));assert.equal(await p.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,`profile overflow ${width}`);
+  await p.screenshot({path:`/workspace/session-shope-previews/minimal-profile-${width}-en.png`,fullPage:true});await p.locator(`${nav} [data-tab="catalog"]`).click();await p.waitForSelector('#market-page:not([hidden])');await p.locator('#search').focus();await p.waitForFunction(()=>document.activeElement===document.querySelector('#search'));
   await p.locator(`${nav} [data-tab="catalog"]`).click();await p.waitForSelector('.account-card');assert((await p.locator('[data-add="2"]').innerText()).includes('Add to cart'));assert((await p.locator('.account-card h3').first().innerText()).includes('Chile'));assert((await p.locator('[data-spam-status="2"]').innerText()).includes('Permanent spam restriction'));await p.locator('#toast').evaluate(e=>e.hidden=true);
   await p.screenshot({path:`/workspace/session-shope-previews/redesign-${width}-en.png`,fullPage:true});
-  await p.locator(`${nav} [data-tab="profile"]`).click();await p.locator('#profile-page [data-open-admin]').click();await p.waitForSelector('.stat-card');assert.equal(await p.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,`admin overflow ${width}`);
+  await p.locator(`${nav} [data-tab="profile"]`).click();await p.locator('#profile-page [data-open-admin]').click();await p.waitForSelector('.stat-card');await p.locator('[data-admin-tab="payments"]').click();await p.waitForSelector('[data-check-payment]');await p.locator('[data-check-payment]').click();await p.waitForFunction(()=>document.querySelector('#admin-notice').textContent.includes('обновлён')||document.querySelector('#admin-notice').textContent.includes('updated'));await p.locator('[data-admin-tab="overview"]').click();await p.waitForSelector('.stat-card');assert.equal(await p.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,`admin overflow ${width}`);
   await p.screenshot({path:`/workspace/session-shope-previews/redesign-admin-${width}.png`,fullPage:true});await p.evaluate(()=>document.dispatchEvent(new Event('sband-auth-error')));await p.waitForSelector('#public-open-bot:not([hidden])');assert.equal(await p.locator('#public-open-bot').getAttribute('href'),'https://t.me/fixture_bot?start=miniapp');await ctx.close();
  }
- assert.deepEqual(errors,[]);console.log('PASS: RU/EN at 320,390,768,1440px; compact market and no category blocks/messages; flags, filters, product, favorite, cart; profile/ID/history, provider choices, Stars rate and SBP limit/stub, safe sharing/language and admin; no overflow or JS errors.');
+ assert.deepEqual(errors,[]);console.log('PASS: RU/EN at 320,390,768,1440px; rounded market, white controls and no top category blocks/messages; flags, filters, product, favorite, cart; profile/ID/wallet totals/transactions/purchase preview, country filter, amount stepper, admin payments and provider choices, Stars rate and SBP limit/stub, safe sharing/language and admin; no overflow or JS errors.');
  }finally{await browser.close();}
 })().catch(e=>{console.error(e);process.exitCode=1;});

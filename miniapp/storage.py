@@ -81,16 +81,18 @@ async def catalog(user_id, category='', query='', sort='new', page=0, *, min_pri
                 if bound is not None:
                     conditions.append(f'ROUND(a.price * %s,2){comparator}%s'); params += [factor, bound]
             ordering = {
+                'popular': 'COALESCE(popular_sales.n,0) DESC,a.id DESC',
                 'new': 'a.id DESC', 'price_asc': 'a.price ASC,a.id DESC', 'price_desc': 'a.price DESC,a.id DESC',
                 'discount': 'CASE WHEN a.compare_price>a.price THEN 1-a.price/a.compare_price ELSE 0 END DESC,a.id DESC',
             }[sort]
+            popular_join = ("LEFT JOIN (SELECT pa.country,COUNT(*) AS n FROM purchases pp JOIN accounts pa ON pa.id=pp.account_id WHERE pp.status<>'refunded' GROUP BY pa.country) popular_sales ON popular_sales.country=a.country " if sort == 'popular' else '')
             await cur.execute(
                 'SELECT a.id,a.telegram_user_id,a.number,a.price,a.compare_price,a.status,a.password,a.registration_date,a.features_note,a.is_premium,a.attributes_checked_at,a.warranty_hours,a.spam_status,a.spam_checked_at,a.spam_lease_until,c.is_active,c.slug,c.name,'
                 'f.user_id AS favorite,t.user_id AS in_cart,r.user_id AS reserved_by,r.expires_at '
                 'FROM accounts a JOIN categories c ON c.slug=a.country '
                 'LEFT JOIN account_favorites f ON f.account_id=a.id AND f.user_id=%s '
                 'LEFT JOIN shopping_cart t ON t.account_id=a.id AND t.user_id=%s '
-                'LEFT JOIN account_reservations r ON r.account_id=a.id AND r.expires_at>UTC_TIMESTAMP() '
+                'LEFT JOIN account_reservations r ON r.account_id=a.id AND r.expires_at>UTC_TIMESTAMP() ' + popular_join +
                 'WHERE ' + ' AND '.join(conditions) + f' ORDER BY {ordering} LIMIT 25 OFFSET %s', (*params,page*24),
             )
             rows = list(await cur.fetchall())

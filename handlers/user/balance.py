@@ -50,7 +50,7 @@ async def back_to_main(call: CallbackQuery, state: FSMContext):
 async def topup_balance_menu(call: CallbackQuery, state: FSMContext):
     await state.clear()
     methods = [method for method in await payments.get_methods() if method['enabled']]
-    rows = [button(method['name'] + (' · 1 ⭐ = 1,20 ₽' if method['id'] == 'stars' else ('' if method['id'] == 'platega' else ' · USDT')), 'deposit_' + method['id'], 'money') for method in methods]
+    rows = [button(method['name'] + (' · 1 ⭐ = 1,20 ₽' if method['id'] == 'stars' else ('' if method['id'] in {'platega','heleket'} else ' · USDT')), 'deposit_' + method['id'], 'money') for method in methods]
     rows.append(button(tr('Назад к балансу'), 'balance'))
     text = tr('<b>Пополнение баланса</b>\n\nСумма задаётся в рублях. Выберите способ оплаты.') if methods else tr('<b>Пополнение баланса</b>\n\nСервисы оплаты пока не настроены. Обратитесь в поддержку.')
     await edit_message_safe(call, text, reply_markup=InlineKeyboardMarkup(inline_keyboard=rows))
@@ -69,7 +69,7 @@ async def _start_deposit(call, state, method):
     await answer_safe(call)
 
 
-@balance_router.callback_query(F.data.in_({'deposit_lave', 'deposit_xrocket', 'deposit_crypto', 'deposit_platega'}))
+@balance_router.callback_query(F.data.in_({'deposit_lave', 'deposit_xrocket', 'deposit_crypto', 'deposit_platega', 'deposit_heleket'}))
 async def deposit_entry(call: CallbackQuery, state: FSMContext):
     await _start_deposit(call, state, call.data.removeprefix('deposit_'))
 
@@ -109,7 +109,7 @@ async def process_lave_amount(message: Message, state: FSMContext):
         await answer_screen(message, tr('<b>Счёт создан</b>\n\nСумма: <b>{0} ₽</b>\nНомер: <code>{1}</code>\n\nБаланс пополнится автоматически после подтверждения сервисом. Кнопка проверки доступна как запасной вариант.', f'{amount:.2f}', f"{escape(result['invoice_id'])}"), section='wallet', reply_markup=InlineKeyboardMarkup(inline_keyboard=rows))
 
 
-@balance_router.callback_query(F.data.startswith('lave_check:') | F.data.startswith('xrocket_check:') | F.data.startswith('crypto_check:') | F.data.startswith('platega_check:'))
+@balance_router.callback_query(F.data.startswith('lave_check:') | F.data.startswith('xrocket_check:') | F.data.startswith('crypto_check:') | F.data.startswith('platega_check:') | F.data.startswith('heleket_check:'))
 async def check_payment(call: CallbackQuery):
     provider, invoice_id = call.data.split(':', 1)
     provider = provider.removesuffix('_check')

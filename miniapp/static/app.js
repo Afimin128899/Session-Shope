@@ -3,7 +3,7 @@
   const $ = s => document.querySelector(s);
   const tg = window.Telegram?.WebApp;
   const state = { tab: 'catalog', wholesale:{minimum:'500',percent:'15'}, ready: false, me: null, items: [], page: 0, category: '', orderPage: 0, orders: [], busy: false, revision: 0, invoice: null, refreshing: false, dialogRevision: 0 };
-  const labels = { home:'Главная', messages:'Сообщения', catalog: 'Маркет', favorites: 'Избранное', cart: 'Корзина', orders: 'Покупки', profile: 'Профиль' };
+  const labels = { home:'Главная', messages:'Поддержка', catalog: 'Маркет', favorites: 'Избранное', cart: 'Корзина', orders: 'Покупки', profile: 'Профиль' };
   const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const num = v => new Intl.NumberFormat(window.SbandI18n.locale, { maximumFractionDigits: 2 }).format(Number(v || 0));
   const rub = v => num(v) + ' ₽';
@@ -19,7 +19,7 @@
     if($('#demo-mode-notice'))$('#demo-mode-notice').hidden=true;
     document.querySelectorAll('[data-demo]').forEach(button=>button.hidden=true);
     window.SBAND_USER=null; document.dispatchEvent(new Event('sband-logout')); state.ready = false; state.me = null; state.items = []; state.recentItems=[]; state.supportRows=[]; state.supportTicket=null; state.orders = []; state.invoice = null; state.revision++;
-    $('#header-balance').textContent = '— ₽'; $('#profile-balance').textContent = '— ₽'; $('#home-balance').textContent='— ₽'; $('#home-countries').replaceChildren(); $('#recent-products').replaceChildren(); $('#support-conversation').replaceChildren(); $('#support-list').replaceChildren(); $('#country-feature').replaceChildren(); $('#catalog-grid').replaceChildren(); $('#orders-list').replaceChildren();
+    $('#header-balance').textContent = '— ₽'; $('#profile-balance').textContent = '— ₽'; $('#home-balance').textContent='— ₽'; $('#profile-deposited').textContent='—'; $('#profile-spent').textContent='—'; $('#profile-orders').replaceChildren(); $('#home-countries').replaceChildren(); $('#recent-products').replaceChildren(); $('#support-conversation').replaceChildren(); $('#support-list').replaceChildren(); $('#country-feature').replaceChildren(); $('#catalog-grid').replaceChildren(); $('#orders-list').replaceChildren();
     document.querySelectorAll('.page').forEach(el => { el.hidden = true; }); $('#login-panel').hidden = false;
     $('#purchase-dialog').close(); $('#dialog-content').replaceChildren(); $('#sync-state').textContent = SbandT("Нужен вход"); notice(text);
   }
@@ -39,7 +39,7 @@
     if($('#demo-mode-notice'))$('#demo-mode-notice').hidden=!data.test_mode_active;
     const initial = (data.user.first_name || 'S').slice(0, 1).toUpperCase();
     $('#avatar').textContent = initial; $('#profile-avatar').textContent = initial;
-    $('#profile-name').textContent = data.user.first_name || SbandT("Покупатель"); $('#profile-username').textContent = data.user.username ? '@' + data.user.username : SbandT("Покупатель Sband ACCS");
+    $('#profile-name').textContent = [data.user.first_name,data.user.last_name].filter(Boolean).join(' ') || SbandT("Покупатель"); $('#profile-username').textContent = data.user.username ? '@' + data.user.username : SbandT("Покупатель Sband ACCS");
     $('#profile-id').textContent = data.user.id; $('#header-balance').textContent = rub(data.balance); $('#profile-balance').textContent = rub(data.balance); $('#home-balance').textContent=rub(data.balance);
     $('#welcome-bonus').hidden = !(Number(data.welcome_bonus) > 0);
     $('#profile-usdt').textContent = num(data.balance_usdt) + ' USDT'; $('#version').textContent = 'v' + data.version;
@@ -166,6 +166,7 @@
     state.departments=departments.items||[];
     if (rev !== state.revision || state.tab !== tab || !state.ready) return;
     state.categories=data.categories;
+    $('#country-filter').innerHTML = `<option value="">${SbandT('Все страны')}</option>` + data.categories.map(category => `<option value="${esc(category.slug)}" ${category.slug===state.category?'selected':''}>${esc(window.SbandCountryName({category:category.slug,name:category.name}))} · ${Number(category.count)||0}</option>`).join('');
     state.page = page; state.items = append ? [...state.items, ...data.items] : data.items;
     $('#total-count').textContent = tab === 'catalog' ? data.categories.reduce((n, c) => n + Number(c.count), 0) : state.items.length;
     $('#categories').innerHTML = [{ slug: '', name: SbandT("Все аккаунты"), count: data.categories.reduce((n, c) => n + Number(c.count), 0) }, ...data.categories.slice().sort((a,b)=>Number(b.count)-Number(a.count))].map(c => `<button class="category ${c.slug === state.category ? 'active' : ''}" data-category="${esc(c.slug)}">${c.slug ? window.SbandCountryArt({category:c.slug,name:c.name}) : '<span class="all-countries-icon" aria-hidden="true">◎</span>'}<span>${esc(window.SbandCountryName({category:c.slug,name:c.name}))}</span><small>${c.count}</small></button>`).join('');
@@ -177,6 +178,39 @@
       if(rev!==state.revision||state.tab!==tab||!state.ready)return;
       state.recentItems=results.filter(r=>r.status==='fulfilled').map(r=>r.value);renderDiscovery();
     }
+  }
+  async function loadProfile() {
+    const revision = state.profileRevision = (state.profileRevision || 0) + 1;
+    const [summary, orders] = await Promise.all([api('wallet/summary'), api('orders?page=0')]);
+    if (!state.ready || state.tab !== 'profile' || revision !== state.profileRevision) return;
+    $('#profile-deposited').textContent = '+' + rub(summary.deposited);
+    $('#profile-spent').textContent = '−' + rub(summary.spent);
+    $('#profile-totals-note').hidden = !summary.missing_amounts;
+    $('#profile-orders').innerHTML = orders.items.slice(0, 3).map(order => `<button class="profile-order" data-order="${order.id}"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16l1 14H3L4 7ZM8 8V6a4 4 0 0 1 8 0v2"/></svg><span>${esc(order.name)}<small>#${order.id} · ${esc(order.status_label)}</small></span><b>${order.paid_amount == null ? '—' : num(order.paid_amount) + ' ' + (order.currency === 'RUB' ? '₽' : esc(order.currency))}</b></button>`).join('') || `<div class="profile-orders-empty"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2 10 5v10l-10 5-10-5V7l10-5ZM2 7l10 5 10-5M12 12v10"/></svg><strong>${SbandT('Покупок пока нет')}</strong><p>${SbandT('После оплаты товар появится здесь.')}</p></div>`;
+  }
+  async function transactions(page = 0, append = false) {
+    if (state.transactionsLoading) return;
+    state.transactionsLoading = true;
+    const revision = ++state.dialogRevision, more = $('#transactions-more');
+    if (more) more.disabled = true;
+    try {
+      const data = await api('wallet/transactions?page=' + page);
+      if (revision !== state.dialogRevision || !state.ready) return;
+      const names = {crypto_pay:'Crypto Pay',xrocket_pay:'xRocket',lave_pay:'Lava Pay',platega_pay:'СБП',stars_pay:'Telegram Stars',heleket_pay:'Heleket',referral_signup:SbandT('Реферальная награда'),referral_deposit:SbandT('Реферальная награда'),referral_purchase:SbandT('Реферальная награда'),referral_reversal:SbandT('Возврат реферальной награды'),stars_refund:SbandT('Возврат Stars')};
+      const rows = data.items.map(row => {
+        const debit = row.kind === 'purchase' || Number(row.amount) < 0;
+        const stamp = row.occurred_at ? new Date(row.occurred_at) : null;
+        const time = stamp && !Number.isNaN(stamp.getTime()) ? stamp.toLocaleString(window.SbandI18n.locale, {timeZone:'Europe/Moscow'}) + ' ' + SbandT('МСК') : SbandT('Дата не сохранена');
+        const label = row.kind === 'payment' ? names[row.reference] || SbandT(row.label) : SbandT(row.label);
+        const amount = row.amount == null ? SbandT('Сумма не сохранена') : (row.currency === 'PCT' ? '' : debit ? '−' : '+') + num(Math.abs(Number(row.amount))) + ' ' + (row.currency === 'PCT' ? '%' : row.currency === 'RUB' ? '₽' : esc(row.currency));
+        return `<div class="history-row"><span>${esc(label)}<small>${esc(time)}${row.kind === 'purchase' || row.kind === 'refund' ? ' · #' + esc(row.reference) : ''}</small></span><b class="${debit ? 'debit' : 'credit'}">${amount}</b></div>`;
+      }).join('');
+      if (append && $('#transaction-rows')) $('#transaction-rows').insertAdjacentHTML('beforeend', rows);
+      else modal(`<h2 id="dialog-title">${SbandT('Все транзакции')}</h2><div id="transaction-rows">${rows || SbandT('Операций пока нет')}</div><p class="history-note">${esc(data.note)}</p><button class="secondary-button" id="transactions-more">${SbandT('Показать ещё')}</button>`);
+      $('#transactions-more').hidden = !data.has_more || !data.items.length;
+      $('#transactions-more').onclick = () => transactions(page + 1, true);
+    } catch (e) { error(e); }
+    finally { state.transactionsLoading = false; if (more?.isConnected) more.disabled = false; }
   }
   async function loadOrders(append = false) {
     const revision=state.orderRevision=(state.orderRevision || 0)+1;
@@ -191,6 +225,7 @@
     $('#market-page').hidden = !['catalog', 'favorites', 'cart'].includes(state.tab);
     $('#orders-page').hidden = state.tab !== 'orders'; $('#profile-page').hidden = state.tab !== 'profile'; $('#messages-page').hidden=state.tab!=='messages';
     document.querySelectorAll('[data-tab]').forEach(el => el.classList.toggle('active', el.dataset.tab === state.tab));
+    document.querySelectorAll('.mobile-nav [data-tab],.side-nav [data-tab]').forEach(el => el.classList.toggle('active', el.dataset.tab === (['catalog','home'].includes(state.tab) ? 'catalog' : 'profile')));
     $('#breadcrumb').textContent = SbandT(labels[state.tab]); $('#home-page').hidden=state.tab!=='home'; $('#benefits').hidden=true; $('#filters').hidden = state.tab !== 'catalog';
     $('#market-title').textContent = state.tab === 'catalog' ? SbandT("Маркет") : SbandT(labels[state.tab]);
     $('#market-kicker').textContent = state.tab === 'cart' ? SbandT("РЕЗЕРВ НА 5 МИНУТ") : state.tab === 'favorites' ? SbandT("ТО, ЧТО НРАВИТСЯ") : SbandT("ВЫБЕРИ СВОЙ");
@@ -201,7 +236,7 @@
     if (!state.ready || !labels[tab]) return;
     state.tab = tab; state.revision++; state.page = 0; state.items = []; showPage(); notice();
     $('#catalog-grid').replaceChildren(); $('#cart-summary').hidden = true;
-    try { if (tab === 'messages') await loadSupport(); else if (tab === 'orders') await loadOrders(); else if (tab !== 'profile') await loadMarket(); } catch (e) { error(e); }
+    try { if (tab === 'messages') await loadSupport(); else if (tab === 'orders') await loadOrders(); else if (tab === 'profile') await loadProfile(); else await loadMarket(); } catch (e) { error(e); }
     window.scrollTo({ top: 0, behavior: 'instant' });
   }
   function modal(html) { state.dialogRevision++; $('#dialog-content').innerHTML = html; if (!$('#purchase-dialog').open) $('#purchase-dialog').showModal(); }
@@ -357,12 +392,12 @@
     try {
       const data = await api('payment-history' + (before ? '?before=' + before : ''));
       if (revision !== state.dialogRevision || !state.ready) return;
-      const names = {crypto_pay:'Crypto Pay',xrocket_pay:'xRocket Pay',lave_pay:'Lava Pay',laveshka_pay:'Lava Pay',platega_pay:'СБП · Platega',stars_pay:'Telegram Stars'};
+      const names = {crypto_pay:'Crypto Pay',xrocket_pay:'xRocket Pay',lave_pay:'Lava Pay',laveshka_pay:'Lava Pay',platega_pay:'СБП · Platega',stars_pay:'Telegram Stars',heleket_pay:'Heleket'};
       const rows = data.items.map(payment => {
         const raw = String(payment.created_at || '').replace(' ', 'T');
         const date = /^\d{10}(?:\.\d+)?$/.test(raw) ? new Date(Number(raw) * 1000) : new Date(/(?:Z|[+-]\d{2}:\d{2})$/.test(raw) ? raw : raw + 'Z');
         const time = Number.isNaN(date.getTime()) ? '' : date.toLocaleString(window.SbandI18n.locale, {timeZone:'Europe/Moscow'});
-        return `<div class="history-row"><span>${esc(names[payment.method] || payment.method)}<small>${esc(time)} ${SbandT('МСК')}</small></span><b>+${num(payment.amount)} ${esc(payment.currency)}</b></div>`;
+        return `<div class="history-row"><span>${esc(names[payment.method] || payment.method)}<small>${esc(time)} ${SbandT('МСК')}</small></span><b>+${num(payment.amount)} ${payment.currency==='RUB'?'₽':esc(payment.currency)}</b></div>`;
       }).join('');
       if (append && $('#history-rows')) $('#history-rows').insertAdjacentHTML('beforeend', rows);
       else modal(`<h2 id="dialog-title">${SbandT('История пополнений')}</h2><div id="history-rows">${rows || SbandT('Пополнений пока нет')}</div><button class="secondary-button" id="history-more">${SbandT('Показать ещё')}</button>`);
@@ -379,7 +414,7 @@
       const data = await api('payment-methods'), methods = data.items.filter(m => m.enabled);
       if (dialogRevision !== state.dialogRevision) return;
       if (!methods.length) { modal(SbandT("<h2 id=\"dialog-title\">Пополнение баланса</h2><p>Платёжные сервисы пока не настроены. Обратись к администратору через Telegram-бота.</p><button class=\"primary-button\" data-bot>Открыть бота <svg class=\"arrow\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M6 18 18 6M6 6h12v12\"/></svg></button>")); return; }
-      modal(`<h2 id="dialog-title">${SbandT('Пополнить баланс')}</h2><label for="topup-amount" id="topup-amount-label">${SbandT('Сумма, ₽')}</label><input id="topup-amount" type="number" inputmode="decimal" min="10" max="1000000" step="0.01" value="500"><div class="amount-presets">${[100,300,500,1000].map(v=>`<button type="button" data-topup-preset="${v}">${num(v)}</button>`).join('')}</div><h3 class="payment-heading">${SbandT('Способ оплаты')}</h3><select id="topup-method" class="native-method" tabindex="-1" aria-hidden="true">${methods.map(m=>`<option value="${esc(m.id)}">${esc(m.name)}</option>`).join('')}</select><div class="payment-choices" role="radiogroup" aria-label="${SbandT('Способ оплаты')}">${methods.map(m=>`<button type="button" role="radio" data-payment-choice="${esc(m.id)}" aria-checked="false"><span class="provider-mark" aria-hidden="true">${esc(({crypto:'C',xrocket:'X',lave:'L',platega:'₽',stars:'★'})[m.id]||'◇')}</span><span class="provider-name">${esc(m.name)}<small>${m.id==='stars'?SbandT('1 ⭐ = 1,20 ₽'):SbandT('От {0} до {1} ₽',num(m.min),num(m.max))}</small></span><i aria-hidden="true"></i></button>`).join('')}</div><p id="topup-quote" class="muted" aria-live="polite"></p><div class="topup-checkout"><div class="topup-summary"><span>${SbandT('На баланс')}</span><strong id="topup-total"></strong></div><p id="dialog-error" class="dialog-error" role="alert" hidden></p><button class="primary-button" id="create-invoice">${SbandT('Продолжить')}</button></div>`);
+      modal(`<h2 id="dialog-title">${SbandT('Пополнить баланс')}</h2><label for="topup-amount" id="topup-amount-label">${SbandT('Сумма, ₽')}</label><div class="amount-control"><button type="button" id="amount-minus" aria-label="${SbandT('Уменьшить сумму')}">−</button><input id="topup-amount" type="number" inputmode="decimal" min="10" max="1000000" step="0.01" value="500"><span id="topup-unit">₽</span><button type="button" id="amount-plus" aria-label="${SbandT('Увеличить сумму')}">+</button></div><div class="amount-presets">${[100,300,500,1000].map(v=>`<button type="button" data-topup-preset="${v}">${num(v)}</button>`).join('')}</div><h3 class="payment-heading">${SbandT('Способ оплаты')}</h3><select id="topup-method" class="native-method" tabindex="-1" aria-hidden="true">${methods.map(m=>`<option value="${esc(m.id)}">${esc(m.name)}</option>`).join('')}</select><div class="payment-choices" role="radiogroup" aria-label="${SbandT('Способ оплаты')}">${methods.map(m=>`<button type="button" role="radio" data-payment-choice="${esc(m.id)}" aria-checked="false"><span class="provider-mark" aria-hidden="true">${esc(({crypto:'C',xrocket:'X',lave:'L',platega:'₽',stars:'★',heleket:'H'})[m.id]||'◇')}</span><span class="provider-name">${esc(m.name)}<small>${m.id==='stars'?SbandT('1 ⭐ = 1,20 ₽'):SbandT('От {0} до {1} ₽',num(m.min),num(m.max))}</small></span><i aria-hidden="true"></i></button>`).join('')}</div><p id="topup-quote" class="muted" aria-live="polite"></p><div class="topup-checkout"><div class="topup-summary"><span>${SbandT('На баланс')}</span><strong id="topup-total"></strong></div><p id="dialog-error" class="dialog-error" role="alert" hidden></p><button class="primary-button" id="create-invoice">${SbandT('Продолжить')}</button></div>`);
       const amountInput = $('#topup-amount'), methodInput = $('#topup-method'), createButton = $('#create-invoice');
       const remembered = { rub: '500', stars: '100' };
       let currentUnit = null;
@@ -391,6 +426,8 @@
           if (currentUnit) remembered[currentUnit] = amountInput.value;
           amountInput.value = remembered[unit]; currentUnit = unit;
         }
+        $('#topup-unit').textContent = stars ? '⭐' : '₽';
+        $('#amount-minus').disabled=state.busy; $('#amount-plus').disabled=state.busy;
         $('#topup-amount-label').textContent = stars ? SbandT("Количество звёзд, ⭐") : SbandT("Сумма, ₽");
         amountInput.min = String(selectedMethod().min); amountInput.max = String(selectedMethod().max); amountInput.step = stars ? '1' : '0.01'; amountInput.inputMode = stars ? 'numeric' : 'decimal';
         const valid = stars ? starCount() : amountInput.checkValidity() && Number(amountInput.value) >= Number(amountInput.min) && Number(amountInput.value) <= Number(amountInput.max);
@@ -402,6 +439,12 @@
         createButton.disabled = state.busy || !valid;
       };
       const clearTopupError=()=>{$('#dialog-error').hidden=true;};
+      for (const [id, direction] of [['#amount-minus', -1], ['#amount-plus', 1]]) $(id).onclick = () => {
+        if (state.busy) return;
+        const stars = methodInput.value === 'stars', value = Number(amountInput.value);
+        const next = Math.min(Number(amountInput.max), Math.max(Number(amountInput.min), (Number.isFinite(value) ? value : Number(amountInput.min)) + direction * (stars ? 1 : 10)));
+        amountInput.value = String(Math.round(next * 100) / 100); clearTopupError(); updateQuote();
+      };
       document.querySelectorAll('[data-payment-choice]').forEach(b=>b.onclick=()=>{if(state.busy)return;methodInput.value=b.dataset.paymentChoice;clearTopupError();updateQuote();});
       document.querySelectorAll('[data-topup-preset]').forEach(b=>b.onclick=()=>{if(state.busy)return;amountInput.value=b.dataset.topupPreset;clearTopupError();updateQuote();});
       $('.payment-choices').onkeydown = event => {
@@ -438,7 +481,7 @@
     }
     const nativeStars = stars && typeof tg?.openInvoice === 'function';
     const paymentControl = nativeStars ? SbandT("<button id=\"pay-stars\" class=\"primary-button\">Оплатить {0} ⭐</button><a id=\"stars-payment-link\" class=\"payment-link\" href=\"{1}\" target=\"_blank\" rel=\"noopener noreferrer\" hidden>Открыть счёт в Telegram</a>",num(i.stars),esc(url.href)) : `<a class="payment-link" href="${esc(url.href)}" target="_blank" rel="noopener noreferrer">${stars ? SbandT("Оплатить {0} ⭐ в Telegram",num(i.stars)) : SbandT("Перейти к оплате")} <svg class="arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 18 18 6M6 6h12v12"/></svg></a>`;
-    modal(SbandT("<h2 id=\"dialog-title\">{0}</h2>{1}{2}<p id=\"invoice-state\" role=\"status\">Ожидаем оплату…</p><p id=\"dialog-error\" class=\"dialog-error\" role=\"alert\" hidden></p>{3}<p>Можно закрыть это окно: проверка продолжится на сервере.</p><button id=\"another-invoice\" class=\"secondary-button\">Создать другой счёт</button>",stars ? SbandT("Счёт на {0} ⭐",num(i.stars)) : SbandT("Счёт на {0}",rub(i.amount)),stars ? SbandT("<div class=\"info\"><span>На баланс</span><b>{0}</b></div><p>Курс: 1 ⭐ = 1,20 ₽. Зачисление произойдёт после подтверждения оплаты Telegram.</p>",rub(i.amount)) : SbandT("<p>Перейди к оплате. Баланс обновится автоматически после подтверждения платёжным сервисом.</p>"),paymentControl,stars ? SbandT("<button id=\"verify-invoice\" class=\"secondary-button\">Проверить зачисление</button>") : ''));
+    modal(SbandT("<h2 id=\"dialog-title\">{0}</h2>{1}{2}<p id=\"invoice-state\" role=\"status\">Ожидаем оплату…</p><p id=\"dialog-error\" class=\"dialog-error\" role=\"alert\" hidden></p>{3}<p>Можно закрыть это окно: проверка продолжится на сервере.</p><button id=\"another-invoice\" class=\"secondary-button\">Создать другой счёт</button>",stars ? SbandT("Счёт на {0} ⭐",num(i.stars)) : SbandT("Счёт на {0}",rub(i.amount)),stars ? SbandT("<div class=\"info\"><span>На баланс</span><b>{0}</b></div><p>Курс: 1 ⭐ = 1,20 ₽. Зачисление произойдёт после подтверждения оплаты Telegram.</p>",rub(i.amount)) : SbandT("<p>Перейди к оплате. Баланс обновится автоматически после подтверждения платёжным сервисом.</p>"),paymentControl,stars ? SbandT("<button id=\"verify-invoice\" class=\"secondary-button\">Проверить зачисление</button>") : SbandT("<button id=\"verify-invoice\" class=\"secondary-button\">Проверить оплату</button>")));
     if (nativeStars) {
       const button = $('#pay-stars');
       button.dataset.invoiceId = String(i.invoice_id);
@@ -473,16 +516,17 @@
     }
     if ($('#verify-invoice')) $('#verify-invoice').onclick = async () => {
       const button = $('#verify-invoice'); button.disabled = true;
-      try { await checkInvoice(); await loadMe(); } catch (e) { dialogError(e); }
+      try { await checkInvoice(true); await loadMe(); } catch (e) { dialogError(e); }
       finally { if (button.isConnected && state.invoice === i) button.disabled = false; }
     };
     $('#another-invoice').disabled = !!state.nativeStarsInvoice;
     $('#another-invoice').onclick = () => { if (state.nativeStarsInvoice) return; state.invoice = null; topup(); };
     if (openStars && nativeStars) $('#pay-stars').click();
   }
-  async function checkInvoice() {
+  async function checkInvoice(verify = false) {
     const i = state.invoice; if (!i) return;
-    const data = await api('invoices/' + encodeURIComponent(i.provider) + '/' + encodeURIComponent(i.invoice_id));
+    const path = 'invoices/' + encodeURIComponent(i.provider) + '/' + encodeURIComponent(i.invoice_id);
+    const data = verify ? await post(path + '/check', {}) : await api(path);
     if (state.invoice !== i) return;
     if (data.status === 'credited' || data.status === 'refunded') {
       state.invoice = null; await loadMe();
@@ -537,7 +581,7 @@
         item.available = !!update?.available;
         if (update) {
           item.characteristics = {...item.characteristics,spam_check:update.spam_check};
-          el.textContent = SbandT('Спамблок: ') + spamLabel(update.spam_check);
+          el.textContent = spamLabel(update.spam_check);
           el.title = spamTime(update.spam_check);
           el.classList.toggle('spam-limited',['limited','permanent'].includes(update.spam_check.status));
           el.classList.toggle('spam-clear',update.spam_check.status==='clear'&&!update.spam_check.running);
@@ -554,12 +598,12 @@
   async function synchronize() {
     if (!state.ready || state.busy || state.refreshing || document.hidden || document.body.classList.contains('admin-mode')) return;
     state.refreshing = true;
-    try { await Promise.all([loadMe(), state.tab === 'messages' ? refreshSupport() : state.tab === 'orders' ? (state.orderPage === 0 ? loadOrders() : null) : (state.page === 0 ? loadMarket() : null), checkInvoice()]); $('#sync-state').textContent = (state.tab === 'orders' ? state.orderPage : state.page) > 0 ? SbandT("● Баланс обновлён") : SbandT("● Обновлено сейчас"); }
+    try { await Promise.all([loadMe(), state.tab === 'profile' ? loadProfile() : state.tab === 'messages' ? refreshSupport() : state.tab === 'orders' ? (state.orderPage === 0 ? loadOrders() : null) : (state.page === 0 ? loadMarket() : null), checkInvoice()]); $('#sync-state').textContent = (state.tab === 'orders' ? state.orderPage : state.page) > 0 ? SbandT("● Баланс обновлён") : SbandT("● Обновлено сейчас"); }
     catch(e) { if(e.code==='maintenance'){showMaintenance(e.details?.shop_status);return;} $('#sync-state').textContent=SbandT("Нет обновления"); if(e.code==='unauthorized') reset(e.message); }
     finally { state.refreshing=false; }
   }
   async function initialize() {
-    try { await window.SbandI18n.ready; tg?.ready(); tg?.expand(); tg?.setHeaderColor('#000000'); tg?.setBackgroundColor('#000000'); await loadMe(); const info=await api('shop-info');state.wholesale=info.wholesale;state.support=info; state.ready = true; document.body.classList.remove('maintenance-mode'); $('#maintenance-page').hidden=true; $('#login-panel').hidden = true; notice(); showPage(); if(state.tab==='messages')await loadSupport();else await loadMarket(); $('#sync-state').textContent = SbandT("● Обновлено сейчас"); const start=tg?.initDataUnsafe?.start_param || new URLSearchParams(location.search).get('tgWebAppStartParam') || (new URLSearchParams(location.search).get('product') ? 'product_'+new URLSearchParams(location.search).get('product') : ''); if(/^product_[0-9]{1,10}$/.test(start)) await features(Number(start.slice(8))); }
+    try { await window.SbandI18n.ready; tg?.ready(); tg?.expand(); tg?.setHeaderColor('#101010'); tg?.setBackgroundColor('#101010'); await loadMe(); const info=await api('shop-info');state.wholesale=info.wholesale;state.support=info; state.ready = true; document.body.classList.remove('maintenance-mode'); $('#maintenance-page').hidden=true; $('#login-panel').hidden = true; notice(); showPage(); if(state.tab==='messages')await loadSupport();else if(state.tab==='profile')await loadProfile();else if(state.tab==='orders')await loadOrders();else await loadMarket(); $('#sync-state').textContent = SbandT("● Обновлено сейчас"); const start=tg?.initDataUnsafe?.start_param || new URLSearchParams(location.search).get('tgWebAppStartParam') || (new URLSearchParams(location.search).get('product') ? 'product_'+new URLSearchParams(location.search).get('product') : ''); if(/^product_[0-9]{1,10}$/.test(start)) await features(Number(start.slice(8))); }
     catch (e) { if(e.code==='maintenance')showMaintenance(e.details?.shop_status);else reset(e.message); }
   }
   document.addEventListener('sband-shop',()=>{if(state.ready) { showPage(); synchronize(); }});
@@ -570,12 +614,15 @@
     if(button.id==='check-maintenance') {button.disabled=true;try{const data=await api('status');if(data.shop_status.maintenance){showMaintenance(data.shop_status);$('#maintenance-feedback').textContent=SbandT("🛠 Работы ещё продолжаются. Статус обновлён.");}else{await initialize();}}catch(e){$('#maintenance-feedback').textContent=e.message;}finally{button.disabled=false;}return;}
     if(button.hasAttribute('data-demo')) { if(state.me?.is_admin){sessionStorage.setItem('sband_test_init',tg?.initData||'');location.assign('/demo'+location.hash);}return; }
     if(button.hasAttribute('data-demo-exit')) { try{await post('demo/exit',{});await loadMe();notice(SbandT("Тестовый режим закрыт. Рабочие операции доступны."));}catch(e){error(e);}return; }
+    if(button.hasAttribute('data-transactions')){transactions();return;}
+    if(button.hasAttribute('data-open-support')){switchTab('messages');return;}
     if(button.hasAttribute('data-payment-history')){paymentHistory();return;}
     if(button.hasAttribute('data-share-app')){shareApp();return;}
     if(button.hasAttribute('data-header-search')){await switchTab('catalog');$('#search').focus();return;}
     if(button.hasAttribute('data-discover')){state.category='';$('#search').value=button.dataset.discover;switchTab('catalog');return;}
     if(button.dataset.department){openDepartment(button.dataset.department);return;}
     if(button.dataset.supportTicket){openSupport(Number(button.dataset.supportTicket));return;}
+    if (button.hasAttribute('data-clear-filters')) {state.category='';for(const id of ['#search','#min-price','#max-price','#premium-filter','#age-filter'])$(id).value='';$('#sort').value='popular';$('.filter-panel').open=false;$('#open-filters').setAttribute('aria-expanded','false');switchTab('catalog');return;}
     if (button.dataset.tab) { switchTab(button.dataset.tab); return; }
     if (button.hasAttribute('data-bot')) openBot();
     if (button.dataset.botOrder) openBot(Number(button.dataset.botOrder));
@@ -605,6 +652,7 @@
     e.currentTarget.textContent=SbandT(expanded?'Свернуть страны ↑':'Все страны ↓');
   };
   $('#home-search').onsubmit=e=>{e.preventDefault();state.category='';$('#search').value=$('#home-query').value;switchTab('catalog');};
+  $('#country-filter').onchange=()=>{state.category=$('#country-filter').value;loadMarket().catch(error);};
   $('#open-filters').onclick=()=>{const panel=$('.filter-panel');panel.open=!panel.open;$('#open-filters').setAttribute('aria-expanded',String(panel.open));if(panel.open)$('#premium-filter').focus();};
   $('#stock-countries').onclick=()=>{state.onlyStockCountries=true;$('#stock-countries').setAttribute('aria-pressed','true');$('#all-countries').setAttribute('aria-pressed','false');renderDiscovery();};
   $('#all-countries').onclick=()=>{state.onlyStockCountries=false;$('#stock-countries').setAttribute('aria-pressed','false');$('#all-countries').setAttribute('aria-pressed','true');renderDiscovery();};

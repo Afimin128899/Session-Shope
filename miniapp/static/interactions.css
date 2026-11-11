@@ -30,7 +30,7 @@ button.is-loading::after {
   left: calc(50% - 8px);
   top: calc(50% - 8px);
   border: 2px solid #87968155;
-  border-top-color: #d0efaa;
+  border-top-color: #eeeeee;
   border-radius: 50%;
   animation: sband-button-loading 750ms linear infinite;
   pointer-events: none;
@@ -41,9 +41,9 @@ button.is-loading::after {
 }
 @keyframes sband-button-loading { to { transform: rotate(360deg); } }
 @media (hover: none) {
-  .primary-button:hover:not(:disabled), .buy-button:hover:not(:disabled) { background: #c8f76b; }
-  .buy-button.added:hover:not(:disabled) { background: #354326; }
-  .secondary-button:hover { background: #2a2f33; }
+  .primary-button:hover:not(:disabled), .buy-button:hover:not(:disabled) { background: #dedede; }
+  .buy-button.added:hover:not(:disabled) { background: #292929; }
+  .secondary-button:hover { background: #242424; }
 }
 @media (prefers-reduced-motion: reduce) {
   button, .mobile-nav button, .mobile-nav button .sband-emoji { transition: none !important; }

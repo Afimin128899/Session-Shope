@@ -115,6 +115,26 @@ class MiniAppAPITests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(res.headers['Cache-Control'], 'no-store')
         self.assertIn('script-src', res.headers['Content-Security-Policy'])
 
+    async def test_invoice_check_requires_authentication_and_owner(self):
+        path = '/api/invoices/crypto/fixture/check'
+        self.assertEqual((await self.client.post(path, json={})).status, 401)
+        with patch.object(server.commerce, 'invoice', AsyncMock(return_value=None)) as invoice, patch.object(server.payments, 'check_invoice', AsyncMock()) as check:
+            result = await self.client.post(path, headers=self.headers, json={'user_id': 99})
+            self.assertEqual(result.status, 404)
+            invoice.assert_awaited_once_with('crypto', 'fixture', 42)
+            check.assert_not_awaited()
+
+    async def test_wallet_is_authenticated_and_owner_scoped(self):
+        from miniapp import wallet
+        from database import activity
+        for path in ['/api/wallet/summary', '/api/wallet/transactions']:
+            self.assertEqual((await self.client.get(path)).status, 401)
+        with patch.object(wallet, 'summary', AsyncMock(return_value={'deposited':'50','spent':'10'})) as summary, patch.object(activity, 'history', AsyncMock(return_value={'items':[], 'has_more':False})) as history:
+            self.assertEqual((await self.client.get('/api/wallet/summary?user_id=99', headers=self.headers)).status, 200)
+            self.assertEqual((await self.client.get('/api/wallet/transactions?user_id=99&page=1', headers=self.headers)).status, 200)
+            summary.assert_awaited_once_with(42)
+            history.assert_awaited_once_with(42, 1)
+
     async def test_purchase_cannot_choose_another_buyer_or_unchecked_price(self):
         with patch.object(storage, 'checkout', AsyncMock(return_value={'id': 5})) as checkout:
             result = await self.client.post('/api/purchase', headers=self.headers,
