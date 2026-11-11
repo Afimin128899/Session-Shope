@@ -33,10 +33,11 @@ async def main_menu(user_id: int | None=None) -> InlineKeyboardMarkup:
          InlineKeyboardButton(text=pack_text(label_support), callback_data='support', icon_custom_emoji_id=pack_icon_for('support'))],
         [InlineKeyboardButton(text=tr('Все категории'), callback_data='all_categories:0', icon_custom_emoji_id=pack_icon_for('catalog'))],
     ]
-    from utils.miniapp import customer_miniapp_url
-    app_url = customer_miniapp_url()
+    from utils.miniapp import customer_miniapp_url, miniapp_url
+    from utils.app_access import CUSTOMER_MINIAPP_ADMIN_ONLY
+    app_url = miniapp_url() if CUSTOMER_MINIAPP_ADMIN_ONLY else customer_miniapp_url()
     if app_url:
-        rows.insert(0, [InlineKeyboardButton(text=tr('🛍 Открыть Mini App'), web_app=WebAppInfo(url=app_url))])
+        rows.insert(0, [InlineKeyboardButton(text=tr('Mini App'), web_app=WebAppInfo(url=app_url))])
     is_admin_user = False
     try:
         is_admin_user = int(user_id) in [int(x) for x in ADMIN_IDS]

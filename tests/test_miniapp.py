@@ -242,7 +242,7 @@ class MiniAppBotIntegrationTests(unittest.IsolatedAsyncioTestCase):
     async def test_configured_https_domain_stays_hidden_while_suspended(self):
         import os
         from keyboards import user_kb
-        with patch.dict(os.environ, {'MINIAPP_URL': 'https://sbandsub.space'}), \
+        with patch('utils.app_access.CUSTOMER_MINIAPP_ADMIN_ONLY',False), patch.dict(os.environ, {'MINIAPP_URL': 'https://sbandsub.space'}), \
              patch.object(user_kb, '_btn_text', AsyncMock(return_value=('Label', None))), \
              patch.object(user_kb, 'get_setting', AsyncMock(return_value='')):
             keyboard = await user_kb.main_menu(42)

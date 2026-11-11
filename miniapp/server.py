@@ -519,16 +519,24 @@ async def app_info(request):
     return response({'bot_username':username if re.fullmatch('[A-Za-z0-9_]{5,32}',username or '') else ''})
 
 
-async def index(request):
+async def storefront(request):
     return web.Response(text=(STATIC / 'index.html').read_text(), content_type='text/html')
 
 
-def create_app(*, token=None, bot=None, bot_username='', customer_enabled=None, admin_enabled=None):
-    from utils.app_access import CUSTOMER_MINIAPP_ENABLED, ADMIN_MINIAPP_ENABLED
-    from miniapp.access import app_access, retired_support, CUSTOMER_ENABLED, ADMIN_ENABLED
+async def index(request):
+    from miniapp.access import ADMIN_ONLY, CUSTOMER_ENABLED
+    if request.app[ADMIN_ONLY] and not request.app[CUSTOMER_ENABLED]:
+        return web.Response(text=(STATIC.parent / 'preview_gate' / 'index.html').read_text(), content_type='text/html')
+    return await storefront(request)
+
+
+def create_app(*, token=None, bot=None, bot_username='', customer_enabled=None, admin_enabled=None, admin_only=None):
+    from utils.app_access import CUSTOMER_MINIAPP_ENABLED, ADMIN_MINIAPP_ENABLED, CUSTOMER_MINIAPP_ADMIN_ONLY
+    from miniapp.access import app_access, retired_support, CUSTOMER_ENABLED, ADMIN_ENABLED, ADMIN_ONLY
     app = web.Application(middlewares=[locale_context, security, app_access, authenticate, retired_support], client_max_size=8192)
     app[CUSTOMER_ENABLED] = CUSTOMER_MINIAPP_ENABLED if customer_enabled is None else customer_enabled
     app[ADMIN_ENABLED] = ADMIN_MINIAPP_ENABLED if admin_enabled is None else admin_enabled
+    app[ADMIN_ONLY] = CUSTOMER_MINIAPP_ADMIN_ONLY if admin_only is None else admin_only
     app[TOKEN] = token if token is not None else config.BOT_TOKEN
     app[BOT] = bot
     app[BOT_USERNAME] = bot_username
@@ -536,6 +544,8 @@ def create_app(*, token=None, bot=None, bot_username='', customer_enabled=None, 
     from miniapp.public_info import about
     app.add_routes([
         web.get('/about', about),
+        web.get('/api/storefront-preview', storefront),
+        web.static('/preview-assets', STATIC.parent / 'preview_gate', show_index=False, follow_symlinks=False),
         web.get('/', index), web.get('/api/health', health),web.get('/api/app-info',app_info),
         web.get('/api/payment-history', payment_history),
         web.post('/api/invoices/{provider}/{invoice}/check', verify_invoice),
