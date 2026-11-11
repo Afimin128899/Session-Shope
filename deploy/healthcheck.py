@@ -73,10 +73,10 @@ async def deliver(session,settings,problems,state,now):
         previous=state.setdefault(admin,{})
         for key,text in problems.items():
             if key in previous and now-previous[key]<3600: continue
-            if await notify(session,token,admin,'⚠️ Sband ACCS\n'+text+'\nПовторное напоминание — не чаще раза в час.'):
+            if await notify(session,token,admin,'Sband ACCS: требуется внимание\n'+text+'\nПовторное напоминание — не чаще раза в час.'):
                 previous[key]=now
         for key in list(previous):
-            if key not in problems and await notify(session,token,admin,'✅ Sband ACCS: проблема устранена ('+key+').'):
+            if key not in problems and await notify(session,token,admin,'Sband ACCS: проблема устранена ('+key+').'):
                 del previous[key]
     return state
 

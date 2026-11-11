@@ -4,7 +4,7 @@ import logging
 import unicodedata
 
 from aiogram.client.session.middlewares.base import BaseRequestMiddleware
-from aiogram.types import InlineKeyboardMarkup
+from aiogram.types import InlineKeyboardMarkup, ReplyKeyboardMarkup
 
 from utils import emoji_map as e
 
@@ -20,6 +20,9 @@ FALLBACK = {
     'search': e.ADMIN_SEARCH,
 }
 CANDIDATES = {
+    'warning': ['⚠', '❗', '❕', '❌'], 'tools': ['🛠', '🔧', '⚙'],
+    'clock': ['🕒', '🕓', '⏱', '⏰'], 'pause': ['⏸', '🛑'], 'play': ['▶', '✅'],
+    'info': ['ℹ', '📄'], 'gift': ['🎁', '⭐'], 'rocket': ['🚀', '⚡'],
     'calendar': ['📅', '🗓'], 'country': ['🌐', '🌍', '🗺'],
     'premium': ['💎', '⭐', '🌟'], 'next': ['➡', '▶'],
     'support': ['💬', '🗨', '🛟'], 'warranty': ['🔒', '🛡'], 'orders': ['📦', '🛍'],
@@ -32,6 +35,7 @@ CANDIDATES = {
     'search': ['🔎', '🔍'],
 }
 PACK_ICONS = {}
+PACK_EMOJIS = {}
 logger = logging.getLogger(__name__)
 
 
@@ -57,16 +61,18 @@ async def load_pack(bot):
             raise ValueError('No suitable icons')
         PACK_ICONS.clear()
         PACK_ICONS.update(mapped)
+        PACK_EMOJIS.clear()
+        PACK_EMOJIS.update(found)
         logger.info('Button emoji pack %s loaded: %s roles', PACK_NAME, len(mapped))
         return True
     except Exception:
         # No exception text: SDK/network errors can contain a token-bearing URL.
-        logger.warning('Button emoji pack %s unavailable; keeping local icon defaults', PACK_NAME)
+        logger.warning('Button emoji pack %s unavailable; keeping cached pack icons', PACK_NAME)
         return False
 
 
 def icon_for(role):
-    return PACK_ICONS.get(role) or FALLBACK.get(role)
+    return PACK_ICONS.get(role)
 
 
 def pack_icon_for(role):
@@ -76,7 +82,8 @@ def pack_icon_for(role):
 
 def pack_text(text):
     """Plain labels accompany custom icons; keep stored editable labels intact."""
-    return ''.join(char for char in text if not (0x1F000 <= ord(char) <= 0x1FAFF or 0x2600 <= ord(char) <= 0x27BF or char in '\ufe0f\u200d\u20e3')).strip()
+    from utils.interface_emojis import strip_emojis
+    return strip_emojis(text).strip()
 
 
 def clean_label(text):
@@ -92,10 +99,11 @@ def clean_label(text):
 def role_for(button):
     text = clean_label(button.text).strip()
     data = button.callback_data or ''
+    if data in {'maintenance_preview','admin_maintenance'}: return 'tools'
     if data.startswith('sn:'):
         parts = data.split(':')
         if parts[1] == 'home':
-            return {'aged': 'calendar', 'premium': 'premium'}.get(parts[2], 'catalog')
+            return {'aged': 'calendar', 'premium': 'premium'}.get(parts[2] if len(parts)>2 else '', 'catalog')
         return {'pay':'confirm','cancel':'cancel','cheap':'money','search':'search',
                 'custom':'edit','item':'catalog','bulk':'catalog','list':'catalog',
                 'products':'calendar'}.get(parts[1], 'country')
@@ -151,9 +159,8 @@ def role_for(button):
         return 'notifications'
     if data.startswith(('stock_page:', 'adm_audit:')):
         return None
-    # Payment providers already have their own visible brand pictograms.
     if data in {'deposit_xrocket', 'deposit_crypto'}:
-        return None
+        return 'rocket' if data == 'deposit_xrocket' else 'money'
     if data.startswith('deposit_') or data == 'toggle_currency':
         return 'money'
     if data.startswith(('lave_check:', 'xrocket_check:', 'crypto_check:', 'platega_check:')):
@@ -194,35 +201,34 @@ def role_for(button):
 
 
 def decorate(markup):
-    if not isinstance(markup, InlineKeyboardMarkup):
+    if not isinstance(markup, (InlineKeyboardMarkup, ReplyKeyboardMarkup)):
         return markup
-    changed = False
-    callbacks = {button.callback_data or '' for row in markup.inline_keyboard for button in row}
-    pack_only = (any(value.startswith('sn:') for value in callbacks)
-                 or {'buy', 'topup_balance', 'all_categories:0'} <= callbacks
-                 or bool({'profile_rules', 'profile_settings', 'profile_info'} & callbacks)
-                 or (any(value.startswith('get_code:') for value in callbacks) and any(value.startswith('purchase_help:') for value in callbacks)))
-    rows = []
-    for row in markup.inline_keyboard:
-        result = []
+    from utils.interface_emojis import identity, legacy_identity, segments
+    field = 'inline_keyboard' if isinstance(markup, InlineKeyboardMarkup) else 'keyboard'
+    rows=[];changed=False
+    for row in getattr(markup,field):
+        result=[]
         for button in row:
-            if button.icon_custom_emoji_id:
-                result.append(button)
-                continue
-            identity = (pack_icon_for if pack_only else icon_for)(role_for(button))
-            if identity:
-                result.append(button.model_copy(update={
-                    'icon_custom_emoji_id': identity, 'text': clean_label(button.text),
-                }))
-                changed = True
-            else:
-                result.append(button)
+            role=role_for(button) if isinstance(markup,InlineKeyboardMarkup) else None
+            found=legacy_identity(button.icon_custom_emoji_id,button.text) if button.icon_custom_emoji_id else None
+            found=found or icon_for(role)
+            if not found:
+                found=next((identity(value) for emoji,value in segments(button.text) if emoji and identity(value)),None)
+            label=pack_text(button.text)
+            if not label:
+                label={'confirm':'Подтвердить','cancel':'Отмена','back':'Назад','next':'Далее','delete':'Удалить'}.get(role,'Выбрать')
+            if found!=button.icon_custom_emoji_id or label!=button.text:
+                result.append(button.model_copy(update={'text':label,'icon_custom_emoji_id':found}))
+                changed=True
+            else: result.append(button)
         rows.append(result)
-    return markup.model_copy(update={'inline_keyboard': rows}) if changed else markup
+    return markup.model_copy(update={field:rows}) if changed else markup
 
 
 class MissingButtonIcons(BaseRequestMiddleware):
     async def __call__(self, make_request, bot, method):
+        from utils.interface_emojis import format_method
+        method = format_method(method, bot)
         markup = getattr(method, 'reply_markup', None)
         decorated = decorate(markup)
         if decorated is not markup:

@@ -5,13 +5,14 @@ from typing import Any, Awaitable, Callable
 
 from config import ADMIN_IDS, SUPPORT_USERNAME
 from database.db import get_setting
+from utils.button_icons import pack_icon_for
 
 
 def maintenance_keyboard() -> InlineKeyboardMarkup:
-    rows = [[InlineKeyboardButton(text=tr('🔄 Проверить статус'), callback_data='check_maintenance')], [InlineKeyboardButton(text=tr('🌐 Язык / Language'), callback_data='language')]]
-    rows.append([InlineKeyboardButton(text=tr('💬 Поддержка'), callback_data='support')])
+    rows = [[InlineKeyboardButton(text=tr('Проверить статус'), callback_data='check_maintenance', icon_custom_emoji_id=pack_icon_for('refresh'), style='primary')],
+            [InlineKeyboardButton(text=tr('Написать в поддержку'), callback_data='support', icon_custom_emoji_id=pack_icon_for('support'))]]
     from utils.legal import information_button
-    rows.append([information_button()])
+    rows.append([information_button(), InlineKeyboardButton(text=tr('Язык'), callback_data='language', icon_custom_emoji_id=pack_icon_for('country'))])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
@@ -73,7 +74,7 @@ class MaintenanceMiddleware(BaseMiddleware):
         if isinstance(event, CallbackQuery):
             from utils.nav import edit_message_safe, answer_safe
             await edit_message_safe(event, text, section='maintenance', reply_markup=maintenance_keyboard())
-            await answer_safe(event, tr('🛠 Технические работы ещё продолжаются.'))
+            await answer_safe(event, tr('Технические работы ещё продолжаются. Обновили информацию о статусе.'))
             return None
 
         return None

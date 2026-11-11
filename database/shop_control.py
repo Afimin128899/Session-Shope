@@ -84,5 +84,17 @@ def public_status(settings):
 
 
 def maintenance_message(settings):
+    from utils.i18n import LANGUAGE
+    from utils.interface_emojis import html_icon
     state = public_status(settings)
-    return tr('🛠 <b>Технические работы</b>\n\n⚙️ {0}\n\n🕒 <b>Ориентир:</b> {1}\n\n💳 Уже подтверждённые оплаты обрабатываются автоматически.\n🔄 Нажмите «Проверить статус», чтобы узнать о возобновлении работы.', f"{escape(state['reason'])}", f"{escape(state['eta'])}")
+    if LANGUAGE.get() == 'en':
+        return (f'{html_icon("tools")} <b>Maintenance</b>\nThe store is temporarily unavailable.\n\n'
+                f'<b>What we are doing</b>\n<blockquote>{escape(state["reason"])}</blockquote>\n\n'
+                f'{html_icon("clock")} <b>Expected completion</b>\n{escape(state["eta"])}\nThe time is an estimate and may change.\n\n'
+                '<b>Your balance and purchases are preserved.</b> Confirmed payments continue to be processed automatically; you do not need to pay the same invoice again.\n\n'
+                'Support remains available. Tap “Check status” to refresh this notice.').strip()
+    return (f'{html_icon("tools")} <b>Технические работы</b>\nМагазин временно недоступен.\n\n'
+            f'<b>Что делаем</b>\n<blockquote>{escape(state["reason"])}</blockquote>\n\n'
+            f'{html_icon("clock")} <b>Ориентир завершения</b>\n{escape(state["eta"])}\nСрок ориентировочный и может измениться.\n\n'
+            '<b>Баланс и покупки сохранены.</b> Подтверждённые оплаты продолжают обрабатываться автоматически. Повторно оплачивать тот же счёт не нужно.\n\n'
+            'Поддержка остаётся на связи. Нажмите «Проверить статус», чтобы обновить информацию.').strip()

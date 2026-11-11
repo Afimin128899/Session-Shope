@@ -19,6 +19,8 @@ class ButtonIconsTests(unittest.IsolatedAsyncioTestCase):
         state = patch.dict(icons.PACK_ICONS, {}, clear=True)
         state.start()
         self.addCleanup(state.stop)
+        emoji_cache=patch.dict(icons.PACK_EMOJIS,{},clear=True)
+        emoji_cache.start();self.addCleanup(emoji_cache.stop)
 
     async def test_pack_name_and_real_ids_are_used_with_variation_selectors(self):
         bot = SimpleNamespace(get_sticker_set=AsyncMock(return_value=SimpleNamespace(stickers=[
@@ -32,14 +34,14 @@ class ButtonIconsTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(icons.icon_for('support'), '1001')
         self.assertEqual(icons.icon_for('edit'), '1002')
         self.assertEqual(icons.icon_for('back'), '1003')
-        self.assertEqual(icons.icon_for('stats'), icons.FALLBACK['stats'])
+        self.assertIsNone(icons.icon_for('stats'))
 
-    async def test_unavailable_pack_keeps_defaults_and_does_not_log_exception_secrets(self):
+    async def test_unavailable_pack_does_not_use_other_packs_or_log_secrets(self):
         bot = SimpleNamespace(get_sticker_set=AsyncMock(side_effect=OSError('token-bearing-url')))
         with self.assertLogs(icons.logger, level='WARNING') as logs:
             self.assertFalse(await icons.load_pack(bot))
         self.assertNotIn('token-bearing-url', ''.join(logs.output))
-        self.assertEqual(icons.icon_for('support'), icons.FALLBACK['support'])
+        self.assertIsNone(icons.icon_for('support'))
 
     async def test_unsuitable_pack_does_not_replace_previously_loaded_icons(self):
         icons.PACK_ICONS['support'] = '1001'
@@ -87,7 +89,7 @@ class ButtonIconsTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(markup.inline_keyboard[0][0].text, '🛟 Мои обращения')
         self.assertIsNone(markup.inline_keyboard[0][0].icon_custom_emoji_id)
 
-    async def test_buttons_that_already_have_icons_and_unrelated_controls_are_untouched(self):
+    async def test_removes_foreign_icons_and_standard_emoji_without_changing_controls(self):
         original = keyboard(
             InlineKeyboardButton(text='Custom support', callback_data='tk_user:0', icon_custom_emoji_id='999'),
             InlineKeyboardButton(text='🇺🇸 USA', callback_data='cat_detail:us'),
@@ -99,7 +101,13 @@ class ButtonIconsTests(unittest.IsolatedAsyncioTestCase):
             InlineKeyboardButton(text='Партнёрская ссылка', url='https://example.com'),
             InlineKeyboardButton(text='🚀 USDT $ (xRocket Pay)', callback_data='deposit_xrocket'),
         )
-        self.assertIs(icons.decorate(original), original)
+        after=icons.decorate(original)
+        self.assertIsNot(after,original)
+        self.assertIsNone(after.inline_keyboard[0][0].icon_custom_emoji_id)
+        self.assertEqual(after.inline_keyboard[0][1].text,'USA')
+        self.assertEqual(after.inline_keyboard[0][-1].text,'USDT $ (xRocket Pay)')
+        for before,button in zip(original.inline_keyboard[0],after.inline_keyboard[0]):
+            self.assertEqual(before.model_dump(exclude={'text','icon_custom_emoji_id'}),button.model_dump(exclude={'text','icon_custom_emoji_id'}))
 
     async def test_semantic_actions_get_appropriate_icons_without_duplicate_pictograms(self):
         examples = [

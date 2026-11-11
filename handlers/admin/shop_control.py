@@ -9,7 +9,7 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from config import ADMIN_IDS
 from database import admin_web
-from database.shop_control import set_review, public_status
+from database.shop_control import set_review, public_status, maintenance_message
 from utils.nav import edit_message_safe, answer_safe
 
 control_router = Router()
@@ -37,9 +37,28 @@ async def show_shop_control(call, state):
     await state.clear()
     settings = await admin_web.settings()
     status = public_status(settings)
-    text = tr('⚙️ <b>Режимы магазина</b>\n\n🛠 Техработы: <b>{0}</b>\n⏸ Продажи: <b>{1}</b>\n\n📝 Причина техработ: {2}\n🕒 Ориентир: {3}\n🛍 Сообщение об остановке продаж: {4}\n\nПри остановке продаж каталог, купленные аккаунты, коды и поддержка доступны. Полные техработы закрывают интерфейс покупателей. Подтверждённые оплаты обрабатываются в обоих режимах.', f"{(tr('включены') if status['maintenance'] else tr('выключены'))}", f"{(tr('приостановлены') if status['sales_paused'] else tr('открыты'))}", f"{escape(status['reason'])}", f"{escape(status['eta'])}", f"{escape(status['sales_reason'])}")
-    rows = [button(tr('🛠 Выключить техработы') if status['maintenance'] else tr('🛠 Включить техработы'), 'shop_mode:maintenance'), button(tr('▶️ Открыть продажи') if status['sales_paused'] else tr('⏸ Приостановить продажи'), 'shop_mode:sales'), button(tr('📝 Причина техработ'), 'shop_notice:maintenance_reason'), button(tr('🕒 Время завершения'), 'shop_notice:maintenance_eta'), button(tr('🛍 Причина остановки продаж'), 'shop_notice:sales_pause_reason'), button(tr('🔎 Аккаунты на проверке'), 'review_list:0'), button(tr('В админ-панель'), 'admin_home')]
-    await edit_message_safe(call, text, reply_markup=InlineKeyboardMarkup(inline_keyboard=rows), section='settings')
+    text = tr('<b>Управление магазином</b>\n\n<b>Технические работы:</b> {0}\n<b>Продажи:</b> {1}\n\n<b>Причина техработ</b>\n<blockquote>{2}</blockquote>\n<b>Ориентир завершения:</b> {3}\n\n<b>Причина остановки продаж:</b> {4}\n\nПолные техработы закрывают интерфейс покупателей; поддержка и информация остаются доступны. Остановка продаж сохраняет доступ к каталогу, покупкам и кодам. Подтверждённые оплаты обрабатываются в обоих режимах.', tr('включены') if status['maintenance'] else tr('выключены'), tr('приостановлены') if status['sales_paused'] else tr('открыты'), escape(status['reason']), escape(status['eta']), escape(status['sales_reason']))
+    rows = [
+        [InlineKeyboardButton(text=tr('Завершить техработы') if status['maintenance'] else tr('Включить техработы'),callback_data='shop_mode:maintenance',style='success' if status['maintenance'] else 'primary')],
+        button(tr('Предпросмотр для покупателя'),'maintenance_preview'),
+        [InlineKeyboardButton(text=tr('Причина техработ'),callback_data='shop_notice:maintenance_reason'),InlineKeyboardButton(text=tr('Время завершения'),callback_data='shop_notice:maintenance_eta')],
+        button(tr('Открыть продажи') if status['sales_paused'] else tr('Приостановить продажи'),'shop_mode:sales'),
+        button(tr('Причина остановки продаж'),'shop_notice:sales_pause_reason'),
+        button(tr('Аккаунты на проверке'),'review_list:0'),
+        button(tr('В админ-панель'),'admin_home'),
+    ]
+    await edit_message_safe(call,text,reply_markup=InlineKeyboardMarkup(inline_keyboard=rows),section='settings')
+    await answer_safe(call)
+
+
+@control_router.callback_query(F.data == 'maintenance_preview')
+async def preview_maintenance(call,state):
+    if call.from_user.id not in ADMIN_IDS:
+        return await answer_safe(call,tr('Нет доступа.'),show_alert=True)
+    await state.clear()
+    settings=await admin_web.settings()
+    rows=[button(tr('Обновить предпросмотр'),'maintenance_preview'),button(tr('К настройкам техработ'),'shop_status')]
+    await edit_message_safe(call,maintenance_message(settings),reply_markup=InlineKeyboardMarkup(inline_keyboard=rows),section='maintenance')
     await answer_safe(call)
 
 
