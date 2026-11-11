@@ -240,8 +240,8 @@ class TicketViewTests(unittest.IsolatedAsyncioTestCase):
             await ui.notify(bot, [42], 9, 'New reply')
         bot.send_message.assert_awaited_once()
 
-    def test_admin_order_card_exposes_status_and_ticket(self):
+    def test_admin_order_card_keeps_status_without_ticket_entry(self):
         order = {'id': 52, 'user_id': 42, 'account_id': 8, 'date': 'today', 'ticket_id': 9,
                  'ticket_status': 'open', 'status': 'completed'}
         self.assertIn('Проблема', order_card(order))
-        self.assertEqual(order_menu(order).inline_keyboard[0][0].callback_data, 'tk:9:0')
+        self.assertFalse(any((b.callback_data or '').startswith('tk:') for row in order_menu(order).inline_keyboard for b in row))

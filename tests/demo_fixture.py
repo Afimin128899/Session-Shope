@@ -9,7 +9,7 @@ from miniapp.server import create_app
 
 async def main():
     config.ADMIN_IDS=[42,43]
-    runner=web.AppRunner(create_app(token=TEST_TOKEN),access_log=None)
+    runner=web.AppRunner(create_app(customer_enabled=True,admin_enabled=True,token=TEST_TOKEN),access_log=None)
     await runner.setup();await web.TCPSite(runner,'127.0.0.1',8087).start()
     print('Demo fixture ready',flush=True)
     try:await asyncio.Event().wait()

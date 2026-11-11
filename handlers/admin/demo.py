@@ -6,7 +6,7 @@ from aiogram.types import InlineKeyboardButton,InlineKeyboardMarkup,WebAppInfo
 from config import ADMIN_IDS
 from services.demo import STORE
 from utils.button_icons import icon_for
-from utils.miniapp import miniapp_url
+from utils.miniapp import customer_miniapp_url
 from utils.nav import answer_safe,edit_message_safe
 
 DEMO_ROUTER=Router()
@@ -74,7 +74,7 @@ async def demo(call, state):
         if order['status'] != 'refunded':
             rows.append(button(tr('Учебный возврат #{0}', f"{order['id']}"), f"demo:refund:{generation}:{order['id']}", 'money'))
     rows.append(button(tr('Учебное колесо удачи'), f'demo:reward:{generation}', 'reviews'))
-    url = miniapp_url()
+    url = customer_miniapp_url()
     if url:
         rows.append([InlineKeyboardButton(text=tr('Открыть тестовый Mini App'), web_app=WebAppInfo(url=url + '/demo'), icon_custom_emoji_id=icon_for('catalog'))])
     rows.append(button(tr('Сбросить учебные данные'), f'demo:reset_ask:{generation}', 'refresh'))

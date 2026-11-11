@@ -54,10 +54,10 @@ class QualityAPITests(unittest.IsolatedAsyncioTestCase):
             res=await self.client.post('/api/reviews',headers=self.headers,json={'purchase_id':1,'user_id':99,'rating':5,'body':'Good'})
             self.assertEqual(res.status,201);save.assert_awaited_once_with(42,1,5,'Good')
 
-    async def test_warranty_claim_checks_ownership_in_storage(self):
+    async def test_archived_warranty_api_cannot_create_tickets(self):
         with patch.object(tickets,'create_ticket',AsyncMock(side_effect=ValueError('Гарантия истекла'))) as save:
             res=await self.client.post('/api/orders/1/warranty-claim',headers=self.headers,json={'user_id':99,'body':'Problem'})
-            self.assertEqual(res.status,409);save.assert_awaited_once_with(42,1,'Problem',warranty=True)
+            self.assertEqual(res.status,410);save.assert_not_awaited()
 
     async def test_promo_redeem_uses_signed_owner(self):
         with patch.object(coupons,'redeem_balance',AsyncMock(return_value=Decimal(100))) as redeem:

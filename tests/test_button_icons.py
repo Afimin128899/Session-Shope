@@ -56,8 +56,8 @@ class ButtonIconsTests(unittest.IsolatedAsyncioTestCase):
             main = await user_kb.main_menu(42)
             self.assertFalse({'balance','my_purchases','tk_user:0','promo'} & {b.callback_data for row in main.inline_keyboard for b in row})
             original = await user_kb.profile_menu()
-        support = next(b for row in original.inline_keyboard for b in row if b.callback_data == 'tk_user:0')
-        self.assertEqual((support.text, support.icon_custom_emoji_id), ('Мои обращения', '1001'))
+        support = next(b for row in original.inline_keyboard for b in row if b.callback_data == 'support')
+        self.assertEqual((support.text, support.icon_custom_emoji_id), ('Написать в поддержку', '1001'))
         decorated = icons.decorate(original)
         for row in original.inline_keyboard:
             for before in row:

@@ -106,7 +106,9 @@ def role_for(button):
         return 'warranty'
     if data == 'spam_all_yes':
         return 'confirm'
-    if data.startswith(('tk_reply:', 'tk_user:', 'tk_admin:', 'tk:', 'purchase_help:')):
+    if data == 'support_end':
+        return 'back'
+    if data == 'support' or data.startswith(('support_reply:', 'tk_reply:', 'tk_user:', 'tk_admin:', 'tk:', 'purchase_help:')):
         return 'support'
     if data.startswith('tk_close:'):
         return 'confirm'

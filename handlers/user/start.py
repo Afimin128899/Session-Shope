@@ -35,15 +35,15 @@ async def cmd_start(message: Message, command, state=None):
         await message.answer(tr('🎁 Приветственный бонус: {0} ₽ зачислены на баланс. Используйте их для покупок в магазине.', f'{welcome_bonus:.2f}'))
     await update_user_username(message.from_user.id, message.from_user.username)
     if args == 'miniapp':
-        from utils.miniapp import miniapp_url
-        url=miniapp_url()
+        from utils.miniapp import customer_miniapp_url
+        url=customer_miniapp_url()
         if url:
             await message.answer(tr('Откройте магазин по кнопке ниже.'),reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text=tr('🛍 Открыть Mini App'),web_app=WebAppInfo(url=url))]]))
             return
     if args and args.startswith('product_'):
-        from utils.miniapp import miniapp_url
+        from utils.miniapp import customer_miniapp_url
         value = args[8:]
-        url = miniapp_url()
+        url = customer_miniapp_url()
         if url and value.isascii() and value.isdigit() and (0 < int(value) <= 2147483647):
             await message.answer(tr('Откройте карточку аккаунта. Наличие и цена проверяются в магазине.'), reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text=tr('Открыть товар'), web_app=WebAppInfo(url=url + ('&' if '?' in url else '?') + 'product=' + value))]]))
             return

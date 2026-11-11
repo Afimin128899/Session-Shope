@@ -111,7 +111,7 @@ class BotDemoTests(unittest.IsolatedAsyncioTestCase):
     async def test_bot_training_screen_and_exit_have_valid_keyboards(self):
         call=NS(from_user=NS(id=42),data='demo:open')
         state=NS(clear=AsyncMock())
-        with patch.object(bot_demo,'ADMIN_IDS',[42]),patch.object(bot_demo,'edit_message_safe',AsyncMock()) as edit,patch.object(bot_demo,'answer_safe',AsyncMock()),patch.object(bot_demo,'miniapp_url',return_value=None):
+        with patch.object(bot_demo,'ADMIN_IDS',[42]),patch.object(bot_demo,'edit_message_safe',AsyncMock()) as edit,patch.object(bot_demo,'answer_safe',AsyncMock()),patch.object(bot_demo,'customer_miniapp_url',return_value=None):
             await bot_demo.demo(call,state)
             self.assertIn('ТЕСТОВЫЙ',edit.call_args.args[1])
             call.data='demo:exit';await bot_demo.demo(call,state)

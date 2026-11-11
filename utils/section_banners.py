@@ -18,6 +18,7 @@ EXACT = {
     'buy': 'catalog', 'back_buy': 'catalog',
     'my_profile': 'profile', 'promo_cancel': 'profile',
     'balance': 'wallet', 'toggle_currency': 'wallet', 'topup_balance': 'wallet',
+    'support': 'support',
     'my_purchases': 'orders', 'promo': 'promo', 'referral_info': 'referrals',
     'wheel': 'bonus', 'wheel_claim': 'bonus', 'info_menu': 'info',
     'stock_menu': 'stock', 'admin_home': 'admin', 'admin_panel_button': 'admin',

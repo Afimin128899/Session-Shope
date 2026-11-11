@@ -523,8 +523,12 @@ async def index(request):
     return web.Response(text=(STATIC / 'index.html').read_text(), content_type='text/html')
 
 
-def create_app(*, token=None, bot=None, bot_username=''):
-    app = web.Application(middlewares=[locale_context, security, authenticate], client_max_size=8192)
+def create_app(*, token=None, bot=None, bot_username='', customer_enabled=None, admin_enabled=None):
+    from utils.app_access import CUSTOMER_MINIAPP_ENABLED, ADMIN_MINIAPP_ENABLED
+    from miniapp.access import app_access, retired_support, CUSTOMER_ENABLED, ADMIN_ENABLED
+    app = web.Application(middlewares=[locale_context, security, app_access, authenticate, retired_support], client_max_size=8192)
+    app[CUSTOMER_ENABLED] = CUSTOMER_MINIAPP_ENABLED if customer_enabled is None else customer_enabled
+    app[ADMIN_ENABLED] = ADMIN_MINIAPP_ENABLED if admin_enabled is None else admin_enabled
     app[TOKEN] = token if token is not None else config.BOT_TOKEN
     app[BOT] = bot
     app[BOT_USERNAME] = bot_username
@@ -555,6 +559,8 @@ def create_app(*, token=None, bot=None, bot_username=''):
     register_demo(app,response)
     from miniapp.admin_api import register
     register(app,response,page_number)
+    from miniapp.admin_app import register as register_admin_app
+    register_admin_app(app, response)
     return app
 
 

@@ -5,7 +5,6 @@ import sys
 from logging.handlers import RotatingFileHandler
 from contextlib import suppress
 from aiogram import Bot, Dispatcher
-from aiogram.types import MenuButtonWebApp, WebAppInfo
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 from aiogram.fsm.storage.memory import MemoryStorage
@@ -25,7 +24,7 @@ from handlers.user.language import language_router
 from utils.language_middleware import LanguageMiddleware
 from handlers.user.rewards import rewards_router
 from handlers.user.restock import restock_router
-from handlers.tickets import ticket_router
+from handlers.direct_support import support_router
 from handlers.quality import quality_router
 from handlers.expansion import router as expansion_router
 from services.restock import restock_worker
@@ -105,9 +104,9 @@ async def main():
     dp.callback_query.outer_middleware(MaintenanceMiddleware())
 
     dp.include_routers(
-        stars_router, DEMO_ROUTER, language_router, commands_router, start_router, balance_router, shop_router, purchases_router, promo_router, profile_router, rewards_router,
+        stars_router, DEMO_ROUTER, language_router, commands_router, support_router, start_router, balance_router, shop_router, purchases_router, promo_router, profile_router, rewards_router,
         admin_router, referral_admin_router, sbp_admin_router, control_router, manage_router, broadcast_router, add_account_router, button_editor_router,
-        cat_router, restock_router, admin_tools_router, spam_router, ticket_router, refund_router, quality_router, expansion_router, fallback_router,
+        cat_router, restock_router, admin_tools_router, spam_router, refund_router, quality_router, expansion_router, fallback_router,
     )
 
     logging.info("Starting bot...")
@@ -122,9 +121,8 @@ async def main():
         if app_url:
             from miniapp.server import start_server
             web_runner = await start_server(bot)
-            await bot.set_chat_menu_button(menu_button=MenuButtonWebApp(
-                text="Магазин", web_app=WebAppInfo(url=app_url),
-            ))
+        from utils.app_access import configure_chat_menu
+        await configure_chat_menu(bot)
         from services.payments import payment_worker
         from services.market_notifications import market_worker
         from services.spam_check import spam_worker

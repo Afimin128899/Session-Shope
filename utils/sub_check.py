@@ -45,6 +45,7 @@ async def send_sub_prompt(event: CallbackQuery | Message, bot: Bot):
     kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text=tr('Подписаться на канал'), url=url, icon_custom_emoji_id=EMOJI_MEGA)], [InlineKeyboardButton(text=tr('Я подписался'), callback_data='check_sub_status', icon_custom_emoji_id=EMOJI_CHECK)]])
     from utils.legal import information_button
     kb.inline_keyboard.append([information_button()])
+    kb.inline_keyboard.append([InlineKeyboardButton(text=tr('Написать в поддержку'), callback_data='support')])
     if isinstance(event, CallbackQuery):
         await edit_message_safe(event, text, reply_markup=kb)
         await answer_safe(event)

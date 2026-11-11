@@ -28,11 +28,6 @@ async def main_menu(user_id: int | None=None) -> InlineKeyboardMarkup:
     label_promo, emoji_promo = await _btn_text('btn_promo', tr('Ввести промокод'), EMOJI_STAR)
     label_info, emoji_info = await _btn_text('btn_info', tr('Информация'), EMOJI_INFO)
     label_profile, emoji_profile = await _btn_text('btn_profile', tr('Мой профиль'), EMOJI_USER)
-    support_val = await get_setting('support_username', SUPPORT_USERNAME)
-    if support_val.startswith('http') or support_val.startswith('t.me'):
-        support_url = support_val if support_val.startswith('http') else f'https://{support_val}'
-    else:
-        support_url = f"https://t.me/{support_val.lstrip('@')}"
     reviews_val = await get_setting('reviews_link', REVIEWS_LINK or 'https://t.me')
     if reviews_val.startswith('http') or reviews_val.startswith('t.me'):
         reviews_url = reviews_val if reviews_val.startswith('http') else f'https://{reviews_val}'
@@ -40,13 +35,12 @@ async def main_menu(user_id: int | None=None) -> InlineKeyboardMarkup:
         reviews_url = f"https://t.me/{reviews_val.lstrip('@')}"
     rows = [[InlineKeyboardButton(text=label_buy, callback_data='buy', icon_custom_emoji_id=emoji_buy)], [InlineKeyboardButton(text=label_profile, callback_data='my_profile', icon_custom_emoji_id=emoji_profile)], [InlineKeyboardButton(text=label_info, callback_data='info_menu', icon_custom_emoji_id=emoji_info)]]
     rows.insert(1,[InlineKeyboardButton(text=tr('🗂 Все категории'),callback_data='all_categories:0')])
-    from utils.miniapp import miniapp_url
-    app_url = miniapp_url()
+    from utils.miniapp import customer_miniapp_url
+    app_url = customer_miniapp_url()
     if app_url:
         rows.insert(0, [InlineKeyboardButton(text=tr('🛍 Открыть Mini App'), web_app=WebAppInfo(url=app_url))])
     reviews_row = [InlineKeyboardButton(text=label_reviews, callback_data='quality_reviews:0', icon_custom_emoji_id=emoji_reviews)]
-    if support_val:
-        reviews_row.insert(0, InlineKeyboardButton(text=label_support, url=support_url, icon_custom_emoji_id=emoji_support))
+    reviews_row.insert(0, InlineKeyboardButton(text=label_support, callback_data='support', icon_custom_emoji_id=emoji_support))
     rows.append(reviews_row)
     is_admin_user = False
     try:
@@ -65,7 +59,7 @@ async def profile_menu():
     for key, label, callback, role in specs:
         text, emoji = await _btn_text(key, label, icon_for(role))
         rows.append([InlineKeyboardButton(text=text, callback_data=callback, icon_custom_emoji_id=emoji)])
-    rows.insert(1, [InlineKeyboardButton(text=tr('Мои обращения'), callback_data='tk_user:0', icon_custom_emoji_id=icon_for('support'))])
+    rows.insert(1, [InlineKeyboardButton(text=tr('Написать в поддержку'), callback_data='support', icon_custom_emoji_id=icon_for('support'))])
     rows.append([InlineKeyboardButton(text=tr('Бонусы · Колесо удачи'), callback_data='wheel', icon_custom_emoji_id=icon_for('reviews'))])
     rows.append([InlineKeyboardButton(text=tr('🌐 Язык / Language'), callback_data='language')])
     rows.append([InlineKeyboardButton(text=tr('В главное меню'), callback_data='back_main', icon_custom_emoji_id=icon_for('back'))])

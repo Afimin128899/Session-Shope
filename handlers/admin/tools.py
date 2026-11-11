@@ -75,8 +75,6 @@ def order_card(order):
 
 def order_menu(order):
     keyboard = search_menu()
-    if order.get('ticket_id'):
-        keyboard.inline_keyboard.insert(0, [InlineKeyboardButton(text=tr('Открыть обращение'), callback_data=f"tk:{order['ticket_id']}:0")])
     if order.get('status') in {'issued', 'completed'} and order.get('paid_amount') is not None:
         keyboard.inline_keyboard.insert(0, [InlineKeyboardButton(text=tr('Вернуть на баланс'), callback_data=f"adm_refund:{order['id']}")])
     return keyboard

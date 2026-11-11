@@ -9,9 +9,7 @@ from database.db import get_setting
 
 def maintenance_keyboard() -> InlineKeyboardMarkup:
     rows = [[InlineKeyboardButton(text=tr('🔄 Проверить статус'), callback_data='check_maintenance')], [InlineKeyboardButton(text=tr('🌐 Язык / Language'), callback_data='language')]]
-    import re
-    if re.fullmatch('@?[A-Za-z0-9_]{5,32}', SUPPORT_USERNAME or ''):
-        rows.append([InlineKeyboardButton(text=tr('💬 Поддержка'), url='https://t.me/' + SUPPORT_USERNAME.lstrip('@'))])
+    rows.append([InlineKeyboardButton(text=tr('💬 Поддержка'), callback_data='support')])
     from utils.legal import information_button
     rows.append([information_button()])
     return InlineKeyboardMarkup(inline_keyboard=rows)
@@ -35,6 +33,9 @@ class MaintenanceMiddleware(BaseMiddleware):
     ) -> Any:
         from utils.payment_events import is_payment_event
         if is_payment_event(event):
+            return await handler(event, data)
+        from utils.support_access import is_support_event
+        if await is_support_event(event, data):
             return await handler(event, data)
         if isinstance(event, CallbackQuery) and (event.data in {'language', 'info_menu'} or (event.data or '').startswith('language:')):
             return await handler(event, data)

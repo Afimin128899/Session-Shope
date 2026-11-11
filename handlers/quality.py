@@ -7,8 +7,8 @@ from aiogram import Router,F
 from aiogram.fsm.state import StatesGroup,State
 from aiogram.types import InlineKeyboardButton,InlineKeyboardMarkup
 from config import ADMIN_IDS
-from database import db, quality, coupons, tickets
-from handlers.tickets import notify
+from database import db, quality, coupons
+from handlers.direct_support import begin as begin_direct_support, relay
 from utils.nav import answer_safe, edit_message_safe
 
 quality_router=Router()
@@ -72,24 +72,15 @@ async def begin_warranty(call, state):
     except ValueError as exc:
         await answer_safe(call, str(exc), show_alert=True)
         return
-    await state.clear()
-    await state.update_data(quality_order=order)
-    await state.set_state(Input.warranty)
-    await edit_message_safe(call, tr('Опишите проблему со входом (до 500 символов). Не отправляйте пароли, коды и сессии. Срок гарантии проверяется при отправке.'), reply_markup=back(order))
-    await call.answer()
+    await begin_direct_support(call, state, order=order, warranty=True)
 
 
 @quality_router.message(Input.warranty,F.text)
 async def submit_warranty(message, state):
-    try:
-        order = (await state.get_data())['quality_order']
-        ticket = await tickets.create_ticket(message.from_user.id, order, message.text, warranty=True)
-    except (ValueError, KeyError) as exc:
-        await message.answer(escape(str(exc)))
-        return
-    await state.clear()
-    await message.answer(tr('✅ Гарантийное обращение #{0} сохранено. Поддержка ответит в боте.', f'{ticket}'), reply_markup=back(order))
-    await notify(message.bot, ADMIN_IDS, ticket, 'Новое гарантийное обращение.')
+    # Compatibility for an in-flight old form; no tickets are created.
+    order = (await state.get_data()).get('quality_order')
+    if await relay(message, order=order, warranty=True):
+        await state.clear()
 
 
 @quality_router.callback_query(F.data.startswith('quality_features:'))

@@ -1,8 +1,10 @@
 """Real MariaDB assertions for warranties, reviews, coupons and private history."""
 import asyncio
 from decimal import Decimal
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock,patch
+from types import SimpleNamespace as NS
 from test_payments import db
+from handlers import direct_support
 from inventory_fixture import confirm_fixture_account
 from test_miniapp import signed_data
 from database import quality,coupons,commerce,activity,tickets,refunds
@@ -42,16 +44,22 @@ async def quality_scenarios(session,connection,headers):
     assert status==200 and data['warranty']['active'] and data['characteristics']['registration_date']=='2020-03-02'
     assert 'quality-session' not in str(data) and 'test-quality-password' not in str(data['characteristics'])
     print('PASS: new stock gets 24h; old orders do not; order snapshots survive admin edits')
-    assert (await api(f'orders/{order}/warranty-claim',{'body':'Login problem'},auth=other,method='POST'))[0]==409
-    status,data=await api(f'orders/{order}/warranty-claim',{'body':'Login problem'},method='POST')
-    assert status==201
-    ticket=await tickets.get_ticket(data['ticket_id'],42)
-    assert ticket['warranty_claimed_at']
-    async with connection.cursor() as cur:
-        await cur.execute('UPDATE purchases SET warranty_until=UTC_TIMESTAMP()-INTERVAL 1 SECOND WHERE id=%s',(order,))
-    assert (await api(f'orders/{order}/warranty-claim',{'body':'Too late'},method='POST'))[0]==409
-    await tickets.reply(ticket['id'],42,'Existing conversation remains open')
-    print('PASS: claim owner and deadline enforced; accepted claim stays recorded after deadline')
+    # HTTP ticket creation is retired; warranty messages go straight to admins.
+    assert (await api(f'orders/{order}/warranty-claim',{'body':'Login problem'},auth=other,method='POST'))[0]==410
+    assert (await api(f'orders/{order}/warranty-claim',{'body':'Login problem'},method='POST'))[0]==410
+    msg=NS(from_user=NS(id=42,full_name='Fixture',username='fixture'),chat=NS(id=42),message_id=1,
+           answer=AsyncMock(),bot=NS(send_message=AsyncMock(),copy_message=AsyncMock()))
+    with patch.object(direct_support,'ADMIN_IDS',[999]):
+        assert await direct_support.relay(msg,order=order,warranty=True)
+        msg.bot.copy_message.assert_awaited_once()
+        async with connection.cursor() as cur:
+            await cur.execute('SELECT COUNT(*) FROM support_tickets WHERE purchase_id=%s',(order,))
+            assert (await cur.fetchone())[0]==0
+            await cur.execute('UPDATE purchases SET warranty_until=UTC_TIMESTAMP()-INTERVAL 1 SECOND WHERE id=%s',(order,))
+        msg.bot.copy_message.reset_mock()
+        assert not await direct_support.relay(msg,order=order,warranty=True)
+        msg.bot.copy_message.assert_not_awaited()
+    print('PASS: direct warranty messages validate deadline; retired HTTP endpoints create no tickets')
     assert (await api('reviews',{'purchase_id':order,'rating':5,'body':'Forged'},auth=other,method='POST'))[0]==409
     assert (await api('reviews',{'purchase_id':order,'rating':5,'body':'test-quality-password'},method='POST'))[0]==409
     assert (await api('reviews',{'purchase_id':order,'rating':5,'body':'Great <script>window.BAD=1</script>'},method='POST'))[0]==201

@@ -126,7 +126,7 @@ async def main():
         await sql("UPDATE categories SET is_active=1 WHERE slug='auto-cl-unverified'")
         report('Popular country seed, stock-first sorting and failed-stock migration work; disabled destinations stay disabled')
 
-        runner=web.AppRunner(create_app(token=TEST_TOKEN,bot=NS(),bot_username='auto_fixture_bot'),access_log=None)
+        runner=web.AppRunner(create_app(customer_enabled=True,admin_enabled=True,token=TEST_TOKEN,bot=NS(),bot_username='auto_fixture_bot'),access_log=None)
         await runner.setup();await web.TCPSite(runner,'127.0.0.1',8093).start()
         async with ClientSession() as client:
             headers={'Authorization':'tma '+signed_data(43)}

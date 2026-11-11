@@ -7,6 +7,8 @@ from utils.payment_events import is_payment_event
 class DemoGuard(BaseMiddleware):
     async def __call__(self,handler,event,data):
         if is_payment_event(event):return await handler(event,data)
+        from utils.support_access import is_support_event
+        if await is_support_event(event, data):return await handler(event,data)
         user=getattr(event,'from_user',None)
         if not user or not STORE.active(user.id):return await handler(event,data)
         from config import ADMIN_IDS

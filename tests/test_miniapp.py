@@ -60,7 +60,7 @@ class MiniAppAPITests(unittest.IsolatedAsyncioTestCase):
         ]
         for p in self.patchers: p.start()
         self.bot = SimpleNamespace(get_chat_member=AsyncMock(return_value=SimpleNamespace(status='left')))
-        self.client = TestClient(TestServer(server.create_app(token=TEST_TOKEN, bot=self.bot)))
+        self.client = TestClient(TestServer(server.create_app(token=TEST_TOKEN, bot=self.bot, customer_enabled=True, admin_enabled=True)))
         await self.client.start_server()
         self.headers = {'Authorization': 'tma ' + signed_data()}
 
@@ -239,27 +239,27 @@ class CheckoutTests(unittest.IsolatedAsyncioTestCase):
 
 
 class MiniAppBotIntegrationTests(unittest.IsolatedAsyncioTestCase):
-    async def test_web_app_button_uses_configured_https_domain(self):
+    async def test_configured_https_domain_stays_hidden_while_suspended(self):
         import os
         from keyboards import user_kb
         with patch.dict(os.environ, {'MINIAPP_URL': 'https://sbandsub.space'}), \
              patch.object(user_kb, '_btn_text', AsyncMock(return_value=('Label', None))), \
              patch.object(user_kb, 'get_setting', AsyncMock(return_value='')):
             keyboard = await user_kb.main_menu(42)
-            self.assertEqual(keyboard.inline_keyboard[0][0].web_app.url, 'https://sbandsub.space')
+            self.assertTrue(all(b.web_app is None for row in keyboard.inline_keyboard for b in row))
 
     async def test_shared_miniapp_link_opens_authenticated_webapp_button(self):
         import os
         from handlers.user import start
         message=SimpleNamespace(from_user=SimpleNamespace(id=42,username='fixture',first_name='Fixture'),answer=AsyncMock())
-        with patch.dict(os.environ,MINIAPP_URL='https://sbandsub.space'), patch.object(start,'is_new_user',AsyncMock(return_value=False)), patch.object(start,'create_user_with_referrer',AsyncMock(return_value=Decimal(0))), patch.object(start,'update_user_username',AsyncMock()):
+        with patch('utils.app_access.CUSTOMER_MINIAPP_ENABLED',True), patch.dict(os.environ,MINIAPP_URL='https://sbandsub.space'), patch.object(start,'is_new_user',AsyncMock(return_value=False)), patch.object(start,'create_user_with_referrer',AsyncMock(return_value=Decimal(0))), patch.object(start,'update_user_username',AsyncMock()):
             await start.cmd_start(message,SimpleNamespace(args='miniapp'))
             keyboard=message.answer.call_args.kwargs['reply_markup']
             self.assertEqual(keyboard.inline_keyboard[0][0].web_app.url,'https://sbandsub.space')
             self.assertNotIn('initData',keyboard.inline_keyboard[0][0].web_app.url)
 
     async def test_public_app_link_metadata_does_not_require_login_or_expose_private_data(self):
-        client=TestClient(TestServer(server.create_app(token=TEST_TOKEN,bot_username='fixture_bot')))
+        client=TestClient(TestServer(server.create_app(token=TEST_TOKEN,bot_username='fixture_bot',customer_enabled=True,admin_enabled=True)))
         try:
             await client.start_server()
             response=await client.get('/api/app-info')
