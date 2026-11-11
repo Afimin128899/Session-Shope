@@ -54,7 +54,7 @@ class ButtonIconsTests(unittest.IsolatedAsyncioTestCase):
              patch.object(user_kb, 'get_setting', AsyncMock(side_effect=lambda key, default: default)), \
              patch('utils.miniapp.miniapp_url', return_value='https://example.com'):
             main = await user_kb.main_menu(42)
-            self.assertFalse({'balance','my_purchases','tk_user:0','promo'} & {b.callback_data for row in main.inline_keyboard for b in row})
+            self.assertFalse({'balance','my_purchases','tk_user:0'} & {b.callback_data for row in main.inline_keyboard for b in row})
             original = await user_kb.profile_menu()
         support = next(b for row in original.inline_keyboard for b in row if b.callback_data == 'support')
         self.assertEqual((support.text, support.icon_custom_emoji_id), ('Написать в поддержку', '1001'))

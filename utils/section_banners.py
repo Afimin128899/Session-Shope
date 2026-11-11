@@ -46,7 +46,7 @@ PREFIXES = (
     ('orders_page:', 'orders'), ('open_purchase:', 'orders'), ('get_code:', 'orders'),
     ('complete_purchase:', 'orders'), ('complete_confirm:', 'orders'), ('adm_order:', 'orders'),
     ('purchase_promo:', 'promo'), ('confirm_buy', 'orders'),
-    ('shop_page:', 'catalog'), ('items_page:', 'catalog'), ('buy_', 'catalog'),
+    ('sn:', 'catalog'), ('shop_page:', 'catalog'), ('items_page:', 'catalog'), ('buy_', 'catalog'),
     ('spam_', 'audit'), ('adm_audit:', 'audit'), ('adm_refund', 'audit'),
     ('refund_approve:', 'audit'), ('expand_confirm:', 'settings'),
     ('quality_features:', 'inventory'), ('cat_', 'inventory'), ('addacc_', 'inventory'),

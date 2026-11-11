@@ -94,16 +94,14 @@ class FlowTests(unittest.IsolatedAsyncioTestCase):
             self.assertIn('&lt;title&gt;',edit.call_args.args[1])
             self.assertLessEqual(len(edit.call_args.kwargs['reply_markup'].inline_keyboard),10)
 
-    async def test_empty_bot_category_has_no_fake_price_and_remains_clickable(self):
+    async def test_bot_entry_exposes_three_account_types_without_fake_prices(self):
+        from handlers.user import shop_navigation
         self.call.data='buy'
-        rows=[{'slug':'us','name':'США','emoji':'🇺🇸','min_price':None,'count':0}]
-        with patch.object(bot_store,'categories',AsyncMock(return_value=(rows,1,0))), \
-             patch.object(shop,'edit_message_safe',AsyncMock()) as edit, patch.object(shop,'answer_safe',AsyncMock()):
+        with patch.object(shop_navigation,'edit_message_safe',AsyncMock()) as edit,patch.object(shop_navigation,'answer_safe',AsyncMock()):
             await shop.open_shop(self.call,self.state)
-            button=edit.call_args.kwargs['reply_markup'].inline_keyboard[0][0]
-            self.assertEqual(button.callback_data,'buy_us')
-            self.assertIn('Нет в наличии',button.text)
-            self.assertNotIn('₽',button.text)
+            buttons=[b for row in edit.call_args.kwargs['reply_markup'].inline_keyboard for b in row]
+            self.assertEqual([b.text for b in buttons[:3]],['Авторег','С отлегой','Премиум'])
+            self.assertFalse(any('₽' in b.text for b in buttons))
 
     async def test_all_categories_exposes_disabled_departments_in_separate_menu(self):
         from database import sections

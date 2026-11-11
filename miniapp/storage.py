@@ -203,7 +203,7 @@ async def checkout_cart(user_id, requested, promo_code=None, expected_total=None
     ids = sorted(quotes)
     placeholders = ','.join(['%s'] * len(ids))
     async with _transaction() as cur:
-        await cur.execute('SELECT a.id,a.price,a.warranty_hours,a.spam_status,a.spam_lease_until>UTC_TIMESTAMP() AS spam_running FROM accounts a JOIN categories c ON c.slug=a.country WHERE a.id IN (' + placeholders + ") AND a.status='available' AND c.is_active=1 ORDER BY a.id FOR UPDATE", tuple(ids))
+        await cur.execute('SELECT a.id,a.price,a.warranty_hours,a.spam_status,a.registration_date,a.is_premium,a.spam_lease_until>UTC_TIMESTAMP() AS spam_running FROM accounts a JOIN categories c ON c.slug=a.country WHERE a.id IN (' + placeholders + ") AND a.status='available' AND c.is_active=1 ORDER BY a.id FOR UPDATE", tuple(ids))
         accounts = list(await cur.fetchall())
         if len(accounts) != len(ids):
             raise CheckoutError(tr('Один из аккаунтов уже недоступен. Корзина не оплачена.'), 'sold')
@@ -216,6 +216,9 @@ async def checkout_cart(user_id, requested, promo_code=None, expected_total=None
             raise CheckoutError(tr('Результат проверки спамблока изменился. Обновите корзину.'), 'terms_changed')
         if any(('warranty_hours' in terms[row['id']] and terms[row['id']]['warranty_hours'] != row['warranty_hours'] for row in accounts)):
             raise CheckoutError(tr('Условия гарантии изменились. Обновите корзину.'), 'terms_changed')
+        if any((key in terms[row['id']] and str(terms[row['id']][key]) != str(row.get(key))
+                for row in accounts for key in ('registration_date', 'is_premium'))):
+            raise CheckoutError(tr('Характеристики аккаунта изменились. Подтвердите покупку заново.'), 'terms_changed')
         await cur.execute('SELECT account_id,user_id FROM account_reservations WHERE account_id IN (' + placeholders + ') AND expires_at>UTC_TIMESTAMP() ORDER BY account_id FOR UPDATE', tuple(ids))
         holds = {row['account_id']: row['user_id'] for row in await cur.fetchall()}
         if any((holds.get(account) != user_id for account in ids)):
@@ -244,7 +247,7 @@ async def checkout_cart(user_id, requested, promo_code=None, expected_total=None
             prices = {key: money(value * (1 - Decimal(str(promo['value'])) / 100)) for key, value in prices.items()}
             if expected_total is None or sum(prices.values(), Decimal('0')) != Decimal(str(expected_total)):
                 raise CheckoutError(tr('Условия промокода изменились. Проверьте новую сумму.'), 'price_changed')
-        if rate and (expected_total is None or sum(prices.values(), Decimal('0')) != Decimal(str(expected_total))):
+        if (rate and expected_total is None) or (expected_total is not None and sum(prices.values(), Decimal('0')) != Decimal(str(expected_total))):
             raise CheckoutError(tr('Оптовые условия изменились. Обновите корзину.'), 'price_changed')
         users = sorted({user_id, referrer} - {None})
         await cur.execute('SELECT id,balance FROM users WHERE id IN (' + ','.join(['%s'] * len(users)) + ') ORDER BY id FOR UPDATE', tuple(users))

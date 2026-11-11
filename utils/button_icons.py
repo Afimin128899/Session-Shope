@@ -20,6 +20,8 @@ FALLBACK = {
     'search': e.ADMIN_SEARCH,
 }
 CANDIDATES = {
+    'calendar': ['📅', '🗓'], 'country': ['🌐', '🌍', '🗺'],
+    'premium': ['💎', '⭐', '🌟'], 'next': ['➡', '▶'],
     'support': ['💬', '🗨', '🛟'], 'warranty': ['🔒', '🛡'], 'orders': ['📦', '🛍'],
     'code': ['🤖', '🔑'], 'confirm': ['✅', '✔'], 'cancel': ['❌', '✖'],
     'back': ['⬅', '◀'], 'home': ['🏠', '🏘'], 'edit': ['✍', '✏'],
@@ -67,6 +69,16 @@ def icon_for(role):
     return PACK_ICONS.get(role) or FALLBACK.get(role)
 
 
+def pack_icon_for(role):
+    """New shopping menus use tgmacicons only; omit icons if the pack is offline."""
+    return PACK_ICONS.get(role)
+
+
+def pack_text(text):
+    """Plain labels accompany custom icons; keep stored editable labels intact."""
+    return ''.join(char for char in text if not (0x1F000 <= ord(char) <= 0x1FAFF or 0x2600 <= ord(char) <= 0x27BF or char in '\ufe0f\u200d\u20e3')).strip()
+
+
 def clean_label(text):
     # Strip a duplicate leading pictogram only when adding a custom icon.
     markers = ('🛟', '🔔', '🔕', '🔎', '🔍', '📋', '📊', '🎟', '💳', '🔄', '🗑',
@@ -80,6 +92,13 @@ def clean_label(text):
 def role_for(button):
     text = clean_label(button.text).strip()
     data = button.callback_data or ''
+    if data.startswith('sn:'):
+        parts = data.split(':')
+        if parts[1] == 'home':
+            return {'aged': 'calendar', 'premium': 'premium'}.get(parts[2], 'catalog')
+        return {'pay':'confirm','cancel':'cancel','cheap':'money','search':'search',
+                'custom':'edit','item':'catalog','bulk':'catalog','list':'catalog',
+                'products':'calendar'}.get(parts[1], 'country')
     if data.startswith(('shop_mode:', 'shop_notice:', 'language')) or data == 'shop_status':
         return 'settings'
     if data.startswith(('review:', 'review_list:')):
@@ -178,6 +197,10 @@ def decorate(markup):
     if not isinstance(markup, InlineKeyboardMarkup):
         return markup
     changed = False
+    callbacks = {button.callback_data or '' for row in markup.inline_keyboard for button in row}
+    pack_only = (any(value.startswith('sn:') for value in callbacks)
+                 or {'buy', 'topup_balance', 'all_categories:0'} <= callbacks
+                 or (any(value.startswith('get_code:') for value in callbacks) and any(value.startswith('purchase_help:') for value in callbacks)))
     rows = []
     for row in markup.inline_keyboard:
         result = []
@@ -185,7 +208,7 @@ def decorate(markup):
             if button.icon_custom_emoji_id:
                 result.append(button)
                 continue
-            identity = icon_for(role_for(button))
+            identity = (pack_icon_for if pack_only else icon_for)(role_for(button))
             if identity:
                 result.append(button.model_copy(update={
                     'icon_custom_emoji_id': identity, 'text': clean_label(button.text),

@@ -17,6 +17,7 @@ from handlers.user.stars import stars_router
 from handlers.navigation import commands_router, fallback_router
 from handlers.user.balance import balance_router
 from handlers.user.shop import shop_router
+from handlers.user.shop_navigation import router as shop_navigation_router
 from handlers.user.purchases import purchases_router
 from handlers.user.promo import promo_router
 from handlers.user.profile import profile_router
@@ -104,7 +105,7 @@ async def main():
     dp.callback_query.outer_middleware(MaintenanceMiddleware())
 
     dp.include_routers(
-        stars_router, DEMO_ROUTER, language_router, commands_router, support_router, start_router, balance_router, shop_router, purchases_router, promo_router, profile_router, rewards_router,
+        stars_router, DEMO_ROUTER, language_router, commands_router, support_router, start_router, balance_router, shop_navigation_router, shop_router, purchases_router, promo_router, profile_router, rewards_router,
         admin_router, referral_admin_router, sbp_admin_router, control_router, manage_router, broadcast_router, add_account_router, button_editor_router,
         cat_router, restock_router, admin_tools_router, spam_router, refund_router, quality_router, expansion_router, fallback_router,
     )
