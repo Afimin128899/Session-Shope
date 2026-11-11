@@ -200,6 +200,7 @@ def decorate(markup):
     callbacks = {button.callback_data or '' for row in markup.inline_keyboard for button in row}
     pack_only = (any(value.startswith('sn:') for value in callbacks)
                  or {'buy', 'topup_balance', 'all_categories:0'} <= callbacks
+                 or bool({'profile_rules', 'profile_settings', 'profile_info'} & callbacks)
                  or (any(value.startswith('get_code:') for value in callbacks) and any(value.startswith('purchase_help:') for value in callbacks)))
     rows = []
     for row in markup.inline_keyboard:

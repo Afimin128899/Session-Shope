@@ -21,7 +21,7 @@ class SubscriptionMiddleware(BaseMiddleware):
         from utils.support_access import is_support_event
         if await is_support_event(event, data):
             return await handler(event, data)
-        if isinstance(event, CallbackQuery) and (event.data in {'language', 'info_menu'} or (event.data or '').startswith('language:')):
+        if isinstance(event, CallbackQuery) and (event.data in {'language', 'info_menu', 'profile_info'} or (event.data or '').startswith('language:')):
             return await handler(event, data)
         if isinstance(event, Message) and (event.text or '').split('@')[0].strip() == '/language':
             return await handler(event, data)

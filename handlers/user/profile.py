@@ -5,12 +5,27 @@ from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMar
 
 from database.db import get_user, get_referral_count, get_referral_settings
 from database import welcome
-from keyboards.user_kb import _btn_text, profile_menu
+from keyboards.user_kb import _btn_text, profile_menu, user_settings_menu, back_to_profile
 from utils.nav import edit_message_safe, answer_safe
 from utils import constants as c
 from utils.emoji_map import EMOJI_COIN, EMOJI_HAND, EMOJI_STAR, EMOJI_USER_ALT
 
 profile_router = Router()
+
+
+@profile_router.callback_query(F.data == 'profile_settings')
+async def user_settings(call: CallbackQuery, state: FSMContext):
+    await state.clear()
+    await edit_message_safe(call, tr('<b>Настройки</b>\n\nИнформация о сервисе и язык интерфейса.'), section='settings', reply_markup=user_settings_menu())
+    await answer_safe(call)
+
+
+@profile_router.callback_query(F.data == 'profile_rules')
+async def user_rules(call: CallbackQuery, state: FSMContext):
+    from utils.store_rules import rules_text
+    await state.clear()
+    await edit_message_safe(call, rules_text(), section='info', reply_markup=back_to_profile())
+    await answer_safe(call)
 
 
 @profile_router.callback_query(F.data == "my_profile")

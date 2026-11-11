@@ -22,21 +22,16 @@ async def _btn_text(key: str, default_label: str, default_emoji: str) -> tuple[s
 async def main_menu(user_id: int | None=None) -> InlineKeyboardMarkup:
     label_balance, emoji_balance = await _btn_text('btn_balance', tr('Пополнить баланс'), c.BTN_ICON_SHOP)
     label_buy, emoji_buy = await _btn_text('btn_buy', tr('Купить аккаунт'), c.BTN_ICON_BUY)
-    label_purchases, emoji_purchases = await _btn_text('btn_purchases', tr('Мои покупки'), EMOJI_PACKAGE)
-    label_support, emoji_support = await _btn_text('btn_support', tr('Техподдержка'), c.BTN_ICON_SUPPORT)
-    label_reviews, emoji_reviews = await _btn_text('btn_reviews', tr('Отзывы'), c.BTN_ICON_REVIEWS)
-    label_promo, emoji_promo = await _btn_text('btn_promo', tr('Промокоды'), EMOJI_STAR)
-    label_info, emoji_info = await _btn_text('btn_info', tr('Правила'), EMOJI_INFO)
-    label_profile, emoji_profile = await _btn_text('btn_profile', tr('Мой профиль'), EMOJI_USER)
+    label_support, _ = await _btn_text('btn_support', tr('Техподдержка'), c.BTN_ICON_SUPPORT)
+    label_profile, _ = await _btn_text('btn_profile', tr('Мой профиль'), EMOJI_USER)
+    if label_balance.casefold() == 'баланс и пополнить':
+        label_balance = tr('Пополнить баланс')
     rows = [
         [InlineKeyboardButton(text=pack_text(label_buy), callback_data='buy', icon_custom_emoji_id=pack_icon_for('catalog'), style='primary')],
         [InlineKeyboardButton(text=pack_text(label_balance), callback_data='topup_balance', icon_custom_emoji_id=pack_icon_for('money'), style='success')],
         [InlineKeyboardButton(text=pack_text(label_profile), callback_data='my_profile', icon_custom_emoji_id=pack_icon_for('users')),
-         InlineKeyboardButton(text=pack_text(label_promo), callback_data='promo', icon_custom_emoji_id=pack_icon_for('reviews'))],
-        [InlineKeyboardButton(text=pack_text(label_info), callback_data='info_menu', icon_custom_emoji_id=pack_icon_for('settings')),
          InlineKeyboardButton(text=pack_text(label_support), callback_data='support', icon_custom_emoji_id=pack_icon_for('support'))],
-        [InlineKeyboardButton(text=tr('Все категории'), callback_data='all_categories:0', icon_custom_emoji_id=pack_icon_for('catalog')),
-         InlineKeyboardButton(text=pack_text(label_reviews), callback_data='quality_reviews:0', icon_custom_emoji_id=pack_icon_for('reviews'))],
+        [InlineKeyboardButton(text=tr('Все категории'), callback_data='all_categories:0', icon_custom_emoji_id=pack_icon_for('catalog'))],
     ]
     from utils.miniapp import customer_miniapp_url
     app_url = customer_miniapp_url()
@@ -54,16 +49,32 @@ async def main_menu(user_id: int | None=None) -> InlineKeyboardMarkup:
 
 
 async def profile_menu():
-    specs = [('btn_purchases', tr('Мои покупки'), 'my_purchases', 'orders'), ('btn_balance', tr('Баланс и пополнить'), 'balance', 'money'), ('btn_promo', tr('Ввести промокод'), 'promo', 'reviews'), ('btn_referral_system', tr('Реферальная система'), 'referral_info', 'users')]
-    rows = []
+    specs = [
+        ('btn_purchases', tr('Мои покупки'), 'my_purchases', 'orders'),
+        ('btn_balance', tr('Пополнить баланс'), 'topup_balance', 'money'),
+        ('btn_referral_system', tr('Реферальная система'), 'referral_info', 'users'),
+        ('btn_bonuses', tr('Бонусы'), 'wheel', 'reviews'),
+        ('btn_promo', tr('Ввести промокод'), 'promo', 'reviews'),
+        ('btn_rules', tr('Правила'), 'profile_rules', 'file'),
+        ('btn_user_settings', tr('Настройки'), 'profile_settings', 'settings'),
+    ]
+    buttons = []
     for key, label, callback, role in specs:
-        text, emoji = await _btn_text(key, label, icon_for(role))
-        rows.append([InlineKeyboardButton(text=text, callback_data=callback, icon_custom_emoji_id=emoji)])
-    rows.insert(1, [InlineKeyboardButton(text=tr('Написать в поддержку'), callback_data='support', icon_custom_emoji_id=icon_for('support'))])
-    rows.append([InlineKeyboardButton(text=tr('Бонусы · Колесо удачи'), callback_data='wheel', icon_custom_emoji_id=icon_for('reviews'))])
-    rows.append([InlineKeyboardButton(text=tr('🌐 Язык / Language'), callback_data='language')])
-    rows.append([InlineKeyboardButton(text=tr('В главное меню'), callback_data='back_main', icon_custom_emoji_id=icon_for('back'))])
+        text, _ = await _btn_text(key, label, pack_icon_for(role))
+        if key == 'btn_balance' and text.casefold() == 'баланс и пополнить':
+            text = tr('Пополнить баланс')
+        buttons.append(InlineKeyboardButton(text=pack_text(text), callback_data=callback, icon_custom_emoji_id=pack_icon_for(role)))
+    rows = [[buttons[0]], [buttons[1]], [buttons[2]], buttons[3:5], buttons[5:7]]
+    rows.append([InlineKeyboardButton(text=tr('В главное меню'), callback_data='back_main', icon_custom_emoji_id=pack_icon_for('back'))])
     return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def user_settings_menu():
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text=tr('Информация'), callback_data='profile_info', icon_custom_emoji_id=pack_icon_for('file'))],
+        [InlineKeyboardButton(text=tr('Язык'), callback_data='language', icon_custom_emoji_id=pack_icon_for('settings'))],
+        [InlineKeyboardButton(text=tr('Назад в профиль'), callback_data='my_profile', icon_custom_emoji_id=pack_icon_for('back'))],
+    ])
 
 
 async def shop_menu() -> tuple[InlineKeyboardMarkup, bool]:
@@ -126,9 +137,16 @@ def back_to_main_menu() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text=tr('Назад'), callback_data='back_main', icon_custom_emoji_id=c.BTN_ICON_BACK_SMILE)]])
 
 
-def information_menu() -> InlineKeyboardMarkup:
+def information_menu(back_callback='back_main') -> InlineKeyboardMarkup:
     from utils.legal import document_rows
-    return InlineKeyboardMarkup(inline_keyboard=document_rows() + back_to_main_menu().inline_keyboard)
+    rows = document_rows()
+    if back_callback == 'profile_settings':
+        for row, role in zip(rows, ['file', 'file', 'support']):
+            row[0] = row[0].model_copy(update={'icon_custom_emoji_id': pack_icon_for(role)})
+        rows.append([InlineKeyboardButton(text=tr('Назад в настройки'), callback_data='profile_settings', icon_custom_emoji_id=pack_icon_for('back'))])
+    else:
+        rows += back_to_main_menu().inline_keyboard
+    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def balance_menu() -> InlineKeyboardMarkup:

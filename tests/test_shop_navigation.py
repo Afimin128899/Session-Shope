@@ -62,7 +62,7 @@ class ShoppingTests(unittest.IsolatedAsyncioTestCase):
         with patch.object(user_kb,'get_button_label',AsyncMock(return_value=None)),patch.object(user_kb,'get_setting',AsyncMock(return_value='')):
             menu=await user_kb.main_menu(42)
         buttons=flatten(menu);callbacks={b.callback_data for b in buttons}
-        self.assertTrue({'buy','topup_balance','my_profile','promo','info_menu','support','all_categories:0'}<=callbacks)
+        self.assertEqual(callbacks,{'buy','topup_balance','my_profile','support','all_categories:0'})
         self.assertTrue(all(b.web_app is None for b in buttons))
         self.assertNotIn('Номер для смены',' '.join(b.text for b in buttons))
         self.assertNotIn('Бот рассылки',' '.join(b.text for b in buttons))

@@ -53,7 +53,7 @@ async def render_order(call, purchase_id):
     if not order:
         await answer_safe(call, tr('Покупка не найдена.'), show_alert=True)
         return
-    rows = [button(tr('Есть проблема'), f'purchase_help:{purchase_id}', 'support'), button(tr('Оставить / изменить отзыв'), f'quality_review:{purchase_id}', 'reviews')]
+    rows = [button(tr('Есть проблема'), f'purchase_help:{purchase_id}', 'support')]
     if order['status'] == 'refunded':
         from database.refunds import get_refund
         refund = await get_refund(purchase_id, call.from_user.id)

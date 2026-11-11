@@ -141,7 +141,8 @@ class LocalizationTests(unittest.IsolatedAsyncioTestCase):
                 await ui.save_language(call,state)
             save.assert_awaited_once_with(42,'en');state.clear.assert_awaited_once()
             self.assertIn('Language saved',edit.call_args.args[1])
-            self.assertIn('My profile',str(edit.call_args.kwargs['reply_markup']))
+            self.assertIn('Back to settings',str(edit.call_args.kwargs['reply_markup']))
+            self.assertEqual(edit.call_args.kwargs['reply_markup'].inline_keyboard[-1][0].callback_data,'profile_settings')
         finally:LANGUAGE.reset(token)
 
     async def test_recipient_notice_uses_their_language_and_lookup_failure_cannot_block_receipt(self):

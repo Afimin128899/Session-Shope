@@ -78,10 +78,12 @@ async def callback_back_main(call: CallbackQuery, state=None):
     await answer_safe(call)
 
 
-@start_router.callback_query(F.data == "info_menu")
-async def show_info(call: CallbackQuery):
+@start_router.callback_query(F.data.in_({'info_menu', 'profile_info'}))
+async def show_info(call: CallbackQuery, state=None):
+    if state is not None:
+        await state.clear()
     info_text = c.info_text()
-    await edit_message_safe(call, info_text, reply_markup=information_menu())
+    await edit_message_safe(call, info_text, section='info', reply_markup=information_menu('profile_settings' if call.data == 'profile_info' else 'back_main'))
     await answer_safe(call)
 
 
