@@ -14,7 +14,7 @@ RU = '''<b>Правила покупки и использования</b>
 <blockquote>• Первые три дня не спешите писать в незнакомые чаты и вступать сразу во множество групп. Избегайте частой смены устройств, подключения и повторных попыток входа.
 • Имя и фамилию лучше не менять сразу после авторизации. Пользуйтесь аккаунтом спокойно и соблюдайте правила Telegram.
 • После успешного входа установите собственный пароль двухэтапной аутентификации и привяжите резервную почту. Убедитесь, что у вас есть доступ к ней, и следуйте подсказкам Telegram.
-• Завершайте покупку в боте только после проверки входа. После завершения повторно получить код через магазин уже нельзя.</blockquote>
+• Покупка подтверждается автоматически, данные аккаунта выдаются после оплаты. Повторный код можно получить через бота, пока активна сессия, отвечающая за вход. Не завершайте эту сессию в Telegram, если планируете запрашивать коды через магазин.</blockquote>
 
 <b>Гарантия и поддержка</b>
 <blockquote>Магазин передаёт аккаунт в соответствии с описанием. Срок и условия гарантии смотрите в карточке товара и в своём заказе: эти рекомендации не меняют и не продлевают их.
@@ -34,7 +34,7 @@ Read these recommendations before paying and signing in. Check the product descr
 <blockquote>• During the first three days, take your time before messaging unfamiliar chats or joining many groups. Avoid frequent device or connection changes and repeated login attempts.
 • Avoid changing the name immediately after signing in. Use the account responsibly and follow Telegram's rules.
 • After a successful sign-in, set your own two-step verification password and recovery email. Make sure you can access that email and follow Telegram's instructions.
-• Complete the purchase in the bot only after verifying that you can sign in. Once completed, login codes can no longer be retrieved through the store.</blockquote>
+• The purchase is confirmed automatically and account details are delivered after payment. You can request another login code through the bot while the session responsible for sign-in remains active. Do not terminate that session in Telegram if you plan to request codes through the store.</blockquote>
 
 <b>Warranty and support</b>
 <blockquote>The account is supplied according to its description. Check the warranty period and terms in the product card and your order; these recommendations do not change or extend them.
