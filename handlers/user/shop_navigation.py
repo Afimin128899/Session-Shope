@@ -84,7 +84,7 @@ async def show_countries(call, state, mode, *, page=None, query='', bulk=False):
     rows = []
     if page is None and not bulk and not query:
         rows = [[btn(tr('Самый дешёвый — {0} ₽', price(items[0]['min_price'])) if items else tr('Самый дешёвый · 0 товаров'), f'sn:cheap:{mode}', 'money', True)],
-                [btn(tr('Поиск страны'), f'sn:search:{mode}', 'search'), btn(tr('Авторег') if mode == 'premium' else tr('Премиум'), 'sn:home:auto' if mode == 'premium' else 'sn:home:premium', 'money')],
+                [btn(tr('Поиск страны'), f'sn:search:{mode}', 'search')] + ([btn(tr('Авторег'), 'sn:home:auto', 'money')] if mode == 'premium' else []),
                 [btn(tr('Массовая покупка'), f'sn:bulk:{mode}:all:0', 'catalog', True)]]
         featured = max(items, key=lambda item: (item['count'], -item['min_price'])) if items else None
         if featured:

@@ -76,7 +76,7 @@ class ShoppingTests(unittest.IsolatedAsyncioTestCase):
             await ui.show_countries(self.call,self.state,'auto')
         rows=self.edit.call_args.kwargs['reply_markup'].inline_keyboard
         self.assertEqual(rows[0][0].text,'Самый дешёвый — 71,25 ₽')
-        self.assertEqual([b.callback_data for b in rows[1]],['sn:search:auto','sn:home:premium'])
+        self.assertEqual([b.callback_data for b in rows[1]],['sn:search:auto'])
         self.assertEqual(rows[2][0].callback_data,'sn:bulk:auto:all:0')
         self.assertEqual(len(rows[4]),2)
         self.assertTrue(any(b.text=='Все страны (3)' for b in flatten(self.edit.call_args.kwargs['reply_markup'])))
