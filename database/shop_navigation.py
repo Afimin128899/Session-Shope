@@ -26,6 +26,23 @@ def _iso(flag):
 COUNTRIES = {_iso(flag): {'name': name, 'flag': flag} for name, flag in COUNTRY_MAP.values()}
 COUNTRIES['kz'] = {'name': 'Казахстан', 'flag': '🇰🇿'}
 COUNTRIES['other'] = {'name': 'Другие страны', 'flag': '🌐'}
+SPAM_SUFFIXES = {'clear': '', 'permanent': 'Вечный СБ', 'limited': 'Есть СБ', 'unverified': 'СБ не проверен'}
+SPAM_GROUP = "CASE WHEN a.spam_status IN ('clear','permanent','limited') THEN a.spam_status ELSE 'unverified' END"
+
+
+def split_nation(nation):
+    if not isinstance(nation, str):
+        raise ValueError(tr('Некорректный раздел каталога.'))
+    parts = nation.split('~')
+    if len(parts) > 2 or parts[0] not in {'all', *COUNTRIES} or (len(parts) == 2 and (parts[0] == 'all' or parts[1] not in SPAM_SUFFIXES)):
+        raise ValueError(tr('Некорректный раздел каталога.'))
+    return parts[0], parts[1] if len(parts) == 2 else None
+
+
+def country_name(nation):
+    country, status = split_nation(nation)
+    name = COUNTRIES[country]['name'] if country != 'all' else tr('Все страны')
+    return (name + ' ' + SPAM_SUFFIXES.get(status, '')).strip()
 
 # Country derives from the actual phone, including +76/+77 Kazakhstan, rather
 # than a manually named category. All SQL fragments are generated from constants.
@@ -38,12 +55,14 @@ NATION = 'CASE ' + ' '.join(f"WHEN {DIGITS} LIKE '{prefix}%%' THEN '{nation}'" f
 
 
 def validate(mode, nation='all', year=0):
-    if mode not in MODES or nation not in {'all', *COUNTRIES} or type(year) is not int or (year and not 2013 <= year <= date.today().year):
+    split_nation(nation)
+    if mode not in MODES or type(year) is not int or (year and not 2013 <= year <= date.today().year):
         raise ValueError(tr('Некорректный раздел каталога.'))
 
 
 async def _where(cur, user_id, mode, nation='all', year=0):
     validate(mode, nation, year)
+    country, spam_status = split_nation(nation)
     await cur.execute("SELECT slug,name FROM categories WHERE is_active=1 AND slug NOT LIKE 'section-%%'")
     slugs = [row['slug'] for row in await cur.fetchall() if category_allowed(row['slug'], row['name'])]
     conditions = ["a.status='available'", 'c.is_active=1', 'a.price>0 AND a.price<=10000',
@@ -61,8 +80,10 @@ async def _where(cur, user_id, mode, nation='all', year=0):
         conditions.append('a.is_premium=1')
     elif mode == 'aged':
         conditions.append('a.registration_date<=DATE_SUB(UTC_DATE(),INTERVAL %s DAY)'); params.append(AGED_DAYS)
-    if nation != 'all':
-        conditions.append(f'({NATION})=%s'); params.append(nation)
+    if country != 'all':
+        conditions.append(f'({NATION})=%s'); params.append(country)
+    if spam_status is not None:
+        conditions.append(f'({SPAM_GROUP})=%s'); params.append(spam_status)
     if year:
         conditions.append('YEAR(a.registration_date)=%s'); params.append(year)
     return ' FROM accounts a JOIN categories c ON c.slug=a.country WHERE ' + ' AND '.join(conditions), params
@@ -74,17 +95,20 @@ async def countries(user_id, mode, query=''):
     async with _get_pool().acquire() as conn:
         async with conn.cursor(aiomysql.DictCursor) as cur:
             where, params = await _where(cur, user_id, mode)
-            await cur.execute(f'SELECT {NATION} AS nation,COUNT(*) AS count,MIN(a.price) AS min_price' + where + ' GROUP BY nation', tuple(params))
+            await cur.execute(f'SELECT {NATION} AS nation,{SPAM_GROUP} AS spam_group,COUNT(*) AS count,MIN(a.price) AS min_price' + where + ' GROUP BY nation,spam_group', tuple(params))
             rows = list(await cur.fetchall())
             _, discount, _ = await pricing(cur, user_id)
     results = []
     for row in rows:
         identity = row['nation']; info = COUNTRIES[identity]
-        aliases = [info['name'], identity] + [key for key, (_, flag) in COUNTRY_MAP.items() if _iso(flag) == identity]
+        selection = identity + '~' + row['spam_group']
+        aliases = [country_name(selection), info['name'], identity] + [key for key, (_, flag) in COUNTRY_MAP.items() if _iso(flag) == identity]
         if identity == 'kz': aliases += ['+7', '+76', '+77']
         if query and not any(query.casefold().strip() in word.casefold() for word in aliases):
             continue
-        results.append(dict(row, **info, min_price=money(Decimal(str(row['min_price'])) * (1 - discount / 100))))
+        results.append(dict(row, flag=info['flag'], name=country_name(selection), country=identity,
+                            nation=selection, spam_status=row['spam_group'],
+                            min_price=money(Decimal(str(row['min_price'])) * (1 - discount / 100))))
     return sorted(results, key=lambda item: (item['min_price'], item['name']))
 
 

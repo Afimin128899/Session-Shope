@@ -98,6 +98,31 @@ class ShoppingTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(rows[0][0].callback_data,'sn:products:aged:us:2014:0')
         self.assertIn('120 ₽',rows[0][0].text)
 
+    async def test_permanent_spam_group_is_named_and_preserved_in_navigation(self):
+        items=[{'nation':'us~clear','name':'США','count':2,'min_price':Decimal(99)},
+               {'nation':'us~permanent','name':'США Вечный СБ','count':1,'min_price':Decimal(10)}]
+        with patch.object(store,'countries',AsyncMock(return_value=items)):
+            await ui.show_countries(self.call,self.state,'auto')
+        buttons=flatten(self.edit.call_args.kwargs['reply_markup'])
+        permanent=next(b for b in buttons if b.callback_data=='sn:country:auto:us~permanent')
+        self.assertIn('США Вечный СБ',permanent.text)
+        self.assertTrue(any(b.text=='Все страны (1)' for b in buttons))
+        self.call.data=permanent.callback_data
+        with patch.object(ui,'show_products',AsyncMock()) as show:
+            await ui.navigate(self.call,self.state)
+            show.assert_awaited_once_with(self.call,self.state,'auto','us~permanent')
+        with patch.object(store,'years',AsyncMock(return_value=[{'year':2015,'count':1,'min_price':Decimal(10)}])):
+            await ui.show_years(self.call,self.state,'aged','us~permanent')
+        self.assertIn('США Вечный СБ',self.edit.call_args.args[1])
+        self.assertIn('us~permanent',flatten(self.edit.call_args.kwargs['reply_markup'])[0].callback_data)
+
+    async def test_bulk_confirmation_keeps_selected_spam_group(self):
+        quote={'items':[{'account_id':7,'price':'10','spam_status':'permanent'}], 'total':'10','rate':'0','created_ids':[7]}
+        with patch.object(store,'reserve_bulk',AsyncMock(return_value=quote)) as reserve:
+            await ui.quote_bulk(self.call,self.state,'auto','us~permanent',0,1)
+            reserve.assert_awaited_once_with(42,'auto','us~permanent',1,0)
+        self.assertIn('США Вечный СБ',self.edit.call_args.args[1])
+
     async def test_generated_product_buttons_reach_shared_confirmation(self):
         items=[{'id':21,'number':'+15551234567','price':Decimal(99)}]
         with patch.object(store,'products',AsyncMock(return_value=(items,1,0))):
@@ -177,3 +202,6 @@ class NavigationValidationTests(unittest.TestCase):
         for args in [('bad','us',0),('auto','us OR 1=1',0),('aged','us',2012),('auto','us',True)]:
             with self.assertRaises(ValueError): store.validate(*args)
         store.validate('auto','all',0);store.validate('aged','kz',2014)
+        store.validate('aged','us~permanent',2015)
+        for nation in ['us~bad','all~permanent','us~permanent~clear','xx~permanent']:
+            with self.assertRaises(ValueError): store.validate('auto',nation)

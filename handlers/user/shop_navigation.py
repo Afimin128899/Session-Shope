@@ -96,7 +96,8 @@ async def show_countries(call, state, mode, *, page=None, query='', bulk=False):
     for index in range(0, len(visible), 2):
         rows.append([btn(country_label(item), f"sn:{'bc' if bulk else 'country'}:{mode}:{item['nation']}") for item in visible[index:index + 2]])
     if page is None:
-        rows.append([btn(tr('Все страны ({0})', len(items)), f'sn:list:{mode}:0', 'catalog')])
+        country_count = len({store.split_nation(item['nation'])[0] for item in items})
+        rows.append([btn(tr('Все страны ({0})', country_count), f'sn:list:{mode}:0', 'catalog')])
     else:
         prefix = f"sn:{'bl' if bulk else 'results' if query else 'list'}:{mode}"
         rows += pagination(page, len(items), 8, prefix)
@@ -119,7 +120,7 @@ async def show_years(call, state, mode, nation):
     rows = [buttons[index:index + 3] for index in range(0, len(buttons), 3)]
     rows.append([btn(tr('Все годы'), f'sn:products:{context(mode,nation)}:0', 'catalog')])
     rows.append([btn(tr('Назад'), f'sn:home:{mode}', 'back')])
-    text = '<b>' + escape(tr(TITLES[mode])) + '</b>\n\n' + tr('{0} — выберите год регистрации аккаунта:', tr(store.COUNTRIES[nation]['name']))
+    text = '<b>' + escape(tr(TITLES[mode])) + '</b>\n\n' + tr('{0} — выберите год регистрации аккаунта:', tr(store.country_name(nation)))
     if not years: text += tr('\n\n0 товаров с подтверждённым годом.')
     await edit_message_safe(call, text, section='catalog', reply_markup=kb(rows))
     await answer_safe(call)
@@ -135,7 +136,7 @@ async def show_products(call, state, mode, nation, year=0, page=0):
     if items: rows.append([btn(tr('Массовая покупка'), f'sn:bulk:{path}', 'catalog', True)])
     else: rows.append([btn(tr('Уведомить о поступлении'), 'stock_menu', 'notifications')])
     rows.append([btn(tr('Назад'), f'sn:country:{mode}:{nation}' if mode == 'aged' else f'sn:home:{mode}', 'back')])
-    label = tr(store.COUNTRIES[nation]['name']) if nation != 'all' else tr('Все страны')
+    label = tr(store.country_name(nation)) if nation != 'all' else tr('Все страны')
     text = '<b>' + escape(tr(TITLES[mode])) + ' · ' + escape(label) + '</b>'
     if year: text += tr('\nГод регистрации: {0}', year)
     text += tr('\n\nВ наличии: {0} товаров.\nВыберите аккаунт:', total)
@@ -154,7 +155,7 @@ async def quantity_screen(call, state, mode, nation, year=0):
     rows = [[btn(tr('{0} шт.', qty), f'sn:qty:{path}:{qty}', green=True) for qty in choices]] if choices else []
     if total: rows.append([btn(tr('Ввести количество'), f'sn:custom:{path}', 'edit')])
     rows.append([btn(tr('Назад'), f'sn:home:{mode}', 'back')])
-    text = tr('<b>Массовая покупка</b>\n\n{0} · {1}\nВ наличии: {2} товаров.\nВыберите количество, до 20 аккаунтов за покупку.', tr(TITLES[mode]), tr(store.COUNTRIES[nation]['name']), total)
+    text = tr('<b>Массовая покупка</b>\n\n{0} · {1}\nВ наличии: {2} товаров.\nВыберите количество, до 20 аккаунтов за покупку.', tr(TITLES[mode]), tr(store.country_name(nation)), total)
     await edit_message_safe(call, text, section='catalog', reply_markup=kb(rows))
     await answer_safe(call)
 
@@ -171,7 +172,7 @@ async def quote_bulk(call, state, mode, nation, year, quantity):
         quote.update(token=token, expires=time.time() + 285, mode=mode, nation=nation, year=year)
         await state.clear()
         await state.update_data(bulk_quote=quote)
-        text = tr('<b>Подтверждение массовой покупки</b>\n\n{0} · {1}\nАккаунтов: {2}\nК оплате: <b>{3} ₽</b>\n\nРезерв действует 5 минут. Все аккаунты оплачиваются одной покупкой. После оплаты данные каждого аккаунта придут в этот чат.', tr(TITLES[mode]), tr(store.COUNTRIES[nation]['name']), len(quote['items']), price(quote['total']))
+        text = tr('<b>Подтверждение массовой покупки</b>\n\n{0} · {1}\nАккаунтов: {2}\nК оплате: <b>{3} ₽</b>\n\nРезерв действует 5 минут. Все аккаунты оплачиваются одной покупкой. После оплаты данные каждого аккаунта придут в этот чат.', tr(TITLES[mode]), tr(store.country_name(nation)), len(quote['items']), price(quote['total']))
         if Decimal(quote['rate']): text += tr('\nОптовая скидка: {0}%.', price(quote['rate']))
         if year: text += tr('\nГод регистрации: {0}.', year)
         rows = [[btn(tr('Купить за {0} ₽', price(quote['total'])), f'sn:pay:{token}', 'confirm', True)],

@@ -39,6 +39,7 @@ async def main():
         old=await stock('+15550000003',200,date(2014,1,1))
         recent=await stock('+919900000001',70,date.today())
         premium=await stock('+15550000004',300,date(2020,1,1),True)
+        permanent=await stock('+15550000009',20,date(2015,1,1),status='permanent')
         kz=await stock('+77010000001',150)
         hidden=await stock('+56990000001',1)
         checking=await stock('+56990000002',2)
@@ -49,33 +50,42 @@ async def main():
             await cur.execute("INSERT INTO categories(slug,name,is_active) VALUES('legacy-ru','Старый раздел',1)")
             await cur.execute("INSERT INTO accounts(country,number,price,data,status) VALUES('legacy-ru','+79990000001',1,'fixture','available')")
         auto=await store.countries(42,'auto')
-        assert {x['nation'] for x in auto}=={'us','in','kz'}
-        assert next(x for x in auto if x['nation']=='us')['min_price']==Decimal('95.00')
-        assert (await store.countries(42,'auto','US'))[0]['nation']=='us'
-        assert (await store.countries(42,'auto','+77'))[0]['nation']=='kz'
+        assert {x['country'] for x in auto}=={'us','in','kz'}
+        assert next(x for x in auto if x['nation']=='us~clear')['min_price']==Decimal('95.00')
+        assert (await store.countries(42,'auto','US'))[0]['country']=='us'
+        assert (await store.countries(42,'auto','+77'))[0]['country']=='kz'
         assert await store.countries(42,'auto','not-a-country')==[]
-        assert {x['nation'] for x in await store.countries(42,'aged')}=={'us'}
+        assert {x['country'] for x in await store.countries(42,'aged')}=={'us'}
         assert sum(x['count'] for x in await store.countries(42,'premium'))==1
-        years=await store.years(42,'aged','us')
+        years=await store.years(42,'aged','us~clear')
         assert {x['year'] for x in years}=={2014,2020}
-        items,total,_=await store.products(42,'aged','us',2014)
+        items,total,_=await store.products(42,'aged','us~clear',2014)
         assert total==1 and items[0]['id']==old
         assert 'data' not in items[0] and 'password' not in items[0]
-        assert (await store.products(42,'auto',quantity=1))[0][0]['id']==recent
+        assert (await store.products(42,'auto',quantity=1))[0][0]['id']==permanent
+        assert next(x for x in auto if x['nation']=='us~permanent')['name']=='США Вечный СБ'
+        assert next(x for x in auto if x['nation']=='us~permanent')['min_price']==Decimal('19.00')
+        permanent_rows,permanent_count,_=await store.products(42,'aged','us~permanent',2015)
+        assert permanent_count==1 and permanent_rows[0]['id']==permanent
+        assert all(row['spam_status']=='clear' for row in (await store.products(42,'auto','us~clear'))[0])
+        permanent_quote=await store.reserve_bulk(42,'aged','us~permanent',1,2015)
+        assert len(permanent_quote['items'])==1 and permanent_quote['items'][0]['account_id']==permanent
+        await commerce.remove_from_cart(42,permanent)
+        print('PASS: permanent spam groups have separate names, prices, years and bulk selection')
         print('PASS: actual countries, years, Premium, age, cheapest, referral prices and hidden stock')
         # Existing another-user holds are excluded; cancellation leaves earlier cart alone.
         await commerce.add_to_cart(43,one)
-        assert next(x for x in await store.countries(42,'auto') if x['nation']=='us')['count']==2
+        assert next(x for x in await store.countries(42,'auto') if x['nation']=='us~clear')['count']==2
         await commerce.remove_from_cart(43,one)
         await commerce.add_to_cart(42,one)
-        cancelled=await store.reserve_bulk(42,'auto','us',2)
+        cancelled=await store.reserve_bulk(42,'auto','us~clear',2)
         assert cancelled['created_ids']==[two]
         for identity in cancelled['created_ids']: await commerce.remove_from_cart(42,identity)
         async with conn.cursor() as cur:
             await cur.execute('SELECT account_id FROM shopping_cart WHERE user_id=42')
             assert {row[0] for row in await cur.fetchall()}=={one}
         await commerce.remove_from_cart(42,one)
-        quote=await store.reserve_bulk(42,'auto','us',2)
+        quote=await store.reserve_bulk(42,'auto','us~clear',2)
         assert {x['account_id'] for x in quote['items']}=={one,two}
         assert quote['total']=='169.58' and quote['rate']=='15'
         balance=(await db.get_user(42))['balance']
@@ -98,7 +108,7 @@ async def main():
         assert (await db.get_user(42))['balance']==balance-Decimal('169.58')
         print('PASS: shared wholesale rules, atomic orders and no repeat debit')
         # Changed prices and expired reservations cannot debit a wallet.
-        quote=await store.reserve_bulk(42,'auto','us',1)
+        quote=await store.reserve_bulk(42,'auto','us~clear',1)
         before=(await db.get_user(42))['balance']
         async with conn.cursor() as cur:
             await cur.execute("UPDATE accounts SET registration_date='2021-01-01' WHERE id=%s",(old,))
