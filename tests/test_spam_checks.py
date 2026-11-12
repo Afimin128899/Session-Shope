@@ -68,6 +68,27 @@ class ConversationTests(unittest.IsolatedAsyncioTestCase):
         self.dialog.get_response.assert_awaited_once_with(self.sent)
         self.client.disconnect.assert_awaited_once()
 
+    async def test_unblock_completes_before_first_start(self):
+        calls=[]
+        async def unblock(request):
+            from telethon.tl.functions.contacts import UnblockRequest
+            self.assertIsInstance(request,UnblockRequest)
+            self.assertEqual(request.id.id,100)
+            calls.append('unblock')
+        async def send(text):
+            self.assertEqual(calls,['unblock'])
+            calls.append('start')
+            return self.sent
+        self.client.unblock.side_effect=unblock
+        self.dialog.send_message.side_effect=send
+        self.assertEqual((await self.check())['status'],'clear')
+        self.assertEqual(calls,['unblock','start'])
+
+    async def test_unblock_flood_wait_does_not_send_or_claim_clear(self):
+        self.client.unblock.side_effect=FloodWaitError(request=None,capture=120)
+        self.assertEqual((await self.check())['reason'],'flood_wait')
+        self.dialog.send_message.assert_not_awaited()
+
     async def test_limited_reply_is_reported_without_storing_its_body(self):
         self.dialog.get_response.return_value.raw_text=LIMITED
         result=await self.check()
@@ -99,7 +120,7 @@ class ConversationTests(unittest.IsolatedAsyncioTestCase):
         self.dialog.get_response.side_effect=[NS(id=11,sender_id=100,raw_text='Please choose a language'),NS(id=21,sender_id=100,raw_text='Your account is permanently limited.')]
         report=await self.check()
         self.assertEqual(report['status'],'permanent')
-        self.client.unblock.assert_awaited_once()
+        self.assertEqual(self.client.unblock.await_count,2)
         self.assertEqual(self.dialog.send_message.await_count,2)
         self.assertEqual(self.dialog.get_response.call_args.args[0].id,20)
 
@@ -108,13 +129,13 @@ class ConversationTests(unittest.IsolatedAsyncioTestCase):
         report=await self.check()
         self.assertEqual(report['status'],'unknown')
         self.assertEqual(self.dialog.send_message.await_count,2)
-        self.client.unblock.assert_awaited_once()
+        self.assertEqual(self.client.unblock.await_count,2)
 
     async def test_timeout_unblocks_verified_bot_and_retries_one_fresh_response(self):
         self.dialog.send_message.side_effect=[NS(id=10),NS(id=20)]
         self.dialog.get_response.side_effect=[TimeoutError(),NS(id=21,sender_id=100,raw_text=CLEAR)]
         self.assertEqual((await self.check())['status'],'clear')
-        self.client.unblock.assert_awaited_once()
+        self.assertEqual(self.client.unblock.await_count,2)
         self.assertEqual(self.dialog.send_message.await_count,2)
         self.assertEqual(self.dialog.get_response.call_args.args[0].id,20)
 
@@ -128,7 +149,7 @@ class ConversationTests(unittest.IsolatedAsyncioTestCase):
         self.dialog.get_response.side_effect=TimeoutError()
         self.client.get_messages.return_value=[NS(id=9,sender_id=100,raw_text=CLEAR),NS(id=12,sender_id=101,raw_text=CLEAR)]
         self.assertEqual((await self.check())['reason'],'timeout')
-        self.client.unblock.assert_awaited_once()
+        self.assertEqual(self.client.unblock.await_count,2)
 
     async def test_timeout_has_error_status_and_disconnects(self):
         self.dialog.get_response.side_effect=TimeoutError()

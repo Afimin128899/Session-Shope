@@ -74,6 +74,9 @@ async def _conversation(client, expected_id, expected_phone):
     peer = await client.get_entity('SpamBot')
     if not getattr(peer, 'bot', False) or str(getattr(peer, 'username', '')).casefold() != 'spambot':
         return result('error', 'wrong_peer')
+    # Always unblock the verified official bot before the first command.
+    # A blocked bot does not reliably produce a send_message exception.
+    await client(UnblockRequest(id=peer))
     async with client.conversation(peer, timeout=12, exclusive=True) as dialog:
         try:
             sent = await dialog.send_message('/start')
