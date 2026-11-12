@@ -52,6 +52,26 @@ class AdminAPI(unittest.IsolatedAsyncioTestCase):
                 r=await self.client.request(method,'/api/admin/'+path,headers=self.headers)
                 self.assertEqual(r.status,403,(method,path))
             get.assert_not_awaited();create.assert_not_awaited()
+    async def test_category_price_requires_admin(self):
+        with patch.object(admin_tools,'change_category_price',AsyncMock()) as change:
+            r=await self.client.post('/api/admin/categories/price',headers=self.headers,json={'slug':'us','price':'99'})
+            self.assertEqual(r.status,403)
+            change.assert_not_awaited()
+
+    async def test_category_price_changes_only_requested_category_as_signed_admin(self):
+        with patch.object(config,'ADMIN_IDS',[42]),patch.object(server.db,'get_category',AsyncMock(return_value={'slug':'auto-us-clear'})),patch.object(admin_tools,'change_category_price',AsyncMock(return_value=8)) as change:
+            r=await self.client.post('/api/admin/categories/price',headers=self.headers,json={'slug':'auto-us-clear','price':'99.50','admin_id':99})
+            self.assertEqual(r.status,200)
+            self.assertEqual((await r.json())['updated'],8)
+            change.assert_awaited_once_with(42,'auto-us-clear','99.50')
+
+    async def test_category_price_rejects_missing_or_unknown_category(self):
+        with patch.object(config,'ADMIN_IDS',[42]),patch.object(server.db,'get_category',AsyncMock(return_value=None)),patch.object(admin_tools,'change_category_price',AsyncMock()) as change:
+            for slug in ('',None,[], 'missing'):
+                r=await self.client.post('/api/admin/categories/price',headers=self.headers,json={'slug':slug,'price':'99'})
+                self.assertEqual(r.status,400)
+            change.assert_not_awaited()
+
     async def test_admin_identity_cannot_be_chosen_by_client(self):
         with patch.object(config,'ADMIN_IDS',[999]),patch.object(admin_web,'overview',AsyncMock()) as get:
             r=await self.client.get('/api/admin/overview?admin_id=999',headers=self.headers)

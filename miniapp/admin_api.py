@@ -100,6 +100,16 @@ def register(app, response, page_number):
         await store.save_category(request['user']['id'], await read_body(request))
         return response({'ok': True})
 
+    async def category_price(request):
+        body = await read_body(request)
+        slug = body.get('slug')
+        if not isinstance(slug, str) or not slug.strip() or len(slug) > 64:
+            raise ValueError(tr('Выберите категорию.'))
+        if not await db.get_category(slug):
+            raise ValueError(tr('Категория не найдена.'))
+        updated = await admin_tools.change_category_price(request['user']['id'], slug, body.get('price'))
+        return response({'ok': True, 'updated': updated})
+
     async def stock_edit(request):
         await store.edit_stock(request['user']['id'], identifier(request.match_info['id']), await read_body(request))
         return response({'ok': True})
@@ -336,7 +346,7 @@ def register(app, response, page_number):
 
     async def jobs(request):
         return response({'items': await store.rows('SELECT id,status,created_at,expires_at FROM import_batches WHERE admin_id=%s ORDER BY created_at DESC LIMIT 20', (request['user']['id'],))})
-    app.add_routes([web.get('/api/admin/payments',payment_list),web.post('/api/admin/payments/check',payment_check),web.get('/api/admin/referrals/blocks',referral_block_list),web.post('/api/admin/referrals/blocks',referral_block_save),web.get('/api/admin/users/{id}/referrals',user_referrals),web.post('/api/admin/spam-checks', spam_all), web.post('/api/admin/stock/{id}/spam-check', spam_one), web.post('/api/admin/stock/{id}/review', stock_review), web.get('/api/admin/overview', overview), web.get('/api/admin/stock', stock), web.post('/api/admin/stock/bulk', stock_bulk), web.patch('/api/admin/stock/{id}', stock_edit), web.delete('/api/admin/stock/{id}', stock_delete), web.get('/api/admin/categories', categories), web.post('/api/admin/categories', category_save), web.get('/api/admin/orders', orders), web.get('/api/admin/orders/{id}', order), web.post('/api/admin/orders/{id}/refund', refund), web.post('/api/admin/orders/{id}/replace', replace), web.get('/api/admin/approvals', approvals), web.post('/api/admin/approvals/{id}', approve), web.get('/api/admin/tickets', inbox), web.get('/api/admin/tickets/{id}', ticket), web.post('/api/admin/tickets/{id}/reply', reply), web.post('/api/admin/tickets/{id}/close', close), web.get('/api/admin/tickets/{id}/photos/{message}', photo), web.get('/api/admin/users', user), web.post('/api/admin/users/{id}/balance', balance), web.get('/api/admin/settings', settings), web.post('/api/admin/settings', settings_save), web.get('/api/admin/audit', audit), web.get('/api/admin/promos', promos), web.post('/api/admin/promos', promo_create), web.post('/api/admin/promos/disable', promo_disable), web.get('/api/admin/imports', jobs), web.post('/api/admin/imports', upload), web.get('/api/admin/imports/{batch}', preview), web.post('/api/admin/imports/{batch}/commit', commit), web.delete('/api/admin/imports/{batch}', discard)])
+    app.add_routes([web.get('/api/admin/payments',payment_list),web.post('/api/admin/payments/check',payment_check),web.get('/api/admin/referrals/blocks',referral_block_list),web.post('/api/admin/referrals/blocks',referral_block_save),web.get('/api/admin/users/{id}/referrals',user_referrals),web.post('/api/admin/spam-checks', spam_all), web.post('/api/admin/stock/{id}/spam-check', spam_one), web.post('/api/admin/stock/{id}/review', stock_review), web.get('/api/admin/overview', overview), web.get('/api/admin/stock', stock), web.post('/api/admin/stock/bulk', stock_bulk), web.patch('/api/admin/stock/{id}', stock_edit), web.delete('/api/admin/stock/{id}', stock_delete), web.get('/api/admin/categories', categories), web.post('/api/admin/categories', category_save), web.post('/api/admin/categories/price', category_price), web.get('/api/admin/orders', orders), web.get('/api/admin/orders/{id}', order), web.post('/api/admin/orders/{id}/refund', refund), web.post('/api/admin/orders/{id}/replace', replace), web.get('/api/admin/approvals', approvals), web.post('/api/admin/approvals/{id}', approve), web.get('/api/admin/tickets', inbox), web.get('/api/admin/tickets/{id}', ticket), web.post('/api/admin/tickets/{id}/reply', reply), web.post('/api/admin/tickets/{id}/close', close), web.get('/api/admin/tickets/{id}/photos/{message}', photo), web.get('/api/admin/users', user), web.post('/api/admin/users/{id}/balance', balance), web.get('/api/admin/settings', settings), web.post('/api/admin/settings', settings_save), web.get('/api/admin/audit', audit), web.get('/api/admin/promos', promos), web.post('/api/admin/promos', promo_create), web.post('/api/admin/promos/disable', promo_disable), web.get('/api/admin/imports', jobs), web.post('/api/admin/imports', upload), web.get('/api/admin/imports/{batch}', preview), web.post('/api/admin/imports/{batch}/commit', commit), web.delete('/api/admin/imports/{batch}', discard)])
 
     async def lifecycle(application):
         housekeeping = asyncio.create_task(archive_import.housekeeping())

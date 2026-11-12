@@ -105,6 +105,10 @@ class AdminMutationTests(unittest.IsolatedAsyncioTestCase):
         self.cur.fetchall.return_value = [{'price': Decimal('100')}, {'price': Decimal('120')}]
         self.cur.rowcount = 2
         self.assertEqual(await storage.change_category_price(7, 'cat', '150'), 2)
+        sql, params = self.cur.execute.call_args_list[1].args
+        self.assertIn('WHERE country=%s', sql)
+        self.assertIn("status IN ('available','review')", sql)
+        self.assertEqual(params[-1], 'cat')
         details = json.loads(self.cur.execute.call_args_list[2].args[1][4])
         self.assertEqual(details['before'], ['100', '120'])
         self.assertEqual(details['updated'], 2)

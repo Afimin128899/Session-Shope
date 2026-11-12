@@ -56,7 +56,7 @@ $('editor').addEventListener('cancel', event => { if (saving) event.preventDefau
 $('edit-form').addEventListener('submit', async event => {
   event.preventDefault(); if (saving || !save) return;
   saving = true; const buttons = [...$('edit-form').querySelectorAll('button')]; buttons.forEach(b => b.disabled = true);
-  try { await save(); $('editor').close(); await load(); }
+  try { await save(); $('editor').close(); await load(); if(categoryPriceResult){$('notice').textContent=categoryPriceResult;categoryPriceResult='';} }
   catch (error) { $('form-error').textContent = error.message; }
   finally { saving = false; buttons.forEach(b => b.disabled = false); }
 });
@@ -75,6 +75,16 @@ function categoryEditor(item = {}) {
     ['active','Доступность',item.is_active === 0 ? '0' : '1','text',[['1','Включена'],['0','Отключена']]]],
     values => api('categories','POST',{slug:values.slug,name:values.name,active:values.active === '1'}));
 }
+function categoryPriceEditor(item) {
+  form('Цена товаров: ' + item.name, [
+    ['price','Новая цена всех непроданных товаров категории, ₽','','number'],
+  ], async values => {
+    const result = await api('categories/price','POST',{slug:item.slug,price:values.price});
+    // load() clears the page notice, so show the result after the dialog reload.
+    categoryPriceResult = 'Цена обновлена. Изменено товаров: ' + result.updated;
+  });
+}
+let categoryPriceResult = '';
 function balanceEditor(user) {
   // A failed request reuses this key; never create a new operation on retry.
   const operationId = crypto.randomUUID().replaceAll('-','');
@@ -136,7 +146,7 @@ async function load() {
           row(list,(item.name||item.country)+' · #'+item.id,item.number+' · '+(statusNames[item.status]||item.status)+' · '+(check.label||'Не проверен')+(check.detail?' · '+check.detail:''),rub(item.price),actions);
         }
         if (selected === 'orders') row(list,'Заказ #' + item.id,(item.name || 'Товар') + ' · ID покупателя: ' + item.user_id + ' · ' + (statusNames[item.status] || item.status),item.currency === 'RUB' ? rub(item.paid_amount) : (item.paid_amount ?? '—') + ' ' + item.currency);
-        if (selected === 'categories') row(list,item.name,item.slug,item.is_active ? 'Включена' : 'Отключена',[button('Изменить', () => categoryEditor(item))]);
+        if (selected === 'categories') row(list,item.name,item.slug,item.is_active ? 'Включена' : 'Отключена',[button('Цена всех товаров', () => categoryPriceEditor(item)),button('Изменить', () => categoryEditor(item))]);
         if (selected === 'promos') row(list,item.code,'Использовано: ' + item.uses + ' из ' + item.max_uses,item.kind === 'discount' ? item.value + '%' : rub(item.value));
         if (selected === 'payments') row(list,item.provider + ' · ' + item.invoice_id,'ID: ' + item.user_id + ' · ' + (statusNames[item.status] || item.status) + ' · ' + item.created_at,rub(item.amount_rub));
       }
