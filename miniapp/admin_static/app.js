@@ -133,7 +133,7 @@ async function load() {
             const b=button(check.running?'Проверяется…':check.queued?'В очереди':'Проверить на спамблок',()=>queueSpam(item.id));
             b.disabled=Boolean(check.running||check.queued);actions.push(b);
           }
-          row(list,(item.name||item.country)+' · #'+item.id,item.number+' · '+(statusNames[item.status]||item.status)+' · '+(check.label||'Не проверен'),rub(item.price),actions);
+          row(list,(item.name||item.country)+' · #'+item.id,item.number+' · '+(statusNames[item.status]||item.status)+' · '+(check.label||'Не проверен')+(check.detail?' · '+check.detail:''),rub(item.price),actions);
         }
         if (selected === 'orders') row(list,'Заказ #' + item.id,(item.name || 'Товар') + ' · ID покупателя: ' + item.user_id + ' · ' + (statusNames[item.status] || item.status),item.currency === 'RUB' ? rub(item.paid_amount) : (item.paid_amount ?? '—') + ' ' + item.currency);
         if (selected === 'categories') row(list,item.name,item.slug,item.is_active ? 'Включена' : 'Отключена',[button('Изменить', () => categoryEditor(item))]);

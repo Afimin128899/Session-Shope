@@ -2,7 +2,7 @@
 import asyncio
 import re
 
-from telethon.errors import FloodWaitError, YouBlockedUserError, UserIsBlockedError
+from telethon.errors import FloodWaitError, YouBlockedUserError, UserIsBlockedError, FrozenMethodInvalidError, FrozenParticipantMissingError
 from telethon.tl.functions.contacts import UnblockRequest
 
 from services.telethon_factory import create_client
@@ -16,6 +16,7 @@ def classify_reply(text):
         'на ваш аккаунт не наложено никаких ограничений',
         'ваш аккаунт свободен от каких-либо ограничений',
         'ваш аккаунт не ограничен',
+        'на данный момент на ваш аккаунт не наложено никаких ограничений',
     ))
     limited = any(part in text for part in (
         'your account is currently limited', 'your account has been limited',
@@ -27,6 +28,8 @@ def classify_reply(text):
         'вашему аккаунту было назначено временное ограничение',
         'вы можете отправлять сообщения только взаимным контактам',
         'you can only send messages to mutual contacts',
+        'your account is now limited until',
+        'мы были вынуждены ограничить ваш аккаунт',
     ))
     permanent = any(part in text for part in (
         'your account is permanently limited', 'your account has been permanently limited',
@@ -44,6 +47,20 @@ def classify_reply(text):
 
 def result(status, reason=None, retry_after=None):
     return {'status': status, 'reason': reason, 'retry_after': retry_after}
+
+
+async def _fresh_history(client, peer, sent):
+    """Recover a fresh reply if a Telegram update was lost; never reuse old status."""
+    try:
+        messages = await asyncio.wait_for(client.get_messages(peer, limit=8, min_id=sent.id), timeout=4)
+    except TimeoutError:
+        return 'unknown'
+    for reply in messages:
+        if reply.sender_id == peer.id and reply.id > sent.id:
+            status = classify_reply(reply.raw_text)
+            if status != 'unknown':
+                return status
+    return 'unknown'
 
 
 async def _conversation(client, expected_id, expected_phone):
@@ -68,9 +85,9 @@ async def _conversation(client, expected_id, expected_phone):
                 reply = await dialog.get_response(sent)
                 status = classify_reply(reply.raw_text) if reply.sender_id == peer.id and reply.id > sent.id else 'unknown'
             except TimeoutError:
-                if attempt:
+                status = await _fresh_history(client, peer, sent)
+                if status == 'unknown' and attempt:
                     raise
-                status = 'unknown'
             if status != 'unknown' or attempt:
                 break
             # Only unblock the verified official bot; retry once with a fresh reply.
@@ -85,7 +102,10 @@ async def check_session(session, *, expected_id=None, expected_phone=None):
         if not isinstance(session, str) or len(session.strip()) < 100:
             return result('error', 'no_session')
         client = create_client(session_str=session)
-        return await asyncio.wait_for(_conversation(client, expected_id, expected_phone), timeout=40)
+        client.flood_sleep_threshold = 0
+        return await asyncio.wait_for(_conversation(client, expected_id, expected_phone), timeout=55)
+    except (FrozenMethodInvalidError, FrozenParticipantMissingError):
+        return result('error', 'frozen')
     except FloodWaitError as exc:
         return result('error', 'flood_wait', max(1, int(exc.seconds)))
     except TimeoutError:

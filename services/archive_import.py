@@ -62,6 +62,10 @@ async def process(admin,batch,files,verifier=None):
                         session,phone,error=await asyncio.wait_for(verifier(str(path),metadata=metadata),timeout=25)
                     except Exception:
                         session=phone=None;error='Проверка не завершилась.'
+                if metadata.get('rejection') == 'frozen':
+                    from services.account_health import FROZEN_MESSAGE
+                    await imports.add_item(batch,label,'error',error=FROZEN_MESSAGE)
+                    continue
                 if not session or not phone or not metadata.get('telegram_user_id'):
                     await imports.add_item(batch,label,'error',error='Не удалось подтвердить сессию. Проверьте авторизацию и доступность Telegram.')
                     continue

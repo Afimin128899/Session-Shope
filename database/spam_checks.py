@@ -132,7 +132,7 @@ async def claim():
 async def finish(lease, report):
     status = report['status'] if report['status'] in {'clear', 'limited', 'permanent', 'unknown', 'error'} else 'unknown'
     reason = report.get('reason')
-    if reason not in {None, 'unrecognized', 'unauthorized', 'identity_mismatch', 'wrong_peer', 'no_session', 'flood_wait', 'timeout', 'connection'}:
+    if reason not in {None, 'unrecognized', 'unauthorized', 'identity_mismatch', 'wrong_peer', 'no_session', 'flood_wait', 'timeout', 'connection', 'frozen'}:
         reason = 'connection'
     delay = 86400 if status in {'clear', 'limited', 'permanent'} else 3600 if status == 'unknown' else 900
     if reason == 'flood_wait':

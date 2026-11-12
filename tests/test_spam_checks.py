@@ -53,6 +53,7 @@ class ConversationTests(unittest.IsolatedAsyncioTestCase):
         self.client=CallableClient(unblock=AsyncMock(),connect=AsyncMock(),disconnect=AsyncMock(),is_user_authorized=AsyncMock(return_value=True),
                        get_me=AsyncMock(return_value=NS(id=9001,phone='79990001122')),
                        get_entity=AsyncMock(return_value=NS(id=100,bot=True,username='SpamBot')),
+                       get_messages=AsyncMock(return_value=[]),
                        conversation=MagicMock(return_value=context))
         patcher=patch.object(spam_check,'create_client',return_value=self.client)
         patcher.start();self.addCleanup(patcher.stop)
@@ -116,6 +117,18 @@ class ConversationTests(unittest.IsolatedAsyncioTestCase):
         self.client.unblock.assert_awaited_once()
         self.assertEqual(self.dialog.send_message.await_count,2)
         self.assertEqual(self.dialog.get_response.call_args.args[0].id,20)
+
+    async def test_lost_update_recovers_only_fresh_official_history(self):
+        self.dialog.get_response.side_effect=TimeoutError()
+        self.client.get_messages.return_value=[NS(id=11,sender_id=100,raw_text=CLEAR)]
+        self.assertEqual((await self.check())['status'],'clear')
+        self.dialog.send_message.assert_awaited_once()
+
+    async def test_stale_history_cannot_turn_timeout_into_clear(self):
+        self.dialog.get_response.side_effect=TimeoutError()
+        self.client.get_messages.return_value=[NS(id=9,sender_id=100,raw_text=CLEAR),NS(id=12,sender_id=101,raw_text=CLEAR)]
+        self.assertEqual((await self.check())['reason'],'timeout')
+        self.client.unblock.assert_awaited_once()
 
     async def test_timeout_has_error_status_and_disconnects(self):
         self.dialog.get_response.side_effect=TimeoutError()

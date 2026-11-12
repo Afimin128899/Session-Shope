@@ -117,6 +117,8 @@ async def process_session_file(message: Message, state: FSMContext):
         metadata = {}
         session_string, phone, error = await import_session_file(tmp_path, metadata=metadata)
         if not session_string or not phone:
+            if metadata.get('rejection') == 'frozen':
+                await state.clear()
             await message.answer(tr('❌ Не удалось импортировать сессию.\nПричина: <b>{0}</b>', f"{error or tr('файл недействителен или авторизация отсутствует')}"))
             return
         from utils.commerce_policy import require_phone
@@ -130,10 +132,11 @@ async def process_session_file(message: Message, state: FSMContext):
         await message.answer(tr('❌ Ошибка обработки .session: <code>{0}</code>', f'{e}'))
     finally:
         if tmp_path:
-            try:
-                os.remove(tmp_path)
-            except OSError:
-                pass
+            for suffix in ('', '-journal', '-wal', '-shm'):
+                try:
+                    os.remove(tmp_path + suffix)
+                except OSError:
+                    pass
 
 
 @add_account_router .message (AddAccountState .waiting_for_phone ,F .text )

@@ -31,10 +31,21 @@ async def stock(query='',status='available',page=0):
         condition+=' AND a.status=%s';args.append(status)
     if query:
         condition+=" AND (CAST(a.id AS CHAR)=%s OR CAST(a.telegram_user_id AS CHAR)=%s OR a.number LIKE %s OR c.name LIKE %s)";args += [query,query,'%'+query+'%','%'+query+'%']
-    items=await rows('SELECT a.id,a.country,a.number,a.telegram_user_id,a.price,a.status,a.review_reason,a.review_admin_id,a.review_started_at,a.warranty_hours,a.registration_date,a.is_premium,a.features_note,a.spam_status,a.spam_checked_at,a.spam_lease_until,a.spam_requested,c.name FROM accounts a LEFT JOIN categories c ON c.slug=a.country WHERE '+condition+' ORDER BY a.id DESC LIMIT 31 OFFSET %s',(*args,page*30))
+    items=await rows('SELECT a.id,a.country,a.number,a.telegram_user_id,a.price,a.status,a.review_reason,a.review_admin_id,a.review_started_at,a.warranty_hours,a.registration_date,a.is_premium,a.features_note,a.spam_status,a.spam_checked_at,a.spam_lease_until,a.spam_requested,a.spam_reason,c.name FROM accounts a LEFT JOIN categories c ON c.slug=a.country WHERE '+condition+' ORDER BY a.id DESC LIMIT 31 OFFSET %s',(*args,page*30))
     from database.spam_checks import public as spam_status
     for item in items:
         item['spam_check']=spam_status(item)
+        item['spam_check']['detail'] = {
+            'timeout': 'SpamBot не ответил после разблокировки и повторного запроса.',
+            'unrecognized': 'Ответ SpamBot не распознан. Статус ограничений не подтверждён.',
+            'unauthorized': 'Сессия больше не авторизована в Telegram.',
+            'identity_mismatch': 'Данные владельца сессии не совпадают с товаром.',
+            'wrong_peer': 'Не удалось подтвердить официальный SpamBot.',
+            'no_session': 'Данные сессии отсутствуют или повреждены.',
+            'flood_wait': 'Telegram ограничил частоту запросов. Повторите позже.',
+            'connection': 'Ошибка подключения. Проверьте API_ID/HASH и доступ сервера к Telegram.',
+            'frozen': 'Аккаунт заморожен Telegram.',
+        }.get(item.pop('spam_reason', None), '')
         item.pop('spam_lease_until',None)
     return {'items':items[:30],'has_more':len(items)>30}
 

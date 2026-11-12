@@ -1,6 +1,8 @@
 from __future__ import annotations 
 
 import asyncio
+from services.account_health import ensure_not_frozen, FrozenAccountError, FROZEN_MESSAGE
+from telethon.errors import FrozenMethodInvalidError, FrozenParticipantMissingError
 import logging 
 from typing import Optional ,Tuple ,Dict 
 from telethon import TelegramClient 
@@ -61,6 +63,7 @@ async def import_session_file(session_path: str, metadata=None) -> Tuple[Optiona
         if not await client.is_user_authorized():
             return None, None, "Сессия не авторизована в Telegram"
 
+        await ensure_not_frozen(client)
         me = await client.get_me()
         if not me or not me.phone:
             return None, None, "Не удалось получить номер телефона из сессии"
@@ -75,9 +78,13 @@ async def import_session_file(session_path: str, metadata=None) -> Tuple[Optiona
             return None, None, "Не удалось экспортировать сессию"
 
         return session_string, phone, None
-    except Exception as e:
-        logger.exception("Ошибка импорта .session файла: %s", e)
-        return None, None, str(e)
+    except (FrozenAccountError, FrozenMethodInvalidError, FrozenParticipantMissingError):
+        if metadata is not None:
+            metadata.clear()
+            metadata["rejection"] = "frozen"
+        return None, None, FROZEN_MESSAGE
+    except Exception:
+        return None, None, "Не удалось проверить сессию и состояние аккаунта. Повторите загрузку."
     finally:
         if client:
             try:
@@ -144,6 +151,7 @@ async def verify_2fa_password (client :TelegramClient ,password :str )->Tuple [b
 async def finalize_account (client :TelegramClient, metadata=None )->Tuple [Optional [str ],Optional [str ],Optional [str ]]:
     """Возвращает (session_string, phone, country)"""
     try :
+        await ensure_not_frozen(client)
         me =await client .get_me ()
         if not me :
             return None ,None ,"Не удалось получить данные профиля"
@@ -158,9 +166,15 @@ async def finalize_account (client :TelegramClient, metadata=None )->Tuple [Opti
 
         await client .disconnect ()
         return session_string ,phone ,country 
-    except Exception as e :
-        await client .disconnect ()
-        return None ,None ,str (e )
+    except (FrozenAccountError, FrozenMethodInvalidError, FrozenParticipantMissingError):
+        if metadata is not None:
+            metadata.clear()
+            metadata["rejection"] = "frozen"
+        await client.disconnect()
+        return None, None, FROZEN_MESSAGE
+    except Exception:
+        await client.disconnect()
+        return None, None, "Не удалось проверить состояние аккаунта. Повторите загрузку."
 
 
 def cache_client (user_id :int ,client :TelegramClient ):

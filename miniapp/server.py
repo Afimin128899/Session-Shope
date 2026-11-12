@@ -598,9 +598,13 @@ async def standalone():
     await db.init_db()
     async with Bot(config.BOT_TOKEN) as bot:
         runner = await start_server(bot)
+        from services.spam_check import spam_worker
+        worker = asyncio.create_task(spam_worker(bot))
         try:
             await asyncio.Event().wait()
         finally:
+            worker.cancel()
+            await asyncio.gather(worker, return_exceptions=True)
             await runner.cleanup()
             db.pool.close()
             await db.pool.wait_closed()
