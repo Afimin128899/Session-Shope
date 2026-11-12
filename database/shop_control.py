@@ -46,7 +46,7 @@ async def set_review(admin, account, enabled, reason):
             await checkout(cur, [account])
         await cur.execute('DELETE FROM account_reservations WHERE account_id=%s', (account,))
         await cur.execute('DELETE FROM shopping_cart WHERE account_id=%s', (account,))
-        await cur.execute('UPDATE accounts SET status=%s,review_reason=%s,review_admin_id=%s,\n            review_started_at=CASE WHEN %s THEN UTC_TIMESTAMP() ELSE NULL END,\n            spam_token=NULL,spam_lease_until=NULL,spam_next_check_at=UTC_TIMESTAMP()\n            WHERE id=%s', (target, reason if enabled else None, admin if enabled else None, enabled, account))
+        await cur.execute('UPDATE accounts SET status=%s,review_reason=%s,review_admin_id=%s,\n            review_started_at=CASE WHEN %s THEN UTC_TIMESTAMP() ELSE NULL END,\n            spam_token=NULL,spam_lease_until=NULL,spam_requested=0,spam_next_check_at=UTC_TIMESTAMP()\n            WHERE id=%s', (target, reason if enabled else None, admin if enabled else None, enabled, account))
         await _record(cur, admin, 'account_review' if enabled else 'account_release', 'account', account, {'before': expected, 'after': target, 'reason': reason, 'previous_reason': row.get('review_reason')})
         return target
 

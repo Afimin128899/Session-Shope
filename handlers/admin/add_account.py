@@ -52,7 +52,7 @@ async def start_add_account_session(call: CallbackQuery, state: FSMContext):
         return
     await state.clear()
     await state.set_state(AddAccountState.waiting_for_session_file)
-    await edit_message_safe(call, tr('📁 <b>Загрузка Telegram-сессии</b>\n\nОтправьте файл <code>.session</code> от уже авторизованного Telegram-аккаунта.\n\nПосле проверки бот получит номер из сессии, а затем попросит цену. Категория определяется по стране и ответу @SpamBot.'), reply_markup=back_to_admin())
+    await edit_message_safe(call, tr('📁 <b>Загрузка Telegram-сессии</b>\n\nОтправьте файл <code>.session</code> от уже авторизованного Telegram-аккаунта.\n\nПосле проверки бот получит номер из сессии, а затем попросит цену. Страна определяется по номеру. Проверку спамблока можно запустить кнопкой в админке Mini App.'), reply_markup=back_to_admin())
     await answer_safe(call)
 
 
@@ -232,7 +232,7 @@ async def process_price(message: Message, state: FSMContext):
             display_emoji = emoji or '📁'
             rows.append([InlineKeyboardButton(text=f'{display_emoji} {button_text}', callback_data=f"addacc_cat:{c['slug']}")])
     rows.append([InlineKeyboardButton(text=tr('« Отмена'), callback_data='admin_home')])
-    text_msg = tr('📂 Выберите <b>автоматическую категорию</b>. Страна определяется по номеру из сессии, спамблок — через @SpamBot. До первого результата аккаунт скрыт. При ошибке проверки он продаётся с пометкой «Спамблок не проверен». Выбранная вручную категория также проверяется и затем уточняется автоматически:\n\n<i>(Цена аккаунта: {0} ₽)</i>', f'{price:.2f}')
+    text_msg = tr('📂 Выберите <b>автоматическую категорию</b>. Страна определяется по номеру из сессии, спамблок — через @SpamBot. После загрузки аккаунт доступен без подтверждённого спамблока. Проверка запускается только вручную кнопкой в админке Mini App; результат уточнит категорию:\n\n<i>(Цена аккаунта: {0} ₽)</i>', f'{price:.2f}')
     await message.answer(text_msg, reply_markup=InlineKeyboardMarkup(inline_keyboard=rows))
 
 
@@ -346,7 +346,7 @@ async def finalize_and_save_account(message: Message, state: FSMContext, client)
         category_slug = saved_account['country']
         cat_display = await get_category(category_slug)
         cat_name = cat_display['name'] if cat_display else category_slug
-        await message.answer(tr("<tg-emoji emoji-id='{0}'>✅</tg-emoji> <b>Аккаунт успешно добавлен!</b>\n\n<tg-emoji emoji-id='{1}'>📞</tg-emoji> Номер: <code>{2}</code>\n<tg-emoji emoji-id='{3}'>🔒</tg-emoji> Пароль (2FA): <code>{4}</code>\n📂 Категория: <b>{5}</b>\n<tg-emoji emoji-id='5258368777350816286'>🪙</tg-emoji> Цена: <b>{6} ₽</b>\n\n<i>Товар появится в магазине после подтверждения страны и спамблока.</i>", f'{EMOJI_CHECK}', f'{EMOJI_PHONE}', f'{phone}', f'{EMOJI_LOCK}', f'{saved_password}', f'{cat_name}', f'{price:.2f}'), reply_markup=kb)
+        await message.answer(tr("<tg-emoji emoji-id='{0}'>✅</tg-emoji> <b>Аккаунт успешно добавлен!</b>\n\n<tg-emoji emoji-id='{1}'>📞</tg-emoji> Номер: <code>{2}</code>\n<tg-emoji emoji-id='{3}'>🔒</tg-emoji> Пароль (2FA): <code>{4}</code>\n📂 Категория: <b>{5}</b>\n<tg-emoji emoji-id='5258368777350816286'>🪙</tg-emoji> Цена: <b>{6} ₽</b>\n\n<i>Товар добавлен без автоматической проверки спамблока. Проверить его можно кнопкой в Mini App.</i>", f'{EMOJI_CHECK}', f'{EMOJI_PHONE}', f'{phone}', f'{EMOJI_LOCK}', f'{saved_password}', f'{cat_name}', f'{price:.2f}'), reply_markup=kb)
     except Exception as e:
         await state.clear()
         await message.answer(tr('❌ Ошибка сохранения в базу: {0}', f'{str(e)}'))

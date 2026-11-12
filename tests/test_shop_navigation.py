@@ -33,7 +33,7 @@ class ShoppingTests(unittest.IsolatedAsyncioTestCase):
         await shop.open_shop(self.call,self.state)
         markup=self.edit.call_args.kwargs['reply_markup']
         self.assertEqual([[b.text for b in row] for row in markup.inline_keyboard],[['Авторег','С отлегой'],['Премиум'],['Назад']])
-        self.assertEqual([b.style for b in flatten(markup)[:3]],['success']*3)
+        self.assertEqual([b.style for b in flatten(markup)[:3]],['primary']*3)
         self.assertIn('Выберите вид аккаунта',self.edit.call_args.args[1])
 
     async def test_new_buttons_use_only_requested_pack_and_no_standard_emoji(self):
@@ -66,7 +66,7 @@ class ShoppingTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(all(b.web_app is None for b in buttons))
         self.assertNotIn('Номер для смены',' '.join(b.text for b in buttons))
         self.assertNotIn('Бот рассылки',' '.join(b.text for b in buttons))
-        self.assertEqual(menu.inline_keyboard[1][0].style,'success')
+        self.assertEqual(menu.inline_keyboard[1][0].style,'primary')
 
     async def test_home_has_real_cheapest_price_country_count_and_two_column_tiles(self):
         items=[{'nation':'us','name':'США','flag':'🇺🇸','count':2,'min_price':Decimal('71.25')},

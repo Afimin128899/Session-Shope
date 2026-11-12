@@ -28,7 +28,7 @@ async def all_accounts(call):
         await edit_message_safe(call, tr('<b>Проверить весь остаток?</b>\n\nВ очередь попадут только аккаунты в продаже. Бот отправит /start официальному @SpamBot с каждого аккаунта. Проверка идёт по одному аккаунту; товары в действующем резерве будут проверены после его окончания. Проверявшиеся менее 5 минут назад и аккаунты с ограничением частоты запросов пропускаются.'), reply_markup=InlineKeyboardMarkup(inline_keyboard=[button(tr('Поставить в очередь'), 'spam_all_yes', 'confirm'), button(tr('Отмена'), 'admin_home', 'cancel')]))
     else:
         count = await spam_checks.enqueue(call.from_user.id)
-        await edit_message_safe(call, tr('Поставлено в очередь: {0}.\nРезультат и время появятся в карточках аккаунтов. Проверка также запускается автоматически для новых товаров и обновляется раз в сутки.', f'{count}'), reply_markup=InlineKeyboardMarkup(inline_keyboard=[button(tr('В админ-панель'), 'admin_home', 'back')]))
+        await edit_message_safe(call, tr('Поставлено в очередь: {0}.\nРезультат и время появятся в карточках аккаунтов. Проверка запускается только по кнопке. После загрузки аккаунт остаётся без подтверждённого результата.', f'{count}'), reply_markup=InlineKeyboardMarkup(inline_keyboard=[button(tr('В админ-панель'), 'admin_home', 'back')]))
     await answer_safe(call)
 
 

@@ -63,7 +63,7 @@ async def security(request, handler):
     except Exception as exc:
         logger.error('Mini App request failed: %s [%s]', request.path, type(exc).__name__)
         result = response({'error': tr('Сервис временно недоступен. Попробуйте позже.'), 'code': 'unavailable'}, 503)
-    result.headers.update({'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer', 'Cache-Control': 'no-store', 'Content-Security-Policy': "default-src 'self'; script-src 'self' https://telegram.org; style-src 'self'; img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors https://web.telegram.org https://*.telegram.org"})
+    result.headers.update({'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer', 'Cache-Control': 'no-store', 'Content-Security-Policy': "default-src 'self'; script-src 'self' https://telegram.org; style-src 'self'; img-src 'self' data: blob: https://t.me https://*.t.me https://telegram.org https://*.telegram.org; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors https://web.telegram.org https://*.telegram.org"})
     return result
 
 

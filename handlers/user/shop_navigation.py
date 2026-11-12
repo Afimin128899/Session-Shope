@@ -35,7 +35,7 @@ class Shopping(StatesGroup):
 
 
 def btn(text, data, role=None, green=False):
-    return InlineKeyboardButton(text=pack_text(text), callback_data=data, icon_custom_emoji_id=pack_icon_for(role or 'country'), style='success' if green else None)
+    return InlineKeyboardButton(text=pack_text(text), callback_data=data, icon_custom_emoji_id=pack_icon_for(role or 'country'), style='primary' if green else None)
 
 
 def kb(rows):

@@ -92,8 +92,13 @@ f"• <a href='https://telegra.ph/POLITIKA-KONFIDENCIALNOSTI-SBAND-ACCS-11-05-2'
 def start_text(name):
     from utils.i18n import LANGUAGE
     if LANGUAGE.get() == 'en':
-        return f'<blockquote>Hello, <b>{name}</b>! Welcome to SBAND ACCS 🛍</blockquote>\n\nBrowse Telegram accounts, manage purchases and contact support below.'
-    return START_TEXT.replace('{name}', name)
+        return (f'<b>SBAND ACCS</b>\n{name}, welcome to your account store.\n\n'
+                '<blockquote>Choose a country and account category. Purchases and login codes are always in your profile.</blockquote>\n\n'
+                '<b>Get started</b>\nBrowse the catalog, top up your balance or contact support using the buttons below.')
+    return (f'<b>SBAND ACCS</b>\n{name}, добро пожаловать в магазин аккаунтов.\n\n'
+            '<blockquote>Страны и категории — в каталоге. Ваши аккаунты и коды входа — в покупках.</blockquote>\n\n'
+            '<b>С чего начать</b>\nВыберите аккаунт, пополните баланс или откройте профиль. '
+            'Если понадобится помощь, поддержка рядом — кнопкой ниже.')
 
 
 def info_text():

@@ -32,6 +32,8 @@ async def main():
                 ids.append(cur.lastrowid)
         print('PASS: additive spam schema can be applied repeatedly')
         await commerce.add_to_cart(42,ids[0])
+        assert await spam_checks.claim() is None
+        assert await spam_checks.enqueue(7)==4
         leases=await asyncio.gather(spam_checks.claim(),spam_checks.claim(),spam_checks.claim())
         assert {r['id'] for r in leases}==set(ids[1:4])
         assert await spam_checks.claim() is None

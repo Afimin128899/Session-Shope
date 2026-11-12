@@ -39,7 +39,9 @@ async def main():
             r=await c.get('/api/category-market',headers=own)
             assert r.status==200,await r.text()
             items=(await r.json())['items'];assert len(items)==1,items
-            assert items[0]['name']=='США Вечный СБ' and items[0]['count']==1
+            assert items[0]['name']=='США' and items[0]['count']==1
+            r=await c.get('/api/category-market?country=us',headers=own)
+            items=(await r.json())['items'];assert items[0]['name']=='США Вечный СБ'
             r=await c.post('/api/category-quote',headers=own,json={'mode':'auto','nation':items[0]['nation']})
             assert r.status==200,await r.text()
             quote=await r.json();assert Decimal(quote['price'])==100

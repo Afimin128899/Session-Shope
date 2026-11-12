@@ -64,12 +64,16 @@ async def _conversation(client, expected_id, expected_phone):
             await client(UnblockRequest(id=peer))
             sent = await dialog.send_message('/start')
         for attempt in range(2):
-            reply = await dialog.get_response(sent)
-            status = classify_reply(reply.raw_text) if reply.sender_id == peer.id and reply.id > sent.id else 'unknown'
+            try:
+                reply = await dialog.get_response(sent)
+                status = classify_reply(reply.raw_text) if reply.sender_id == peer.id and reply.id > sent.id else 'unknown'
+            except TimeoutError:
+                if attempt:
+                    raise
+                status = 'unknown'
             if status != 'unknown' or attempt:
                 break
-            # Reset only the verified official bot; request one new reply rather
-            # than accepting an old dialog message or guessing that it is clear.
+            # Only unblock the verified official bot; retry once with a fresh reply.
             await client(UnblockRequest(id=peer))
             sent = await dialog.send_message('/start')
         return result(status, 'unrecognized' if status == 'unknown' else None)

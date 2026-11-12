@@ -3,6 +3,7 @@ const tg = window.Telegram?.WebApp;
 const $ = id => document.getElementById(id);
 const content = $('content');
 const statusNames = {available:'В наличии',review:'На проверке',sold:'Продан',issued:'Выдан',completed:'Завершён',refunded:'Возвращён',pending:'Ожидает оплаты',credited:'Зачислен',expired:'Истёк',replaced:'Заменён'};
+let stockTimer=null;
 let page = 'overview', offset = 0, query = '', generation = 0, save = null, saving = false;
 const rub = value => new Intl.NumberFormat('ru-RU',{style:'currency',currency:'RUB'}).format(Number(value || 0));
 function node(tag, text, className) {
@@ -89,6 +90,7 @@ function promoEditor() {
     values => api('promos','POST',{...values,percent:Number(values.percent),limit:Number(values.limit)}));
 }
 async function load() {
+  clearTimeout(stockTimer);
   const current = ++generation; const selected = page;
   content.setAttribute('aria-busy','true'); $('notice').textContent = '';
   try {
@@ -113,6 +115,7 @@ async function load() {
       const info=node('div',undefined,'card');info.append(node('h2','Поддержка напрямую'),node('p','Сообщения приходят администраторам в бота. Чтобы ответить, нажмите кнопку под сообщением пользователя.'));content.append(info);
       return;
     }
+    if (selected === 'stock') content.append(button('Проверить на спамблок все',()=>queueSpam(),true));
     if (selected === 'categories') content.append(button('Добавить категорию', () => categoryEditor(), true));
     if (selected === 'promos') content.append(button('Создать промокод',promoEditor,true));
     const list=node('div',undefined,'card');content.append(list);
@@ -124,13 +127,21 @@ async function load() {
       const items=result.items || [];
       if (!items.length) list.append(node('p','Записей пока нет.','muted'));
       for (const item of items) {
-        if (selected === 'stock') row(list,(item.name || item.country) + ' · #' + item.id,item.number + ' · ' + (statusNames[item.status] || item.status),rub(item.price),['available','review'].includes(item.status) ? [button('Изменить', () => stockEditor(item))] : []);
+        if (selected === 'stock') {
+          const check=item.spam_check||{};const actions=['available','review'].includes(item.status)?[button('Изменить',()=>stockEditor(item))]:[];
+          if(item.status==='available'){
+            const b=button(check.running?'Проверяется…':check.queued?'В очереди':'Проверить на спамблок',()=>queueSpam(item.id));
+            b.disabled=Boolean(check.running||check.queued);actions.push(b);
+          }
+          row(list,(item.name||item.country)+' · #'+item.id,item.number+' · '+(statusNames[item.status]||item.status)+' · '+(check.label||'Не проверен'),rub(item.price),actions);
+        }
         if (selected === 'orders') row(list,'Заказ #' + item.id,(item.name || 'Товар') + ' · ID покупателя: ' + item.user_id + ' · ' + (statusNames[item.status] || item.status),item.currency === 'RUB' ? rub(item.paid_amount) : (item.paid_amount ?? '—') + ' ' + item.currency);
         if (selected === 'categories') row(list,item.name,item.slug,item.is_active ? 'Включена' : 'Отключена',[button('Изменить', () => categoryEditor(item))]);
         if (selected === 'promos') row(list,item.code,'Использовано: ' + item.uses + ' из ' + item.max_uses,item.kind === 'discount' ? item.value + '%' : rub(item.value));
         if (selected === 'payments') row(list,item.provider + ' · ' + item.invoice_id,'ID: ' + item.user_id + ' · ' + (statusNames[item.status] || item.status) + ' · ' + item.created_at,rub(item.amount_rub));
       }
     }
+    if(selected==='stock'&&(result.items||[]).some(item=>item.spam_check?.running||item.spam_check?.queued))stockTimer=setTimeout(()=>{if(page==='stock')load();},5000);
     if (['stock','orders','payments'].includes(selected) && (offset || result.has_more)) {
       const pager=node('div',undefined,'pagination'); const prev=button('Назад',()=>{offset--;return load();});prev.disabled=!offset;
       const next=button('Далее',()=>{offset++;return load();});next.disabled=!result.has_more;pager.append(prev,node('span','Страница ' + (offset+1)),next);content.append(pager);
@@ -152,3 +163,8 @@ document.querySelectorAll('[data-page]').forEach(b => b.addEventListener('click'
     $('access').hidden=true;$('app').hidden=false;await load();
   } catch(error) {$('access').textContent=error.message;}
 })();
+
+async function queueSpam(id){
+ const result=await api(id?'stock/'+id+'/spam-check':'spam-checks','POST',{});
+ await load();$('notice').textContent=result.queued?'Поставлено в очередь: '+result.queued+'. Результат обновится автоматически.':'Повтор пока недоступен: проверка уже идёт, не прошло 5 минут или действует ограничение Telegram.';
+}

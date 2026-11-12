@@ -17,6 +17,7 @@ async def init_schema(cur, database):
         ('spam_checked_at', 'DATETIME DEFAULT NULL'), ('spam_reason', 'VARCHAR(32) DEFAULT NULL'),
         ('spam_next_check_at', 'DATETIME DEFAULT NULL'), ('spam_token', 'CHAR(32) DEFAULT NULL'),
         ('spam_lease_until', 'DATETIME DEFAULT NULL'),
+        ('spam_requested', 'TINYINT NOT NULL DEFAULT 0'),
     ]
     for column, definition in fields:
         await cur.execute('SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=%s AND TABLE_NAME=%s AND COLUMN_NAME=%s', (database, 'accounts', column))
@@ -48,6 +49,21 @@ async def init_schema(cur, database):
                           "SET a.country=c.slug WHERE a.country LIKE 'auto-%-pending' AND a.status='available' "
                           "AND a.spam_status IN ('error','unknown') AND a.spam_checked_at IS NOT NULL")
 
+    await cur.execute("SELECT `value` FROM settings WHERE `key`='manual_spam_checks_v1'")
+    if not await cur.fetchone():
+        # Startup cursors may return tuples; do not call runtime DictCursor helpers.
+        await cur.execute("SELECT id,number FROM accounts WHERE status='available' AND country LIKE 'auto-%-pending'")
+        pending = list(await cur.fetchall())
+        from database.auto_categories import ensure
+        for item in pending:
+            identity,phone=(item['id'],item['number']) if isinstance(item,dict) else item
+            try:
+                target=await ensure(cur,phone,'not_checked')
+            except ValueError:
+                continue
+            await cur.execute('UPDATE accounts SET country=%s WHERE id=%s',(target,identity))
+        await cur.execute("INSERT IGNORE INTO settings(`key`,`value`) VALUES('manual_spam_checks_v1','1')")
+
 
 def public(row):
     status = row.get('spam_status') or 'not_checked'
@@ -64,7 +80,8 @@ def public(row):
         running = datetime.fromisoformat(running)
     return {'status': status, 'label': tr(LABELS[status]),
             'checked_at': checked.replace(tzinfo=timezone.utc).isoformat() if checked else None,
-            'running': bool(running and running.replace(tzinfo=timezone.utc) > datetime.now(timezone.utc))}
+            'running': bool(running and running.replace(tzinfo=timezone.utc) > datetime.now(timezone.utc)),
+            'queued': bool(row.get('spam_requested'))}
 
 
 def description(row):
@@ -96,7 +113,7 @@ async def catalog_status(user_id, ids):
 
 async def claim():
     async with _transaction() as cur:
-        await cur.execute("SELECT a.id,a.data,a.number,a.telegram_user_id FROM accounts a WHERE a.status='available' "
+        await cur.execute("SELECT a.id,a.data,a.number,a.telegram_user_id FROM accounts a WHERE a.status='available' AND a.spam_requested=1 "
                           "AND (a.spam_next_check_at IS NULL OR a.spam_next_check_at<=UTC_TIMESTAMP()) AND " + CHECK_FREE +
                           " AND NOT EXISTS(SELECT 1 FROM account_reservations r WHERE r.account_id=a.id AND r.expires_at>UTC_TIMESTAMP()) "
                           "ORDER BY a.spam_next_check_at,a.id LIMIT 1 FOR UPDATE")
@@ -122,7 +139,7 @@ async def finish(lease, report):
         delay = max(delay, int(report.get('retry_after') or delay))
     async with _transaction() as cur:
         await cur.execute("UPDATE accounts SET spam_status=%s,spam_checked_at=UTC_TIMESTAMP(),spam_reason=%s,"
-                          "spam_next_check_at=DATE_ADD(UTC_TIMESTAMP(),INTERVAL %s SECOND),spam_token=NULL,spam_lease_until=NULL "
+                          "spam_next_check_at=DATE_ADD(UTC_TIMESTAMP(),INTERVAL %s SECOND),spam_token=NULL,spam_lease_until=NULL,spam_requested=0 "
                           "WHERE id=%s AND spam_token=%s AND status='available' AND data=%s AND spam_lease_until>UTC_TIMESTAMP()",
                           (status, reason, delay, lease['id'], lease['token'], lease['data']))
         saved = cur.rowcount > 0
@@ -144,7 +161,8 @@ async def enqueue(admin_id, account_id=None):
         condition += "AND NOT (COALESCE(spam_reason,'')='flood_wait' AND spam_next_check_at>UTC_TIMESTAMP())"
         if account_id is not None:
             condition += ' AND id=%s'
-        await cur.execute('UPDATE accounts SET spam_next_check_at=UTC_TIMESTAMP() WHERE ' + condition,
+        condition += ' AND spam_requested=0'
+        await cur.execute('UPDATE accounts SET spam_requested=1,spam_next_check_at=UTC_TIMESTAMP() WHERE ' + condition,
                           (account_id,) if account_id is not None else ())
         count = cur.rowcount
         await _record(cur, admin_id, 'spam_check_queued', 'account' if account_id else 'stock', account_id or 'all', {'count': count})

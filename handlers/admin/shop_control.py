@@ -163,7 +163,7 @@ async def review_reason(message, state):
     await state.set_state(ControlInput.confirm)
     action = tr('Отправить на проверку') if saved['review_enabled'] else tr('Вернуть в продажу')
     text = tr('🔎 <b>{0}: #{1}</b>\n\nПричина: {2}\n\n', f'{action}', f"{saved['review_id']:02d}", f'{escape(reason)}')
-    text += tr('Товар будет скрыт из каталога, резерв и запись в корзине отменятся. Деньги не списываются.') if saved['review_enabled'] else tr('Товар станет доступен в активной категории. Проверка @SpamBot будет поставлена в очередь.')
+    text += tr('Товар будет скрыт из каталога, резерв и запись в корзине отменятся. Деньги не списываются.') if saved['review_enabled'] else tr('Товар станет доступен в активной категории. Проверку @SpamBot можно запустить вручную в Mini App.')
     from utils.section_banners import answer_screen
     await answer_screen(message, text, section='inventory', reply_markup=InlineKeyboardMarkup(inline_keyboard=[button(tr('Подтвердить решение'), f'review_apply:{token}'), button(tr('Отмена'), f"admin_account_detail:{saved['review_id']}")]))
 

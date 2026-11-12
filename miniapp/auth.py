@@ -4,6 +4,20 @@ import hmac
 import json
 import time
 from urllib.parse import parse_qsl
+from urllib.parse import urlsplit
+
+
+def photo_url(value):
+    """Only Telegram-hosted HTTPS photos from the verified user payload."""
+    if not isinstance(value, str) or len(value) > 2048:
+        return None
+    try:
+        url = urlsplit(value)
+        host = url.hostname or ''
+        allowed = host in {'t.me', 'telegram.org'} or host.endswith(('.t.me', '.telegram.org'))
+        return value if url.scheme == 'https' and allowed and not url.username and not url.password and url.port in (None, 443) else None
+    except ValueError:
+        return None
 
 
 class AuthError(ValueError):
@@ -33,8 +47,11 @@ def validate_init_data(raw, token, *, now=None, max_age=3600):
         user = json.loads(data['user'])
         if not isinstance(user, dict) or type(user.get('id')) is not int or not 0 < user['id'] < 2**63:
             raise ValueError
-        return {'id': user['id'], 'first_name': str(user.get('first_name', 'Покупатель'))[:100],
-                'username': str(user['username'])[:64] if user.get('username') else None}
+        identity = {'id': user['id'], 'first_name': str(user.get('first_name', 'Покупатель'))[:100],
+                    'username': str(user['username'])[:64] if user.get('username') else None}
+        if picture := photo_url(user.get('photo_url')):
+            identity['photo_url'] = picture
+        return identity
     except AuthError:
         raise
     except (ValueError, KeyError, TypeError) as exc:

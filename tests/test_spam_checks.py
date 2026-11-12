@@ -109,6 +109,14 @@ class ConversationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.dialog.send_message.await_count,2)
         self.client.unblock.assert_awaited_once()
 
+    async def test_timeout_unblocks_verified_bot_and_retries_one_fresh_response(self):
+        self.dialog.send_message.side_effect=[NS(id=10),NS(id=20)]
+        self.dialog.get_response.side_effect=[TimeoutError(),NS(id=21,sender_id=100,raw_text=CLEAR)]
+        self.assertEqual((await self.check())['status'],'clear')
+        self.client.unblock.assert_awaited_once()
+        self.assertEqual(self.dialog.send_message.await_count,2)
+        self.assertEqual(self.dialog.get_response.call_args.args[0].id,20)
+
     async def test_timeout_has_error_status_and_disconnects(self):
         self.dialog.get_response.side_effect=TimeoutError()
         self.assertEqual((await self.check())['reason'],'timeout')

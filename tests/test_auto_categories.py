@@ -18,15 +18,15 @@ class CategoryTests(unittest.TestCase):
             self.assertEqual(value['name'],'Чили 🇨🇱 · '+label)
             self.assertEqual(value['active'],1)
 
-    def test_unknown_errors_and_unchecked_are_hidden_and_never_called_clear(self):
-        for status in ['not_checked','invented']:
+    def test_unrecognized_status_is_hidden_and_never_called_clear(self):
+        for status in ['invented']:
             value=auto_categories.specification('+56912345678',status)
             self.assertEqual(value['slug'],'auto-cl-pending')
             self.assertEqual(value['active'],0)
             self.assertNotIn('Без спамблока',value['name'])
 
-    def test_failed_checks_are_sellable_but_never_promised_clean(self):
-        for status in ['unknown', 'error']:
+    def test_failed_and_unchecked_are_sellable_but_never_promised_clean(self):
+        for status in ['unknown', 'error', 'not_checked']:
             value=auto_categories.specification('+56912345678',status)
             self.assertEqual(value['slug'],'auto-cl-unverified')
             self.assertEqual(value['active'],1)
