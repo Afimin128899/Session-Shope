@@ -74,7 +74,7 @@ async def main():
         assert credited and (await db.get_user(43))['balance']>before
         report('Single/cart/legacy checkouts and reservations stop; confirmed top-ups continue')
 
-        runner=web.AppRunner(create_app(customer_enabled=True,admin_enabled=True,token=TEST_TOKEN,bot=SimpleNamespace(),bot_username='local_fixture_bot'),access_log=None)
+        runner=web.AppRunner(create_app(enable_cart=True,customer_enabled=True,admin_enabled=True,token=TEST_TOKEN,bot=SimpleNamespace(),bot_username='local_fixture_bot'),access_log=None)
         await runner.setup();await web.TCPSite(runner,'127.0.0.1',8088).start()
         buyer={'Authorization':'tma '+signed_data(43)}
         admin={'Authorization':'tma '+signed_data(42)}

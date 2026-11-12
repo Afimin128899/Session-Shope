@@ -42,7 +42,7 @@ async def main():
                 await cur.execute('INSERT INTO accounts (country, number, password, price, data, telegram_user_id) VALUES (%s,%s,%s,%s,%s,%s)',
                                   (categories[index % 6][0], f'+15550000{index:03}', 'fixture-password', 200 + index * 25, 'NEVER_EXPOSE_SESSION', 9000000000 + index))
         bot = SimpleNamespace(get_chat_member=None)
-        runner = web.AppRunner(create_app(customer_enabled=True,admin_enabled=True,token=TEST_TOKEN, bot=bot, bot_username='session_test_bot'), access_log=None)
+        runner = web.AppRunner(create_app(enable_cart=True,customer_enabled=True,admin_enabled=True,token=TEST_TOKEN, bot=bot, bot_username='session_test_bot'), access_log=None)
         await runner.setup()
         site = web.TCPSite(runner, '127.0.0.1', 8085)
         await site.start()

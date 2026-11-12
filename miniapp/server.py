@@ -520,7 +520,7 @@ async def app_info(request):
 
 
 async def storefront(request):
-    return web.Response(text=(STATIC / 'index.html').read_text(), content_type='text/html')
+    return web.Response(text=(STATIC.parent / 'storefront_v2' / 'index.html').read_text(), content_type='text/html')
 
 
 async def index(request):
@@ -530,7 +530,7 @@ async def index(request):
     return await storefront(request)
 
 
-def create_app(*, token=None, bot=None, bot_username='', customer_enabled=None, admin_enabled=None, admin_only=None):
+def create_app(*, token=None, bot=None, bot_username='', customer_enabled=None, admin_enabled=None, admin_only=None, enable_cart=False):
     from utils.app_access import CUSTOMER_MINIAPP_ENABLED, ADMIN_MINIAPP_ENABLED, CUSTOMER_MINIAPP_ADMIN_ONLY
     from miniapp.access import app_access, retired_support, CUSTOMER_ENABLED, ADMIN_ENABLED, ADMIN_ONLY
     app = web.Application(middlewares=[locale_context, security, app_access, authenticate, retired_support], client_max_size=8192)
@@ -545,6 +545,7 @@ def create_app(*, token=None, bot=None, bot_username='', customer_enabled=None, 
     app.add_routes([
         web.get('/about', about),
         web.get('/api/storefront-preview', storefront),
+        web.static('/store-assets', STATIC.parent / 'storefront_v2', show_index=False, follow_symlinks=False),
         web.static('/preview-assets', STATIC.parent / 'preview_gate', show_index=False, follow_symlinks=False),
         web.get('/', index), web.get('/api/health', health),web.get('/api/app-info',app_info),
         web.get('/api/payment-history', payment_history),
@@ -556,8 +557,7 @@ def create_app(*, token=None, bot=None, bot_username='', customer_enabled=None, 
         web.get('/api/departments',departments),web.get('/api/support',support_list),web.post('/api/support',support_create),web.get('/api/support/{id}',support_detail),web.post('/api/support/{id}/reply',support_reply),
         web.get('/api/shop-info',shop_info),web.get('/api/products/{id}',product),web.get('/api/me', me), web.get('/api/catalog', catalog), web.post('/api/purchase', purchase),
         web.get('/api/favorites', collection), web.post('/api/favorites', collection_update),
-        web.get('/api/cart', collection), web.post('/api/cart', collection_update), web.delete('/api/cart', collection_update),
-        web.post('/api/cart/checkout', cart_checkout), web.get('/api/payment-methods', payment_methods),
+        web.get('/api/payment-methods', payment_methods),
         web.post('/api/invoices', create_invoice), web.get('/api/invoices/{provider}/{invoice}', invoice_status),
         web.post('/api/promo/preview',promo_preview),web.post('/api/promo/redeem',promo_redeem),
         web.get('/api/reviews',review_list),web.post('/api/reviews',review_save),
@@ -565,12 +565,16 @@ def create_app(*, token=None, bot=None, bot_username='', customer_enabled=None, 
         web.get('/api/orders', orders), web.get('/api/orders/{id}', order_detail),
         web.static('/assets', STATIC, show_index=False, follow_symlinks=False),
     ])
+    if enable_cart:
+        app.add_routes([web.get('/api/cart', collection),web.post('/api/cart', collection_update),web.delete('/api/cart', collection_update),web.post('/api/cart/checkout', cart_checkout)])
     from miniapp.demo_api import register as register_demo
     register_demo(app,response)
     from miniapp.admin_api import register
     register(app,response,page_number)
     from miniapp.admin_app import register as register_admin_app
     register_admin_app(app, response)
+    from miniapp.storefront_api import register as register_storefront
+    register_storefront(app, response)
     return app
 
 

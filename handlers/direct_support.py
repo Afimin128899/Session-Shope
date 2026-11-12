@@ -121,6 +121,10 @@ async def relay(message, *, order=None, warranty=False):
         except Exception as exc:
             logger.warning('Direct support delivery failed [%s], recipient=%s', type(exc).__name__, admin)
     if delivered:
+        try:
+            from database.direct_chat import append
+            await append(user.id,'user',(message.text or message.caption or ('Вложение: '+str(message.content_type)))[:4000])
+        except Exception: logger.warning('Direct chat history save unavailable')
         await message.answer(tr('Сообщение передано администрации. Ответ придёт в этот чат.'), reply_markup=cancel_keyboard())
         return True
     await message.answer(tr('Сообщение не удалось передать. Попробуйте позже.'), reply_markup=cancel_keyboard())
@@ -166,4 +170,8 @@ async def admin_message(message, state):
         logger.warning('Direct support reply failed [%s], recipient=%s', type(exc).__name__, target)
         await message.answer(tr('Не удалось доставить ответ. Пользователь мог заблокировать бота.'))
         return
+    try:
+        from database.direct_chat import append
+        await append(target,'admin',(message.text or message.caption or ('Вложение: '+str(message.content_type)))[:4000])
+    except Exception: logger.warning('Direct chat history save unavailable')
     await message.answer(tr('Ответ отправлен пользователю {0}.', target), reply_markup=cancel_keyboard())

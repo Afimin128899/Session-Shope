@@ -54,13 +54,13 @@ class MiniAppAPITests(unittest.IsolatedAsyncioTestCase):
             patch.object(storage, 'access_settings', AsyncMock(return_value={})),
             patch.object(db, 'create_user', AsyncMock()),
             patch.object(server.welcome, 'received', AsyncMock(return_value=Decimal(0))),
-            patch.object(db, 'get_setting', AsyncMock(return_value='1')),
+            patch.object(db, 'get_setting', AsyncMock(side_effect=lambda key, default='': '0' if key=='miniapp_public_access' else '1')),
             patch.object(server.quality, 'my_review', AsyncMock(return_value=None)),
             patch.object(db, 'get_user', AsyncMock(return_value={'balance': 500, 'balance_usdt': 0})),
         ]
         for p in self.patchers: p.start()
         self.bot = SimpleNamespace(get_chat_member=AsyncMock(return_value=SimpleNamespace(status='left')))
-        self.client = TestClient(TestServer(server.create_app(token=TEST_TOKEN, bot=self.bot, customer_enabled=True, admin_enabled=True)))
+        self.client = TestClient(TestServer(server.create_app(token=TEST_TOKEN, bot=self.bot, customer_enabled=True, admin_enabled=True, enable_cart=True)))
         await self.client.start_server()
         self.headers = {'Authorization': 'tma ' + signed_data()}
 

@@ -10,6 +10,8 @@ POLICY = 'Гарантия на проблемы со входом в преде
 
 
 async def init_schema(cur, database):
+    from database.direct_chat import init_schema as init_direct_chat
+    await init_direct_chat(cur)
     columns = {
         'accounts': [('warranty_hours','INT DEFAULT NULL'), ('registration_date','DATE DEFAULT NULL'),
                      ('features_note','VARCHAR(500) DEFAULT NULL'), ('is_premium','TINYINT DEFAULT NULL'),

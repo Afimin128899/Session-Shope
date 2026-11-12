@@ -138,7 +138,7 @@ async def main():
         assert (await db.get_user(43))['balance']==before+12000
         report('Stars retain their native 10,000 count ceiling independently of SBP; historical receipts remain exactly-once credited')
 
-        runner=web.AppRunner(create_app(customer_enabled=True,admin_enabled=True,token=TEST_TOKEN,bot=SimpleNamespace(),bot_username='fixture_store_bot'),access_log=None)
+        runner=web.AppRunner(create_app(enable_cart=True,customer_enabled=True,admin_enabled=True,token=TEST_TOKEN,bot=SimpleNamespace(),bot_username='fixture_store_bot'),access_log=None)
         await runner.setup();await web.TCPSite(runner,'127.0.0.1',8089).start()
         async with ClientSession() as session:
             res=await session.get('http://127.0.0.1:8089/about')

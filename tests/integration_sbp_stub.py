@@ -61,7 +61,7 @@ async def main():
         star_bill=await stars.register_invoice(43,10000)
         assert star_bill['amount']=='12000.00'
         report('The RUB 10,000 funding cap applies only to SBP; Crypto and native Stars keep their separate limits')
-        runner=web.AppRunner(create_app(customer_enabled=True,admin_enabled=True,token=TEST_TOKEN,bot=NS(),bot_username='fixture_sbp_bot'),access_log=None)
+        runner=web.AppRunner(create_app(enable_cart=True,customer_enabled=True,admin_enabled=True,token=TEST_TOKEN,bot=NS(),bot_username='fixture_sbp_bot'),access_log=None)
         await runner.setup();await web.TCPSite(runner,'127.0.0.1',8091).start()
         customer={'Authorization':'tma '+signed_data(43)};admin={'Authorization':'tma '+signed_data(42)}
         origin='http://127.0.0.1:8091'

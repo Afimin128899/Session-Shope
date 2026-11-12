@@ -4,7 +4,7 @@ Stored URLs, Mini App files and payment configuration remain untouched.
 """
 CUSTOMER_MINIAPP_ENABLED = False
 CUSTOMER_MINIAPP_ADMIN_ONLY = True
-ADMIN_MINIAPP_ENABLED = False
+ADMIN_MINIAPP_ENABLED = True
 
 
 async def configure_chat_menu(bot):

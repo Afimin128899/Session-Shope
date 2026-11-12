@@ -142,7 +142,7 @@ async def main():
 
         for i in range(10,40):await stock(i)
         await admin_web.save_settings(42,{'referral_signup_bonus':'3','referral_deposit_pct':'5','referral_purchase_pct':'5','referral_discount_pct':'5'})
-        runner=web.AppRunner(create_app(customer_enabled=True,admin_enabled=True,token=TEST_TOKEN,bot=SimpleNamespace(),bot_username='fixture_referral_bot'),access_log=None)
+        runner=web.AppRunner(create_app(enable_cart=True,customer_enabled=True,admin_enabled=True,token=TEST_TOKEN,bot=SimpleNamespace(),bot_username='fixture_referral_bot'),access_log=None)
         await runner.setup();await web.TCPSite(runner,'127.0.0.1',8090).start()
         async with ClientSession() as session:
             customer={'Authorization':'tma '+signed_data(100)};admin={'Authorization':'tma '+signed_data(42)}

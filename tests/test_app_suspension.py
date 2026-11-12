@@ -14,7 +14,7 @@ from keyboards import user_kb, admin_kb
 
 class SuspensionTests(unittest.IsolatedAsyncioTestCase):
     async def test_explicit_suspension_blocks_both_apps_without_database_work(self):
-        app=server.create_app(token=TEST_TOKEN,admin_only=False)
+        app=server.create_app(token=TEST_TOKEN,admin_only=False,admin_enabled=False)
         self.assertFalse(app[CUSTOMER_ENABLED]);self.assertFalse(app[ADMIN_ENABLED])
         async with TestClient(TestServer(app)) as client:
             with patch.object(server.db,'get_user',AsyncMock()) as get:
@@ -32,14 +32,14 @@ class SuspensionTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_menu_clears_persisted_webapp_and_settings_are_retained(self):
         bot=NS(set_chat_menu_button=AsyncMock())
-        with patch.dict(os.environ,MINIAPP_URL='https://example.com/'):
+        with patch('utils.app_access.ADMIN_MINIAPP_ENABLED',False),patch.dict(os.environ,MINIAPP_URL='https://example.com/'):
             self.assertEqual(miniapp.miniapp_url(),'https://example.com')
             self.assertIsNone(miniapp.customer_miniapp_url());self.assertIsNone(miniapp.admin_miniapp_url())
             await app_access.configure_chat_menu(bot)
         self.assertEqual(bot.set_chat_menu_button.call_args.kwargs['menu_button'].type,'commands')
 
     async def test_user_and_admin_menus_have_no_app_or_tickets(self):
-        with patch.dict(os.environ,MINIAPP_URL='https://example.com'),patch('utils.app_access.CUSTOMER_MINIAPP_ADMIN_ONLY',False),patch.object(user_kb,'get_button_label',AsyncMock(return_value=None)),patch.object(user_kb,'get_setting',AsyncMock(side_effect=lambda key,default:default)):
+        with patch('utils.app_access.ADMIN_MINIAPP_ENABLED',False),patch.dict(os.environ,MINIAPP_URL='https://example.com'),patch('utils.app_access.CUSTOMER_MINIAPP_ADMIN_ONLY',False),patch.object(user_kb,'get_button_label',AsyncMock(return_value=None)),patch.object(user_kb,'get_setting',AsyncMock(side_effect=lambda key,default:default)):
             menus=[await user_kb.main_menu(42),await user_kb.profile_menu(),admin_kb.get_admin_panel()]
         for menu in menus:
             for row in menu.inline_keyboard:
@@ -66,7 +66,7 @@ class SeparateAdminTests(unittest.IsolatedAsyncioTestCase):
             with patch.object(server.config,'ADMIN_IDS',[42]):
                 response=await client.get('/api/storefront-preview',headers=self.headers)
                 self.assertEqual(response.status,200)
-                self.assertIn('catalog-grid',await response.text())
+                self.assertIn('id="categories"',await response.text())
 
     async def test_miniapp_button_is_visible_to_everyone(self):
         with patch.dict(os.environ,MINIAPP_URL='https://example.com'),patch.object(user_kb,'get_button_label',AsyncMock(return_value=None)):

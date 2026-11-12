@@ -55,7 +55,7 @@ async def main():
         assert await count('payment_logs',200)==0
         report('Ten concurrent first starts grant RUB 4 once and announce it once; inviter gets only RUB 3, while wheel and first-deposit bonus remain untouched')
 
-        runner=web.AppRunner(create_app(customer_enabled=True,admin_enabled=True,token=TEST_TOKEN,bot=NS(),bot_username='welcome_fixture_bot'),access_log=None)
+        runner=web.AppRunner(create_app(enable_cart=True,customer_enabled=True,admin_enabled=True,token=TEST_TOKEN,bot=NS(),bot_username='welcome_fixture_bot'),access_log=None)
         await runner.setup();await web.TCPSite(runner,'127.0.0.1',8092).start()
         async with ClientSession() as client:
             async def me(user,raw=None):

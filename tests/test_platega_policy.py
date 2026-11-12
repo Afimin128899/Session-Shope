@@ -178,5 +178,5 @@ class PublicInfoTests(unittest.IsolatedAsyncioTestCase):
         page=await self.client.get('/')
         self.assertEqual(page.status,200)
         text=await page.text()
-        self.assertIn('legal-footer',text);self.assertIn('href="/about">Информация',text);self.assertIn('mekbuda',text)
+        self.assertNotIn('legal-footer',text);self.assertNotIn('mekbuda',text);self.assertIn('data-action="information"',text)
         self.assertNotIn(PRIVACY_URL,text);self.assertNotIn(AGREEMENT_URL,text)

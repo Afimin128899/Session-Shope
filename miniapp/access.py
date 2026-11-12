@@ -21,9 +21,11 @@ async def app_access(request, handler):
             authorization = request.headers.get('Authorization', '')
             user = validate_init_data(authorization[4:] if authorization.startswith('tma ') else '', request.app[TOKEN])
             if user['id'] not in ADMIN_IDS:
-                return web.json_response({'error': 'Mini App доступен только администратору.', 'code': 'forbidden'}, status=403)
+                from miniapp.storefront_api import public_access
+                if not await public_access():
+                    return web.json_response({'error': 'Mini App доступен только администратору.', 'code': 'forbidden'}, status=403)
         # Static bootstrap contains no user data. All data and actions require
-        # signed Telegram initData and the admin role, including old direct links.
+        # signed Telegram initData and the current access policy, including old links.
         enabled = True
     if not enabled:
         return web.json_response({'error': 'Mini App временно отключён.', 'code': 'app_disabled'}, status=404 if admin else 503)
