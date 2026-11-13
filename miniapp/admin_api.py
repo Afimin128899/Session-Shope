@@ -11,6 +11,7 @@ from services import archive_import
 TASKS=web.AppKey('admin_import_tasks',set)
 UPLOADS=web.AppKey('admin_upload_count',dict)
 NOTICES=web.AppKey('admin_notice_tasks',set)
+SESSION_JOBS=web.AppKey('admin_session_jobs',set)
 
 
 def identifier(value, maximum=2147483647):
@@ -53,6 +54,7 @@ async def send_notice(request,user,source,*values):
 
 def register(app, response, page_number):
     app[TASKS] = set()
+    app[SESSION_JOBS] = set()
     app[NOTICES] = set()
     app[UPLOADS] = {'active': 0}
 
@@ -118,6 +120,41 @@ def register(app, response, page_number):
         body = await read_body(request)
         await expansion.bulk_edit(request['user']['id'], body.get('ids'), body.get('field'), body.get('value'))
         return response({'ok': True})
+
+    async def session_job(request):
+        from miniapp.server import BOT
+        from services.session_inventory_jobs import run
+        body=await read_body(request)
+        action=body.get('action')
+        if action not in {'export','reauthorize'}:
+            raise ValueError(tr('Выберите выгрузку или новую авторизацию.'))
+        if app[SESSION_JOBS]:
+            return response({'error':tr('Дождитесь завершения текущей операции с сессиями.')},409)
+        bot=request.app[BOT]
+        if not bot:
+            raise ValueError(tr('Бот для отправки файлов не настроен.'))
+        admin=request['user']['id']
+        # Do not begin changes if the administrator has not opened the bot's chat.
+        app[SESSION_JOBS].add(admin)
+        try:
+            await asyncio.wait_for(bot.send_message(admin,'Начинаю выгрузку сессий.' if action=='export' else 'Начинаю новую авторизацию непроданных аккаунтов. Результаты придут в ZIP.'),12)
+        except BaseException:
+            app[SESSION_JOBS].discard(admin)
+            raise ValueError(tr('Не удалось написать вам. Откройте личный чат с ботом и нажмите /start.')) from None
+        async def perform():
+            try:
+                await run(bot,admin,action)
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                try: await bot.send_message(admin,'Операция прервана. Уже отправленные ZIP сохраните. Можно повторить операцию; подробности подключения проверьте на сервере.')
+                except Exception: pass
+            finally:
+                app[SESSION_JOBS].discard(admin)
+        task=asyncio.create_task(perform())
+        app[TASKS].add(task)
+        task.add_done_callback(app[TASKS].discard)
+        return response({'queued':True},202)
 
     async def stock_review(request):
         from database.shop_control import set_review
@@ -346,7 +383,7 @@ def register(app, response, page_number):
 
     async def jobs(request):
         return response({'items': await store.rows('SELECT id,status,created_at,expires_at FROM import_batches WHERE admin_id=%s ORDER BY created_at DESC LIMIT 20', (request['user']['id'],))})
-    app.add_routes([web.get('/api/admin/payments',payment_list),web.post('/api/admin/payments/check',payment_check),web.get('/api/admin/referrals/blocks',referral_block_list),web.post('/api/admin/referrals/blocks',referral_block_save),web.get('/api/admin/users/{id}/referrals',user_referrals),web.post('/api/admin/spam-checks', spam_all), web.post('/api/admin/stock/{id}/spam-check', spam_one), web.post('/api/admin/stock/{id}/review', stock_review), web.get('/api/admin/overview', overview), web.get('/api/admin/stock', stock), web.post('/api/admin/stock/bulk', stock_bulk), web.patch('/api/admin/stock/{id}', stock_edit), web.delete('/api/admin/stock/{id}', stock_delete), web.get('/api/admin/categories', categories), web.post('/api/admin/categories', category_save), web.post('/api/admin/categories/price', category_price), web.get('/api/admin/orders', orders), web.get('/api/admin/orders/{id}', order), web.post('/api/admin/orders/{id}/refund', refund), web.post('/api/admin/orders/{id}/replace', replace), web.get('/api/admin/approvals', approvals), web.post('/api/admin/approvals/{id}', approve), web.get('/api/admin/tickets', inbox), web.get('/api/admin/tickets/{id}', ticket), web.post('/api/admin/tickets/{id}/reply', reply), web.post('/api/admin/tickets/{id}/close', close), web.get('/api/admin/tickets/{id}/photos/{message}', photo), web.get('/api/admin/users', user), web.post('/api/admin/users/{id}/balance', balance), web.get('/api/admin/settings', settings), web.post('/api/admin/settings', settings_save), web.get('/api/admin/audit', audit), web.get('/api/admin/promos', promos), web.post('/api/admin/promos', promo_create), web.post('/api/admin/promos/disable', promo_disable), web.get('/api/admin/imports', jobs), web.post('/api/admin/imports', upload), web.get('/api/admin/imports/{batch}', preview), web.post('/api/admin/imports/{batch}/commit', commit), web.delete('/api/admin/imports/{batch}', discard)])
+    app.add_routes([web.get('/api/admin/payments',payment_list),web.post('/api/admin/payments/check',payment_check),web.get('/api/admin/referrals/blocks',referral_block_list),web.post('/api/admin/referrals/blocks',referral_block_save),web.get('/api/admin/users/{id}/referrals',user_referrals),web.post('/api/admin/spam-checks', spam_all), web.post('/api/admin/stock/{id}/spam-check', spam_one), web.post('/api/admin/stock/{id}/review', stock_review), web.get('/api/admin/overview', overview), web.get('/api/admin/stock', stock), web.post('/api/admin/stock/bulk', stock_bulk), web.post('/api/admin/session-jobs',session_job), web.patch('/api/admin/stock/{id}', stock_edit), web.delete('/api/admin/stock/{id}', stock_delete), web.get('/api/admin/categories', categories), web.post('/api/admin/categories', category_save), web.post('/api/admin/categories/price', category_price), web.get('/api/admin/orders', orders), web.get('/api/admin/orders/{id}', order), web.post('/api/admin/orders/{id}/refund', refund), web.post('/api/admin/orders/{id}/replace', replace), web.get('/api/admin/approvals', approvals), web.post('/api/admin/approvals/{id}', approve), web.get('/api/admin/tickets', inbox), web.get('/api/admin/tickets/{id}', ticket), web.post('/api/admin/tickets/{id}/reply', reply), web.post('/api/admin/tickets/{id}/close', close), web.get('/api/admin/tickets/{id}/photos/{message}', photo), web.get('/api/admin/users', user), web.post('/api/admin/users/{id}/balance', balance), web.get('/api/admin/settings', settings), web.post('/api/admin/settings', settings_save), web.get('/api/admin/audit', audit), web.get('/api/admin/promos', promos), web.post('/api/admin/promos', promo_create), web.post('/api/admin/promos/disable', promo_disable), web.get('/api/admin/imports', jobs), web.post('/api/admin/imports', upload), web.get('/api/admin/imports/{batch}', preview), web.post('/api/admin/imports/{batch}/commit', commit), web.delete('/api/admin/imports/{batch}', discard)])
 
     async def lifecycle(application):
         housekeeping = asyncio.create_task(archive_import.housekeeping())

@@ -100,6 +100,16 @@ function promoEditor() {
     ['percent','Размер скидки или бонуса','','number'],['limit','Лимит использований',1,'number']],
     values => api('promos','POST',{...values,percent:Number(values.percent),limit:Number(values.limit)}));
 }
+function sessionJobEditor(action) {
+  const reauthorize=action==='reauthorize';
+  form(reauthorize?'Новая авторизация всех непроданных аккаунтов':'Отправить все сессии и JSON в личный чат',[
+    ['confirm',reauthorize?'Введите ПЕРЕСОЗДАТЬ. Сессия заменится только после успешного входа.':'Введите ОТПРАВИТЬ. ZIP содержит данные входа.',''],
+  ],async values=>{
+    if(values.confirm.trim()!==(reauthorize?'ПЕРЕСОЗДАТЬ':'ОТПРАВИТЬ'))throw Error('Введите слово подтверждения.');
+    await api('session-jobs','POST',{action});
+    categoryPriceResult='Операция запущена. ZIP и отчёты придут в ваш личный чат с ботом.';
+  });
+}
 const selectedStock = new Set();
 let bulkBusy = false;
 function stockSelectionTools(items) {
@@ -172,7 +182,7 @@ async function load() {
       return;
     }
     let refreshSelection;
-    if (selected === 'stock') {content.append(button('Проверить на спамблок все',()=>queueSpam(),true));refreshSelection=stockSelectionTools(result.items||[]);}
+    if (selected === 'stock') {content.append(button('Проверить на спамблок все',()=>queueSpam(),true),button('Все сессии и JSON в чат',()=>sessionJobEditor('export')),button('Пересоздать все сессии',()=>sessionJobEditor('reauthorize')));refreshSelection=stockSelectionTools(result.items||[]);}
     if (selected === 'categories') content.append(button('Добавить категорию', () => categoryEditor(), true));
     if (selected === 'promos') content.append(button('Создать промокод',promoEditor,true));
     const list=node('div',undefined,'card');content.append(list);
