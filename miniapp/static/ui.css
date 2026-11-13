@@ -1,0 +1,200 @@
+:root {
+  --bg:#08090c;
+  --surface:#11151e;
+  --raised:#181e29;
+  --line:#283140;
+  --text:#f2f4f8;
+  --muted:#9ba6b8;
+  --blue:#162b49;
+  --accent:#a9c4ec;
+  --danger:#ed9da5;
+  --danger-bg:#321b25;
+  --ease:cubic-bezier(.2,.8,.2,1);
+  --fast:160ms;
+  --motion:220ms;
+  color-scheme:dark
+}
+button,input,select,textarea {
+  font:inherit
+}
+button,a,input,textarea,select {
+  -webkit-tap-highlight-color:transparent
+}
+button {
+  min-height:44px;
+  touch-action:manipulation;
+  transition:background var(--fast),border-color var(--fast),color var(--fast),transform var(--fast) var(--ease);
+  position:relative
+}
+button:active:not(:disabled) {
+  transform:scale(.97)
+}
+button:disabled {
+  opacity:.5;
+  cursor:not-allowed
+}
+button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible {
+  outline:2px solid var(--accent);
+  outline-offset:3px
+}
+input,textarea,select {
+  font-size:16px;
+  min-height:48px
+}
+button.primary {
+  color:#10141c;
+  background:#f2f4f8;
+  border-color:#f2f4f8;
+  box-shadow:none
+}
+button.danger {
+  color:#ffc6cd;
+  background:var(--danger-bg);
+  border-color:#75404e
+}
+button.primary:hover {
+  background:#dce5f1;
+  border-color:#dce5f1;
+  box-shadow:none
+}
+button.danger:hover {
+  background:#44212d;
+  border-color:#a05a69
+}
+.ui-icon {
+  width:20px;
+  height:20px;
+  display:inline-block;
+  flex-shrink:0;
+  vertical-align:middle;
+  fill:none;
+  stroke:currentColor;
+  stroke-width:1.65;
+  stroke-linecap:round;
+  stroke-linejoin:round
+}
+.selection-track {
+  position:absolute;
+  top:0;
+  left:0;
+  background:var(--blue);
+  border:1px solid #354c6d;
+  border-radius:15px;
+  pointer-events:none;
+  transition:transform var(--motion) var(--ease),width var(--motion) var(--ease),height var(--motion) var(--ease);
+  z-index:0
+}
+.has-selection-track {
+  position:relative;
+  isolation:isolate
+}
+.has-selection-track>button {
+  position:relative;
+  z-index:1
+}
+.has-selection-track>button.selected,.has-selection-track>button[aria-current=page] {
+  background:transparent;
+  border-color:transparent;
+  color:var(--text)
+}
+button.is-busy {
+  cursor:progress!important
+}
+button.is-busy::after {
+  content:'';
+  display:inline-block;
+  width:13px;
+  height:13px;
+  vertical-align:middle;
+  margin-left:9px;
+  border:2px solid currentColor;
+  border-right-color:transparent;
+  border-radius:50%;
+  animation:ui-spin .8s linear infinite
+}
+button.is-busy.loading::after {
+  margin-left:9px
+}
+.field-error {
+  display:block;
+  color:#f2a8b2;
+  font-size:12px;
+  line-height:1.5;
+  margin-top:5px
+}
+.inline-error {
+  color:#f2a8b2
+}
+[aria-invalid=true] {
+  border-color:#b75f72!important
+}
+.ui-error-box {
+  padding:20px;
+  border:1px solid #603447;
+  border-radius:20px;
+  background:#21151e;
+  color:var(--text);
+  grid-column:1/-1
+}
+.ui-error-box p {
+  color:var(--muted);
+  margin:0 0 12px
+}
+.ui-error-box button {
+  width:auto
+}
+.ui-status-success {
+  color:#a8cfbf!important
+}
+.ui-status-error {
+  color:#f1b0bb!important
+}
+.ui-status-pending {
+  color:#afc4e5!important
+}
+.loading-progress {
+  width:100%;
+  height:6px;
+  accent-color:#96b7e6;
+  border:0;
+  border-radius:6px;
+  overflow:hidden
+}
+.loading-progress::-webkit-progress-bar {
+  background:#232c3d
+}
+.loading-progress::-webkit-progress-value {
+  background:#96b7e6;
+  transition:width var(--motion)
+}
+.ui-enter {
+  animation:ui-enter var(--motion) var(--ease) both
+}
+@keyframes ui-spin {
+  to {
+    transform:rotate(360deg)
+  }
+}
+@keyframes ui-enter {
+  from {
+    opacity:0;
+    transform:translateY(8px)
+  }
+  to {
+    opacity:1;
+    transform:none
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  *,*::before,*::after {
+    animation:none!important;
+    transition:none!important;
+    scroll-behavior:auto!important
+  }
+  .selection-track {
+    transition:none!important
+  }
+  button:active:not(:disabled) {
+    transform:none
+  }
+}

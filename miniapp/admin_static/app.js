@@ -3,7 +3,7 @@ const tg = window.Telegram?.WebApp;
 const $ = id => document.getElementById(id);
 const content = $('content');
 const statusNames = {available:'В наличии',review:'На проверке',sold:'Продан',issued:'Выдан',completed:'Завершён',refunded:'Возвращён',pending:'Ожидает оплаты',credited:'Зачислен',expired:'Истёк',replaced:'Заменён'};
-let stockTimer=null;
+let stockTimer=null,stockStatus='available';
 let page = 'overview', offset = 0, query = '', generation = 0, save = null, saving = false;
 const rub = value => new Intl.NumberFormat('ru-RU',{style:'currency',currency:'RUB'}).format(Number(value || 0));
 function node(tag, text, className) {
@@ -14,24 +14,24 @@ function node(tag, text, className) {
 }
 function button(text, action, primary = false) {
   const b = node('button', text, primary ? 'primary' : ''); b.type = 'button';
-  b.addEventListener('click', () => Promise.resolve(action()).catch(showError));
+  if(/^Удалить/.test(text))b.classList.add('danger');
+  b.addEventListener('click', () => SbandUI.run(b,action).catch(showError));
   return b;
 }
-function showError(error) { $('notice').textContent = error.message || 'Не удалось выполнить запрос.'; }
+function showError(error) { $('notice').classList.add('ui-status-error');$('notice').textContent = error.message || 'Не удалось выполнить запрос.'; }
 async function api(path, method = 'GET', body) {
-  const response = await fetch('/api/admin/' + path, {
+  const {response,data} = await SbandUI.request('/api/admin/' + path, {
     method, credentials:'omit', cache:'no-store',
     headers:{Authorization:'tma ' + (tg?.initData || ''), ...(body ? {'Content-Type':'application/json'} : {})},
     body:body ? JSON.stringify(body) : undefined,
   });
-  const data = await response.json();
   if (!response.ok) throw Error(data.error || 'Запрос недоступен.');
   return data;
 }
 function row(parent, title, detail, trailing, action) {
   const line = node('div', undefined, 'row'); const info = node('div',undefined,'detail');
   info.append(node('strong',title),node('span',detail,'muted')); line.append(info);
-  if (trailing) line.append(node('span',trailing));
+  if (trailing) line.append(node('span',trailing,'row-value'));
   if (action) { const actions = node('div',undefined,'actions'); actions.append(...action); line.append(actions); }
   parent.append(line);
 }
@@ -49,16 +49,20 @@ function form(title, fields, submit) {
     wrapper.append(input); $('fields').append(wrapper);
   }
   save = () => submit(Object.fromEntries(Object.entries(controls).map(([k,v]) => [k,v.value])));
-  $('editor').showModal();
+  $('editor').dataset.intent=title.startsWith('Удалить')?'danger':'normal';
+  $('edit-form').querySelector('button[type=submit]').classList.toggle('danger',title.startsWith('Удалить'));
+  $('edit-form').querySelector('button[type=submit]').classList.toggle('primary',!title.startsWith('Удалить'));
+  $('edit-form').querySelector('button[type=submit]').textContent=title.startsWith('Удалить')?'Удалить выбранные':'Сохранить';
+  SbandUI.open($('editor'));
 }
-$('cancel').addEventListener('click', () => { if (!saving) $('editor').close(); });
-$('editor').addEventListener('cancel', event => { if (saving) event.preventDefault(); });
+$('cancel').addEventListener('click', () => { if (!saving) SbandUI.close($('editor')); });
+$('editor').addEventListener('cancel', event => {event.preventDefault();if(!saving)SbandUI.close($('editor'));});
 $('edit-form').addEventListener('submit', async event => {
   event.preventDefault(); if (saving || !save) return;
-  saving = true; const buttons = [...$('edit-form').querySelectorAll('button')]; buttons.forEach(b => b.disabled = true);
+  saving = true;$('edit-form').querySelector('button[type=submit]').classList.add('is-busy');$('edit-form').querySelector('button[type=submit]').setAttribute('aria-busy','true'); const buttons = [...$('edit-form').querySelectorAll('button')]; buttons.forEach(b => b.disabled = true);
   try { await save(); $('editor').close(); await load(); if(categoryPriceResult){$('notice').textContent=categoryPriceResult;categoryPriceResult='';} }
   catch (error) { $('form-error').textContent = error.message; }
-  finally { saving = false; buttons.forEach(b => b.disabled = false); }
+  finally { saving = false; buttons.forEach(b => b.disabled = false);$('edit-form').querySelector('button[type=submit]').classList.remove('is-busy');$('edit-form').querySelector('button[type=submit]').removeAttribute('aria-busy'); }
 });
 function stockEditor(item) {
   form('Товар #' + item.id, [
@@ -115,7 +119,7 @@ let bulkBusy = false;
 function stockSelectionTools(items) {
   const tools=node('div',undefined,'tools stock-selection');
   const count=node('span');
-  const refresh=()=>{count.textContent='Выбрано: '+selectedStock.size;};
+  const refresh=()=>{count.textContent='Выбрано: '+selectedStock.size;tools.dataset.selected=String(selectedStock.size>0);tools.querySelectorAll('.selection-actions button').forEach(b=>{if(!b.hasAttribute('aria-busy'))b.disabled=!selectedStock.size;});content.querySelectorAll('[data-stock-id]').forEach(box=>box.closest('.row')?.classList.toggle('is-selected',box.checked));checkbox.checked=available.length>0&&available.every(item=>selectedStock.has(item.id));checkbox.indeterminate=available.some(item=>selectedStock.has(item.id))&&!checkbox.checked;};
   const all=node('label',undefined,'stock-select');
   const checkbox=node('input');checkbox.type='checkbox';
   const available=items.filter(item=>item.status==='available');
@@ -129,18 +133,20 @@ function stockSelectionTools(items) {
   async function execute(action,ids,value) {
     if(bulkBusy)throw Error('Дождитесь завершения операции.');
     bulkBusy=true;let completed=0,queued=0;
+    const progress=node('div',undefined,'batch-progress'),caption=node('span','Обработано: 0 из '+ids.length),bar=node('progress',undefined,'loading-progress');bar.max=ids.length;bar.value=0;bar.setAttribute('aria-label','Обработано выбранных товаров');progress.append(caption,bar);if($('editor').open)$('edit-form').insertBefore(progress,$('edit-form').querySelector('footer'));else tools.append(progress);
+    const advance=()=>{bar.value=completed;caption.textContent='Обработано: '+completed+' из '+ids.length;};
     try{
       if(action==='price'){
-        await api('stock/bulk','POST',{ids,field:'price',value});completed=ids.length;
+        await api('stock/bulk','POST',{ids,field:'price',value});completed=ids.length;advance();
         ids.forEach(id=>selectedStock.delete(id));
       }else for(const id of ids){
         const result=action==='delete'?await api('stock/'+id,'DELETE'):await api('stock/'+id+'/spam-check','POST',{});
-        queued+=result.queued||0;completed++;selectedStock.delete(id);
+        queued+=result.queued||0;completed++;advance();selectedStock.delete(id);
       }
       const message=action==='spam'?'Поставлено в очередь: '+queued+' из '+ids.length+'. Остальные могут уже проверяться или ожидать повторного запроса.':'Обработано товаров: '+completed;
       if(action==='spam'){await load();$('notice').textContent=message;}else{categoryPriceResult=message;}
     }catch(error){await load();throw Error('Обработано: '+completed+' из '+ids.length+'. '+error.message);}
-    finally{bulkBusy=false;}
+    finally{bulkBusy=false;progress.remove();}
   }
   function choose(action){
     if(bulkBusy)throw Error('Дождитесь завершения операции.');
@@ -152,24 +158,25 @@ function stockSelectionTools(items) {
     });
     else return execute(action,ids);
   }
-  tools.append(button('Изменить цену',()=>choose('price')),button('Проверить спамблок',()=>choose('spam')),button('Удалить выбранные',()=>choose('delete')),button('Снять выделение',()=>{selectedStock.clear();return load();}));
+  const selectionActions=node('div',undefined,'selection-actions');selectionActions.append(button('Изменить цену',()=>choose('price')),button('Проверить спамблок',()=>choose('spam')),button('Удалить выбранные',()=>choose('delete')),button('Снять выделение',()=>{selectedStock.clear();return load();}));tools.append(selectionActions);
   refresh();content.append(tools);return refresh;
 }
 async function load() {
   clearTimeout(stockTimer);
   const current = ++generation; const selected = page;
-  content.setAttribute('aria-busy','true'); $('notice').textContent = '';
+  content.setAttribute('aria-busy','true'); $('notice').classList.remove('ui-status-error');$('notice').textContent = '';
   try {
-    const params = new URLSearchParams({page:String(offset),q:query});
+    const params = new URLSearchParams({page:String(offset),q:query});if(selected==='stock')params.set('status',stockStatus);
     const result = await api(selected + (['stock','orders','users','payments'].includes(selected) ? '?' + params : ''));
     if (current !== generation) return;
-    content.replaceChildren();
+    const changed=content.dataset.page!==selected;content.dataset.page=selected;if(changed)SbandUI.enter(content);content.replaceChildren();
     const titles = {overview:'Обзор',stock:'Товары',users:'Пользователи',orders:'Заказы',categories:'Категории',promos:'Промокоды',payments:'История платежей'};
     content.append(node('h2',titles[selected]));
     if (['stock','orders','users','payments'].includes(selected)) {
       const search = node('form',undefined,'tools'); const input = node('input');
       input.type='search'; input.value=query; input.placeholder=selected === 'users' ? 'ID или имя пользователя' : 'Поиск'; input.setAttribute('aria-label','Поиск');
-      const submit = node('button','Найти'); submit.type='submit'; search.append(input,submit);
+      const submit = node('button','Найти'); submit.type='submit'; search.append(input);
+      if(selected==='stock'){const status=node('select');status.setAttribute('aria-label','Статус товара');for(const [value,title] of [['available','В наличии'],['review','На проверке'],['sold','Проданы'],['','Все статусы']]){const option=node('option',title);option.value=value;status.append(option);}status.value=stockStatus;status.addEventListener('change',()=>{stockStatus=status.value;query=input.value.trim();offset=0;load();});search.append(status);}search.append(submit);
       search.addEventListener('submit',event => {event.preventDefault();query=input.value.trim();offset=0;load();}); content.append(search);
     }
     if (selected === 'overview') {
@@ -182,10 +189,14 @@ async function load() {
       return;
     }
     let refreshSelection;
-    if (selected === 'stock') {content.append(button('Проверить на спамблок все',()=>queueSpam(),true),button('Все сессии и JSON в чат',()=>sessionJobEditor('export')),button('Пересоздать все сессии',()=>sessionJobEditor('reauthorize')));refreshSelection=stockSelectionTools(result.items||[]);}
+    if (selected === 'stock') {
+      const toolbar=node('div',undefined,'stock-toolbar');toolbar.append(button('Загрузить аккаунты',()=>{page='imports';document.querySelectorAll('[data-page]').forEach(b=>b.dataset.page==='imports'?b.setAttribute('aria-current','page'):b.removeAttribute('aria-current'));return load();},true));
+      const details=node('details'),summary=node('summary','Операции с сессиями'),actions=node('div',undefined,'detail-actions');
+      actions.append(button('Проверить на спамблок все',()=>queueSpam()),button('Все сессии и JSON в чат',()=>sessionJobEditor('export')),button('Пересоздать все сессии',()=>sessionJobEditor('reauthorize')));details.append(summary,actions);toolbar.append(details);content.append(toolbar);refreshSelection=stockSelectionTools(result.items||[]);
+    }
     if (selected === 'categories') content.append(button('Добавить категорию', () => categoryEditor(), true));
     if (selected === 'promos') content.append(button('Создать промокод',promoEditor,true));
-    const list=node('div',undefined,'card');content.append(list);
+    const list=node('div',undefined,'card');if(selected==='stock'){list.classList.add('stock-table');const heading=node('div',undefined,'stock-table-heading');heading.setAttribute('aria-hidden','true');for(const text of ['','Товар и сведения','Цена','Действия'])heading.append(node('span',text));list.append(heading);}content.append(list);
     if (selected === 'users') {
       const user=result.user;
       if (!user) list.append(node('p','Пользователь не найден. Укажите ID или имя.','muted'));
@@ -201,8 +212,9 @@ async function load() {
             b.disabled=Boolean(check.running||check.queued);actions.push(b);
           }
           row(list,(item.name||item.country)+' · #'+item.id,item.number+' · '+(statusNames[item.status]||item.status)+' · '+(check.label||'Не проверен')+(check.detail?' · '+check.detail:'')+' · Год регистрации: '+(item.registration_date?String(item.registration_date).slice(0,4):'не указан')+' · Дата: '+(item.registration_date||'не указана'),rub(item.price),actions);
-          if(item.status==='available'){
-            const label=node('label',undefined,'stock-select');const box=node('input');box.type='checkbox';box.dataset.stockId=item.id;box.checked=selectedStock.has(item.id);box.setAttribute('aria-label','Выбрать товар #'+item.id);
+          list.lastElementChild.classList.add('stock-row');
+          {
+            const label=node('label',undefined,'stock-select');const box=node('input');box.type='checkbox';box.disabled=item.status!=='available';box.dataset.stockId=item.id;box.checked=selectedStock.has(item.id);box.setAttribute('aria-label','Выбрать товар #'+item.id);
             box.addEventListener('change',()=>{
               if(box.checked&&selectedStock.size>=100){box.checked=false;showError(Error('Можно выбрать до 100 товаров.'));return;}
               box.checked?selectedStock.add(item.id):selectedStock.delete(item.id);refreshSelection();
@@ -215,12 +227,12 @@ async function load() {
         if (selected === 'payments') row(list,item.provider + ' · ' + item.invoice_id,'ID: ' + item.user_id + ' · ' + (statusNames[item.status] || item.status) + ' · ' + item.created_at,rub(item.amount_rub));
       }
     }
-    if(selected==='stock'&&(result.items||[]).some(item=>item.spam_check?.running||item.spam_check?.queued))stockTimer=setTimeout(()=>{if(page==='stock')load();},5000);
+    if(selected==='stock'){refreshSelection();if((result.items||[]).some(item=>item.spam_check?.running||item.spam_check?.queued)){const poll=()=>{if(page!=='stock')return;if($('editor').open||bulkBusy)stockTimer=setTimeout(poll,5000);else load();};stockTimer=setTimeout(poll,5000);}}
     if (['stock','orders','payments'].includes(selected) && (offset || result.has_more)) {
       const pager=node('div',undefined,'pagination'); const prev=button('Назад',()=>{offset--;return load();});prev.disabled=!offset;
       const next=button('Далее',()=>{offset++;return load();});next.disabled=!result.has_more;pager.append(prev,node('span','Страница ' + (offset+1)),next);content.append(pager);
     }
-  } catch(error) {if (current === generation) showError(error);}
+  } catch(error) {if (current === generation){showError(error);content.replaceChildren();SbandUI.errorBox(content,error.message,()=>load());}}
   finally {if (current === generation) content.removeAttribute('aria-busy');}
 }
 document.querySelectorAll('[data-page]').forEach(b => b.addEventListener('click',()=>{
