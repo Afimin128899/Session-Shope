@@ -130,7 +130,7 @@ class BlockedSpamBotTests(unittest.IsolatedAsyncioTestCase):
         self.client.rpc.side_effect=FloodWaitError(request=None,capture=1800)
         result=await self.check()
         self.assertEqual(result,{'status':'error','reason':'flood_wait','retry_after':1800})
-        self.assertEqual(self.dialog.send_message.await_count,1)
+        self.dialog.send_message.assert_not_awaited()
         self.dialog.get_response.assert_not_awaited()
 
 

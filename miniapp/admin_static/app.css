@@ -2,3 +2,5 @@
 :root{background:#08090c;color:#edf0f6}nav{background:#08090c}button{background:#171c26;border-color:#2c3546;border-radius:16px;transition:transform .18s,background .22s,box-shadow .22s}button.primary,button[aria-current=page]{background:#162b49;border-color:#345078;color:#edf0f6}button:hover{background:#22314a;box-shadow:0 7px 26px #0005}.card{background:#11151e;border-color:#263044}.row{border-color:#273042}dialog{background:#11151e;border-color:#35415b}dialog[open]{animation:admin-open .25s ease-out}input,select,textarea{background:#0a0e15;border-color:#2c374a}input[type=checkbox]{width:20px;height:20px;accent-color:#345682}main{animation:admin-open .3s ease-out}.card h3{margin-top:0}#notice{color:#a9bbd8}@keyframes admin-open{from{opacity:0;transform:translateY(10px) scale(.985)}to{opacity:1;transform:none}}
 
 .card{animation:admin-open .3s ease-out}@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+
+.stock-select{display:flex;align-items:center;gap:8px;margin:0;flex-shrink:0}.stock-selection{align-items:center;margin-top:16px}.stock-selection>span{min-width:95px}

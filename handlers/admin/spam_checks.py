@@ -52,3 +52,71 @@ async def one_account(call):
         note = tr('\n\nПроверка добавлена в очередь.') if count else tr('\n\nПроверка уже идёт, повтор пока недоступен или товар уже продан.')
     await edit_message_safe(call, tr('<b>Спамблок · #{0}</b>\n\n{1}', f'{account_id:02d}', f'{escape(spam_checks.description(row))}') + note + tr('\n\nИсточник: официальный @SpamBot. Результат актуален на момент проверки; состояние может измениться.'), reply_markup=InlineKeyboardMarkup(inline_keyboard=[button(tr('Обновить результат'), f'spam_show:{account_id}', 'refresh'), button(tr('Проверить снова'), f'spam_check:{account_id}', 'warranty'), button(tr('К аккаунту'), f'admin_account_detail:{account_id}', 'back')]))
     await answer_safe(call)
+
+
+# Explicit administrator-only maintenance; exports are sent only to its private chat.
+from aiogram.filters import Command
+from aiogram.types import BufferedInputFile
+import asyncio
+import io
+import json
+import zipfile
+
+_audit_running = False
+
+
+@spam_router.message(Command('audit_sessions'), F.chat.type == 'private')
+async def audit_sessions(message):
+    global _audit_running
+    if message.from_user.id not in ADMIN_IDS:
+        return
+    if _audit_running:
+        await message.answer('Проверка уже выполняется.')
+        return
+    _audit_running = True
+    from database.admin_web import rows
+    from database.admin_tools import _transaction
+    from services.session_audit import clean_other_sessions, session_file_bytes
+    from uuid import uuid4
+    try:
+        await message.answer('Проверяю непроданные аккаунты. Завершаю остальные сеансы, сохраняя сеанс магазина. Неудачные проверки придут отдельными файлами в ZIP.')
+        # Process bounded batches; never load all private sessions into memory at once.
+        last = 0
+        while True:
+            batch = await rows("SELECT id FROM accounts WHERE status='available' AND id>%s ORDER BY id LIMIT 50", (last,))
+            if not batch:
+                break
+            report=[]; output=io.BytesIO(); failures=0
+            with zipfile.ZipFile(output,'w',zipfile.ZIP_DEFLATED) as archive:
+                for item in batch:
+                    identity=item['id'];last=identity;token=uuid4().hex
+                    async with _transaction() as cur:
+                        await cur.execute("SELECT id,data,number,telegram_user_id,registration_date FROM accounts WHERE id=%s AND status='available' AND spam_requested=0 AND (spam_lease_until IS NULL OR spam_lease_until<=UTC_TIMESTAMP()) FOR UPDATE",(identity,))
+                        account=await cur.fetchone()
+                        if account:
+                            await cur.execute('SELECT user_id FROM account_reservations WHERE account_id=%s AND expires_at>UTC_TIMESTAMP() FOR UPDATE',(identity,))
+                            if await cur.fetchone(): account=None
+                        if account:
+                            await cur.execute('UPDATE accounts SET spam_token=%s,spam_lease_until=DATE_ADD(UTC_TIMESTAMP(),INTERVAL 2 MINUTE) WHERE id=%s',(token,identity))
+                    if not account:
+                        report.append({'id':identity,'status':'skipped_busy'});continue
+                    try:
+                        result=await clean_other_sessions(account['data'],account['telegram_user_id'])
+                        report.append({'id':identity,'registration_date':str(account['registration_date']) if account.get('registration_date') else None,'registration_date_source':'store_metadata' if account.get('registration_date') else 'unknown',**result})
+                        if result['status']=='failed':
+                            failures+=1
+                            try:
+                                archive.writestr(f'account-{identity}.session',session_file_bytes(account['data']))
+                            except Exception:
+                                # Invalid SQLite export still leaves the original StringSession in JSON.
+                                pass
+                            # Exact registration date is not exposed by Telegram. Preserve only known metadata.
+                            archive.writestr(f'account-{identity}.json',json.dumps({'id':identity,'phone':account['number'],'string_session':account['data'],'registration_date':str(account['registration_date']) if account.get('registration_date') else None,'registration_date_source':'store_metadata' if account.get('registration_date') else 'unknown',**result},ensure_ascii=False))
+                    finally:
+                        async with _transaction() as cur:
+                            await cur.execute('UPDATE accounts SET spam_token=NULL,spam_lease_until=NULL WHERE id=%s AND spam_token=%s',(identity,token))
+                archive.writestr('report.json',json.dumps(report,ensure_ascii=False,indent=2))
+            await message.answer_document(BufferedInputFile(output.getvalue(),filename=f'session-audit-{last}.zip'),caption=f'Проверка до товара #{last}. Не удалось завершить проверку/лишние сеансы: {failures}. Сессии магазина сохранены.')
+        await message.answer('Проверка завершена. Пропущенные занятые товары можно проверить повторным запуском /audit_sessions.')
+    finally:
+        _audit_running = False

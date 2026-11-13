@@ -99,6 +99,51 @@ function promoEditor() {
     ['percent','Размер скидки или бонуса','','number'],['limit','Лимит использований',1,'number']],
     values => api('promos','POST',{...values,percent:Number(values.percent),limit:Number(values.limit)}));
 }
+const selectedStock = new Set();
+let bulkBusy = false;
+function stockSelectionTools(items) {
+  const tools=node('div',undefined,'tools stock-selection');
+  const count=node('span');
+  const refresh=()=>{count.textContent='Выбрано: '+selectedStock.size;};
+  const all=node('label',undefined,'stock-select');
+  const checkbox=node('input');checkbox.type='checkbox';
+  const available=items.filter(item=>item.status==='available');
+  checkbox.checked=available.length>0&&available.every(item=>selectedStock.has(item.id));
+  checkbox.addEventListener('change',()=>{
+    if(checkbox.checked&&new Set([...selectedStock,...available.map(item=>item.id)]).size>100){checkbox.checked=false;showError(Error('Можно выбрать до 100 товаров.'));return;}
+    for(const item of available) checkbox.checked?selectedStock.add(item.id):selectedStock.delete(item.id);
+    content.querySelectorAll('[data-stock-id]').forEach(box=>{box.checked=selectedStock.has(Number(box.dataset.stockId));});refresh();
+  });
+  all.append(checkbox,node('span','Все на странице'));tools.append(all,count);
+  async function execute(action,ids,value) {
+    if(bulkBusy)throw Error('Дождитесь завершения операции.');
+    bulkBusy=true;let completed=0,queued=0;
+    try{
+      if(action==='price'){
+        await api('stock/bulk','POST',{ids,field:'price',value});completed=ids.length;
+        ids.forEach(id=>selectedStock.delete(id));
+      }else for(const id of ids){
+        const result=action==='delete'?await api('stock/'+id,'DELETE'):await api('stock/'+id+'/spam-check','POST',{});
+        queued+=result.queued||0;completed++;selectedStock.delete(id);
+      }
+      const message=action==='spam'?'Поставлено в очередь: '+queued+' из '+ids.length+'. Остальные могут уже проверяться или ожидать повторного запроса.':'Обработано товаров: '+completed;
+      if(action==='spam'){await load();$('notice').textContent=message;}else{categoryPriceResult=message;}
+    }catch(error){await load();throw Error('Обработано: '+completed+' из '+ids.length+'. '+error.message);}
+    finally{bulkBusy=false;}
+  }
+  function choose(action){
+    if(bulkBusy)throw Error('Дождитесь завершения операции.');
+    const ids=[...selectedStock];if(!ids.length)throw Error('Отметьте товары галочками.');
+    if(action==='price')form('Цена выбранных товаров: '+ids.length,[['price','Новая цена, ₽','','number']],v=>execute(action,ids,v.price));
+    else if(action==='delete')form('Удалить выбранные товары: '+ids.length,[['confirm','Для удаления введите УДАЛИТЬ','']],v=>{
+      if(v.confirm.trim()!=='УДАЛИТЬ')throw Error('Введите УДАЛИТЬ для подтверждения.');
+      return execute(action,ids);
+    });
+    else return execute(action,ids);
+  }
+  tools.append(button('Изменить цену',()=>choose('price')),button('Проверить спамблок',()=>choose('spam')),button('Удалить выбранные',()=>choose('delete')),button('Снять выделение',()=>{selectedStock.clear();return load();}));
+  refresh();content.append(tools);return refresh;
+}
 async function load() {
   clearTimeout(stockTimer);
   const current = ++generation; const selected = page;
@@ -125,7 +170,8 @@ async function load() {
       const info=node('div',undefined,'card');info.append(node('h2','Поддержка напрямую'),node('p','Сообщения приходят администраторам в бота. Чтобы ответить, нажмите кнопку под сообщением пользователя.'));content.append(info);
       return;
     }
-    if (selected === 'stock') content.append(button('Проверить на спамблок все',()=>queueSpam(),true));
+    let refreshSelection;
+    if (selected === 'stock') {content.append(button('Проверить на спамблок все',()=>queueSpam(),true));refreshSelection=stockSelectionTools(result.items||[]);}
     if (selected === 'categories') content.append(button('Добавить категорию', () => categoryEditor(), true));
     if (selected === 'promos') content.append(button('Создать промокод',promoEditor,true));
     const list=node('div',undefined,'card');content.append(list);
@@ -144,6 +190,13 @@ async function load() {
             b.disabled=Boolean(check.running||check.queued);actions.push(b);
           }
           row(list,(item.name||item.country)+' · #'+item.id,item.number+' · '+(statusNames[item.status]||item.status)+' · '+(check.label||'Не проверен')+(check.detail?' · '+check.detail:''),rub(item.price),actions);
+          if(item.status==='available'){
+            const label=node('label',undefined,'stock-select');const box=node('input');box.type='checkbox';box.dataset.stockId=item.id;box.checked=selectedStock.has(item.id);box.setAttribute('aria-label','Выбрать товар #'+item.id);
+            box.addEventListener('change',()=>{
+              if(box.checked&&selectedStock.size>=100){box.checked=false;showError(Error('Можно выбрать до 100 товаров.'));return;}
+              box.checked?selectedStock.add(item.id):selectedStock.delete(item.id);refreshSelection();
+            });label.append(box);list.lastElementChild.prepend(label);
+          }
         }
         if (selected === 'orders') row(list,'Заказ #' + item.id,(item.name || 'Товар') + ' · ID покупателя: ' + item.user_id + ' · ' + (statusNames[item.status] || item.status),item.currency === 'RUB' ? rub(item.paid_amount) : (item.paid_amount ?? '—') + ' ' + item.currency);
         if (selected === 'categories') row(list,item.name,item.slug,item.is_active ? 'Включена' : 'Отключена',[button('Цена всех товаров', () => categoryPriceEditor(item)),button('Изменить', () => categoryEditor(item))]);
