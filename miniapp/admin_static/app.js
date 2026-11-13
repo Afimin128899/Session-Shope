@@ -44,7 +44,7 @@ function form(title, fields, submit) {
       input = node('select');
       for (const [v,text] of options) { const option = node('option',text); option.value = v; input.append(option); }
     } else { input = node(type === 'textarea' ? 'textarea' : 'input'); if (type !== 'textarea') input.type = type; }
-    input.value = value ?? ''; input.required = type !== 'textarea'; controls[key] = input;
+    input.value = value ?? ''; input.required = type !== 'textarea' && key !== 'registration_date'; controls[key] = input;
     if (type === 'number') input.step = key === 'limit' || key === 'warranty_hours' ? '1' : '0.01';
     wrapper.append(input); $('fields').append(wrapper);
   }
@@ -63,11 +63,12 @@ $('edit-form').addEventListener('submit', async event => {
 function stockEditor(item) {
   form('Товар #' + item.id, [
     ['price','Цена, ₽',item.price,'number'], ['category','Код категории',item.country],
+    ['registration_date','Дата регистрации (из JSON)',item.registration_date||'','date'],
     ['warranty_hours','Гарантия, часов',item.warranty_hours || 0,'number'],
     ['note','Примечание',item.features_note || '','textarea'],
   ], values => api('stock/' + item.id,'PATCH',{
     ...values,warranty_hours:Number(values.warranty_hours),
-    registration_date:item.registration_date,is_premium:item.is_premium == null ? null : Boolean(item.is_premium),
+    registration_date:values.registration_date||null,is_premium:item.is_premium == null ? null : Boolean(item.is_premium),
   }));
 }
 function categoryEditor(item = {}) {
@@ -189,7 +190,7 @@ async function load() {
             const b=button(check.running?'Проверяется…':check.queued?'В очереди':'Проверить на спамблок',()=>queueSpam(item.id));
             b.disabled=Boolean(check.running||check.queued);actions.push(b);
           }
-          row(list,(item.name||item.country)+' · #'+item.id,item.number+' · '+(statusNames[item.status]||item.status)+' · '+(check.label||'Не проверен')+(check.detail?' · '+check.detail:''),rub(item.price),actions);
+          row(list,(item.name||item.country)+' · #'+item.id,item.number+' · '+(statusNames[item.status]||item.status)+' · '+(check.label||'Не проверен')+(check.detail?' · '+check.detail:'')+' · Год регистрации: '+(item.registration_date?String(item.registration_date).slice(0,4):'не указан')+' · Дата: '+(item.registration_date||'не указана'),rub(item.price),actions);
           if(item.status==='available'){
             const label=node('label',undefined,'stock-select');const box=node('input');box.type='checkbox';box.dataset.stockId=item.id;box.checked=selectedStock.has(item.id);box.setAttribute('aria-label','Выбрать товар #'+item.id);
             box.addEventListener('change',()=>{

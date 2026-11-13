@@ -5,6 +5,7 @@ import json
 import re
 from decimal import Decimal
 from uuid import uuid4
+from utils.country_codes import detect_country_code
 from database.admin_tools import _transaction,_record,_decimal
 from database.db import _get_pool
 import aiomysql
@@ -23,6 +24,9 @@ async def init_schema(cur):
         session_data TEXT DEFAULT NULL,fingerprint CHAR(64) DEFAULT NULL,account_id INT DEFAULT NULL,
         FOREIGN KEY(batch_id) REFERENCES import_batches(id) ON DELETE CASCADE,KEY import_batch(batch_id)
     ) ENGINE=InnoDB''')
+    await cur.execute("SHOW COLUMNS FROM import_items LIKE 'registration_date'")
+    if not await cur.fetchone():
+        await cur.execute('ALTER TABLE import_items ADD COLUMN registration_date DATE DEFAULT NULL')
     await cur.execute('''CREATE TABLE IF NOT EXISTS inventory_identities (
         identity_key VARCHAR(80) PRIMARY KEY,account_id INT DEFAULT NULL,
         FOREIGN KEY(account_id) REFERENCES accounts(id) ON DELETE SET NULL
@@ -66,12 +70,12 @@ async def create(admin):
     return batch
 
 
-async def add_item(batch,label,state,*,error=None,phone=None,telegram_id=None,premium=None,session=None):
+async def add_item(batch,label,state,*,error=None,phone=None,telegram_id=None,premium=None,session=None,registration_date=None,existing_account=None):
     async with _transaction() as cur:
         await cur.execute("SELECT id FROM import_batches WHERE id=%s AND status='checking' AND expires_at>UTC_TIMESTAMP() FOR UPDATE",(batch,))
         if not await cur.fetchone(): return
-        await cur.execute('INSERT INTO import_items(batch_id,label,state,error,phone,telegram_id,premium,session_data,fingerprint) VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s)',
-                          (batch,label[:200],state,error,phone,telegram_id,premium,session,hashlib.sha256(session.encode()).hexdigest() if session else None))
+        await cur.execute('INSERT INTO import_items(batch_id,label,state,error,phone,telegram_id,premium,session_data,fingerprint,registration_date,account_id) VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)',
+                          (batch,label[:200],state,error,phone,telegram_id,premium,session,hashlib.sha256(session.encode()).hexdigest() if session else None,registration_date,existing_account))
 
 
 async def finish(batch,status='ready'):
@@ -86,7 +90,7 @@ async def preview(admin, batch):
         result = await cur.fetchone()
         if not result:
             raise ValueError(tr('Черновик не найден или срок истёк.'))
-        await cur.execute('SELECT id,label,state,error,phone,telegram_id,premium,account_id FROM import_items WHERE batch_id=%s ORDER BY id', (batch,))
+        await cur.execute('SELECT id,label,state,error,phone,telegram_id,premium,account_id,registration_date FROM import_items WHERE batch_id=%s ORDER BY id', (batch,))
         result['items'] = list(await cur.fetchall())
         return result
 
@@ -118,6 +122,16 @@ async def commit(admin, batch, selections):
             item = await cur.fetchone()
             if not item or not item['session_data']:
                 raise ValueError(tr('Строка не готова к импорту.'))
+            if item.get('account_id'):
+                await cur.execute("SELECT id FROM accounts WHERE id=%s AND telegram_user_id=%s AND data=%s AND status='available' FOR UPDATE",(item['account_id'],item['telegram_id'],item['session_data']))
+                if not await cur.fetchone():
+                    raise ValueError(tr('Перепроверенный товар изменился или уже продан. Обновление отменено.'))
+                if not item.get('registration_date'):
+                    raise ValueError(tr('Для обновления нужна дата регистрации из JSON.'))
+                await cur.execute('UPDATE accounts SET registration_date=%s,code=%s,is_premium=%s,attributes_checked_at=UTC_TIMESTAMP() WHERE id=%s',(item['registration_date'],detect_country_code(item['phone']),item['premium'],item['account_id']))
+                ids.append(item['account_id'])
+                await cur.execute("UPDATE import_items SET state='imported' WHERE id=%s",(identity,))
+                continue
             if category != 'auto':
                 await cur.execute('SELECT slug FROM categories WHERE slug=%s AND is_active=1', (category,))
                 if not await cur.fetchone():
@@ -127,7 +141,7 @@ async def commit(admin, batch, selections):
             keys = await claim(cur, item['phone'], item['telegram_id'], item['session_data'])
             from database.auto_categories import ensure
             category = await ensure(cur, item['phone'], 'not_checked')
-            await cur.execute("INSERT INTO accounts(country,code,number,password,price,data,telegram_user_id,warranty_hours,is_premium,attributes_checked_at)\n                VALUES(%s,'',%s,%s,%s,%s,%s,%s,%s,UTC_TIMESTAMP())", (category, item['phone'], password, price, item['session_data'], item['telegram_id'], hours, item['premium']))
+            await cur.execute("INSERT INTO accounts(country,code,number,password,price,data,telegram_user_id,warranty_hours,is_premium,registration_date,attributes_checked_at)\n                VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,UTC_TIMESTAMP())", (category, detect_country_code(item['phone']), item['phone'], password, price, item['session_data'], item['telegram_id'], hours, item['premium'], item.get('registration_date')))
             account = cur.lastrowid
             ids.append(account)
             await bind(cur, keys, account)

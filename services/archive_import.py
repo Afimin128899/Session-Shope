@@ -21,7 +21,7 @@ def inspect_archive(data):
     if not data or len(data)>MAX_UPLOAD: raise ValueError('Архив должен быть ZIP размером до 8 МБ.')
     try:
         archive=zipfile.ZipFile(io.BytesIO(data));entries=archive.infolist()
-        if not entries or len(entries)>120: raise ValueError('В архиве допускается до 100 сессий и 20 служебных записей.')
+        if not entries or len(entries)>220: raise ValueError('В архиве допускается до 100 сессий с парными JSON.')
         total=0;files=[];names=set()
         for entry in entries:
             name=entry.filename
@@ -30,14 +30,21 @@ def inspect_archive(data):
             if entry.is_dir(): continue
             if name in names: raise ValueError('Повторяющиеся имена файлов в архиве.')
             names.add(name)
-            if not name.lower().endswith('.session'): raise ValueError('ZIP должен содержать только файлы .session; уберите JSON, архивы и другие файлы.')
+            if not name.lower().endswith(('.session','.json')): raise ValueError('ZIP должен содержать только .session и парные .json.')
             if entry.file_size>MAX_FILE or entry.file_size<0 or entry.file_size>max(1,entry.compress_size)*100: raise ValueError('Слишком большой или чрезмерно сжатый файл.')
             total+=entry.file_size
-            if total>MAX_TOTAL or len(files)>=100: raise ValueError('Допускается до 100 сессий, общий размер до 32 МБ.')
+            if total>MAX_TOTAL or (sum(n.lower().endswith('.session') for n,_ in files)>=100 and name.lower().endswith('.session')): raise ValueError('Допускается до 100 сессий, общий размер до 32 МБ.')
             content=archive.read(entry)
             if len(content)!=entry.file_size: raise ValueError('Размер файла не совпадает с описанием ZIP.')
             files.append((str(path)[:200],content))
-        if not files: raise ValueError('В архиве нет .session файлов.')
+        session_names={str(PurePosixPath(n).with_suffix('')) for n,_ in files if n.lower().endswith('.session')}
+        if not session_names: raise ValueError('В архиве нет .session файлов.')
+        from services.session_metadata import parse_metadata
+        for name,content in files:
+            if name.lower().endswith('.json'):
+                if str(PurePosixPath(name).with_suffix('')) not in session_names:
+                    raise ValueError('Для JSON нужен одноимённый .session в той же папке.')
+                parse_metadata(content)
         return files
     except (zipfile.BadZipFile,RuntimeError,NotImplementedError): raise ValueError('Не удалось прочитать ZIP.') from None
 
@@ -47,9 +54,12 @@ async def process(admin,batch,files,verifier=None):
         from services.telethon_auth import import_session_file
         verifier=import_session_file
     seen=set()
+    from services.session_metadata import parse_metadata, match_identity
     try:
+        sidecars={str(PurePosixPath(n).with_suffix('')):parse_metadata(c) for n,c in files if n.lower().endswith('.json')}
         async with GATE:
             for label,content in files:
+                if label.lower().endswith('.json'): continue
                 draft=await imports.preview(admin,batch)
                 if draft['status']!='checking': return
                 if not content.startswith(b'SQLite format 3\x00'):
@@ -76,12 +86,21 @@ async def process(admin,batch,files,verifier=None):
                     await imports.add_item(batch,label,'error',error=str(exc))
                     continue
                 identity=metadata['telegram_user_id']
-                existing=await rows("SELECT id FROM accounts WHERE telegram_user_id=%s OR REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(number,'+',''),' ',''),'-',''),'(',''),')','')=%s OR data=%s LIMIT 1",(identity,''.join(c for c in phone if c.isdigit()),session))
-                if identity in seen or existing:
+                extra=sidecars.get(str(PurePosixPath(label).with_suffix('')), {})
+                try:
+                    match_identity(extra,phone,identity)
+                except ValueError as exc:
+                    await imports.add_item(batch,label,'error',error=str(exc))
+                    continue
+                existing=await rows("SELECT id,status,data FROM accounts WHERE telegram_user_id=%s OR REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(number,'+',''),' ',''),'-',''),'(',''),')','')=%s OR data=%s LIMIT 1",(identity,''.join(c for c in phone if c.isdigit()),session))
+                if identity not in seen and len(existing)==1 and extra.get('registration_date') and existing[0].get('status')=='available' and existing[0].get('data')==session:
+                    seen.add(identity)
+                    await imports.add_item(batch,label,'ready',phone=phone,telegram_id=identity,premium=metadata.get('is_premium'),session=session,registration_date=extra['registration_date'],existing_account=existing[0]['id'])
+                elif identity in seen or existing:
                     await imports.add_item(batch,label,'duplicate',error='Аккаунт повторяется в архиве или уже есть в магазине.',phone=phone,telegram_id=identity)
                 else:
                     seen.add(identity)
-                    await imports.add_item(batch,label,'ready',phone=phone,telegram_id=identity,premium=metadata.get('is_premium'),session=session)
+                    await imports.add_item(batch,label,'ready',phone=phone,telegram_id=identity,premium=metadata.get('is_premium'),session=session,registration_date=extra.get('registration_date'))
             await imports.finish(batch)
     except asyncio.CancelledError:
         await imports.finish(batch,'failed');raise
