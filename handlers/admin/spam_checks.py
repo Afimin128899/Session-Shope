@@ -78,20 +78,21 @@ async def audit_sessions(message):
     from database.admin_tools import _transaction
     from services.session_audit import clean_other_sessions, session_file_bytes
     from uuid import uuid4
+    from database.session_audit import PENDING, hide_failed, delete_delivered
     try:
-        await message.answer('Проверяю непроданные аккаунты. Завершаю остальные сеансы, сохраняя сеанс магазина. Неудачные проверки придут отдельными файлами в ZIP.')
+        await message.answer('Проверяю непроданные аккаунты. Завершаю остальные сеансы, сохраняя сеанс магазина. Проблемные аккаунты будут скрыты из продажи, отправлены в ZIP и затем удалены из магазина.')
         # Process bounded batches; never load all private sessions into memory at once.
         last = 0
         while True:
-            batch = await rows("SELECT id FROM accounts WHERE status='available' AND id>%s ORDER BY id LIMIT 50", (last,))
+            batch = await rows("SELECT id FROM accounts WHERE (status='available' OR (status='review' AND review_reason=%s)) AND id>%s ORDER BY id LIMIT 50", (PENDING,last,))
             if not batch:
                 break
-            report=[]; output=io.BytesIO(); failures=0
+            report=[]; output=io.BytesIO(); failures=0; pending_exports=[]
             with zipfile.ZipFile(output,'w',zipfile.ZIP_DEFLATED) as archive:
                 for item in batch:
                     identity=item['id'];last=identity;token=uuid4().hex
                     async with _transaction() as cur:
-                        await cur.execute("SELECT id,data,number,telegram_user_id,registration_date FROM accounts WHERE id=%s AND status='available' AND spam_requested=0 AND (spam_lease_until IS NULL OR spam_lease_until<=UTC_TIMESTAMP()) FOR UPDATE",(identity,))
+                        await cur.execute("SELECT id,data,number,telegram_user_id,registration_date,status FROM accounts WHERE id=%s AND (status='available' OR (status='review' AND review_reason=%s)) AND spam_requested=0 AND (spam_lease_until IS NULL OR spam_lease_until<=UTC_TIMESTAMP()) FOR UPDATE",(identity,PENDING))
                         account=await cur.fetchone()
                         if account:
                             await cur.execute('SELECT user_id FROM account_reservations WHERE account_id=%s AND expires_at>UTC_TIMESTAMP() FOR UPDATE',(identity,))
@@ -101,10 +102,14 @@ async def audit_sessions(message):
                     if not account:
                         report.append({'id':identity,'status':'skipped_busy'});continue
                     try:
-                        result=await clean_other_sessions(account['data'],account['telegram_user_id'])
+                        result=({'status':'failed','reason':'export_pending'} if account['status']=='review' else await clean_other_sessions(account['data'],account['telegram_user_id']))
                         report.append({'id':identity,'registration_date':str(account['registration_date']) if account.get('registration_date') else None,'registration_date_source':'store_metadata' if account.get('registration_date') else 'unknown',**result})
                         if result['status']=='failed':
                             failures+=1
+                            hidden=await hide_failed(message.from_user.id,account,token)
+                            if hidden:
+                                pending_exports.append(account)
+                            report[-1]['hidden_from_sale']=hidden
                             try:
                                 archive.writestr(f'account-{identity}.session',session_file_bytes(account['data']))
                             except Exception:
@@ -117,6 +122,15 @@ async def audit_sessions(message):
                             await cur.execute('UPDATE accounts SET spam_token=NULL,spam_lease_until=NULL WHERE id=%s AND spam_token=%s',(identity,token))
                 archive.writestr('report.json',json.dumps(report,ensure_ascii=False,indent=2))
             await message.answer_document(BufferedInputFile(output.getvalue(),filename=f'session-audit-{last}.zip'),caption=f'Проверка до товара #{last}. Не удалось завершить проверку/лишние сеансы: {failures}. Сессии магазина сохранены.')
+            deleted=0
+            for account in pending_exports:
+                try:
+                    deleted += bool(await delete_delivered(message.from_user.id,account))
+                except Exception:
+                    # Keep hidden stock and its session for a later export/retry.
+                    pass
+            if pending_exports:
+                await message.answer(f'Файл отправлен. Удалено товаров: {deleted}. Осталось скрыто для повторного удаления: {len(pending_exports)-deleted}.')
         await message.answer('Проверка завершена. Пропущенные занятые товары можно проверить повторным запуском /audit_sessions.')
     finally:
         _audit_running = False
