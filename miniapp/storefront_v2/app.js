@@ -37,7 +37,7 @@ function countryAvatar(country,name){
 }
 async function market(){
  const rev=++state.revision,target=$('categories'),selection=state.country,mode=state.mode;
- $('back-countries').hidden=!selection;$('catalog-title').textContent=selection?'Категории':'Каталог';
+ document.querySelector('.market-hero').hidden=Boolean(selection);$('back-countries').hidden=!selection;$('catalog-title').textContent=selection?'Категории':'Каталог';
  $('catalog-caption').textContent=selection?'Выберите статус аккаунта. Рядом указана цена из актуального наличия.':'Выберите страну, затем категорию аккаунта.';
  target.setAttribute('aria-busy','true');target.replaceChildren();for(let i=0;i<4;i++)target.append(el('div',undefined,'skeleton'));
  try{
@@ -49,13 +49,14 @@ async function market(){
    const c=el('article',undefined,'category');c.style.setProperty('--delay',Math.min(index,5)*20+'ms');
    const head=el('div',undefined,'category-head');head.append(countryAvatar(item.country,item.name),el('span',quantity(item.count,['товар','товара','товаров']),'stock'));
    const price=el('div',undefined,'category-price');price.append(el('small','от '),document.createTextNode(money(item.min_price)));
-   const action=selection?()=>purchase(item,mode):()=>{state.country=item.country;$('search').value='';return market();};
-   c.append(head,el('h3',item.name),price,btn(selection?'Купить':'Категории',action,'primary'));target.append(c);
+   const action=selection?()=>purchase(item,mode):async()=>{state.country=item.country;$('search').value='';await market();$('catalog-section').scrollIntoView({block:'start',behavior:'instant'});};
+   const foot=el('div',undefined,'category-footer'),actionButton=btn(selection?'Купить':'Категории',action,'category-action');actionButton.append(SbandUI.icon('arrowUp'));foot.append(price,actionButton);
+   c.append(head,el('small',selection?'ПОДХОДЯЩИЙ ВАРИАНТ':'АККАУНТЫ ПО СТРАНАМ','category-overline'),el('h3',item.name),foot);target.append(c);
   }
  }catch(e){if(rev===state.revision){target.removeAttribute('aria-busy');target.replaceChildren();SbandUI.errorBox(target,clean(e.message),market);}}
 }
 $('back-countries').onclick=()=>{state.country=null;$('search').value='';market();};
-async function purchase(item,mode=state.mode){const quote=await api('category-quote',{mode,nation:item.nation});const body=open('Покупка категории');body.append(el('h3',quote.name),el('p','Один свободный аккаунт будет подобран автоматически.','muted'));const total=el('strong',money(quote.price),'category-price');body.append(total);if(quote.warranty_hours)body.append(el('p','Гарантия: '+quote.warranty_hours+' ч.','muted'));body.append(btn('Купить за '+money(quote.price),async()=>{const result=await api('category-buy',{token:quote.token});await me();await order(result.id);toast('Покупка оформлена');market();},'primary full'));}
+async function purchase(item,mode=state.mode){const quote=await api('category-quote',{mode,nation:item.nation});const body=open('Покупка категории');body.append(el('h3',quote.name),el('p','Один свободный аккаунт будет подобран автоматически.','muted'));const summary=el('div',undefined,'purchase-summary');summary.append(el('small','К оплате с баланса'),el('strong',money(quote.price),'category-price'));const facts=el('div',undefined,'purchase-facts');row(facts,'Выдача','Автоматически после оплаты');row(facts,'Доступ к данным','В разделе «Мои покупки»');summary.append(facts);body.append(summary);if(quote.warranty_hours)body.append(el('p','Гарантия: '+quote.warranty_hours+' ч.','muted'));body.append(btn('Купить за '+money(quote.price),async()=>{const result=await api('category-buy',{token:quote.token});await me();await order(result.id);toast('Покупка оформлена');market();},'primary full'));}
 async function order(id){
  const data=await api('orders/'+id),body=open('Заказ #'+id);
  body.append(el('p',data.status_label||data.status,'muted'));
@@ -150,6 +151,26 @@ async function transactions(){
 }
 async function promo(){const body=open('Ввести промокод');const input=el('input');input.maxLength=40;input.autocomplete='off';label(body,'Промокод',input);body.append(btn('Активировать',async()=>{if(!input.value.trim()){SbandUI.fieldError(input,'Введите промокод.');input.focus();return;}try{await api('promo/redeem',{code:input.value.trim()});await me();toast('Промокод активирован');await SbandUI.close($('modal'));}catch(e){SbandUI.fieldError(input,clean(e.message));}},'primary full'));}
 async function rewards(){const data=await api('rewards');const body=open('Бонусы');body.append(el('p','Бонус доступен по действующим условиям магазина. Пополнения и период получения проверяются автоматически.','muted'));if(data.eligible)body.append(btn('Получить бонус',async()=>{await api('rewards/claim',{});await me();toast('Бонус начислен');$('modal').close();},'primary full'));else body.append(el('p',data.next_at?'Следующее получение: '+date(data.next_at):'Пока нет подходящих пополнений.'));}
+async function freeAccount(){
+ const body=open('Бесплатный аккаунт');
+ const intro=el('div',undefined,'free-intro');intro.append(el('span','10','free-number'),el('div','Пригласи друзей.\nПолучи Telegram-аккаунт.','free-headline'));body.append(intro);
+ const progress=el('div',undefined,'referral-progress');progress.setAttribute('aria-live','polite');body.append(progress);
+ const steps=el('ol',undefined,'free-steps');for(const [title,text] of [['Пригласи 10 друзей','Используй свою реферальную ссылку. Засчитываются новые пользователи.'],['Напиши в поддержку','Когда наберёшь 10 рефералов, обратись к нам для проверки.'],['Получи аккаунт','После проверки приглашений поддержка выдаст бесплатный Telegram-аккаунт.']]){const li=el('li');li.append(el('strong',title),el('p',text));steps.append(li);}body.append(steps);
+ body.append(el('p','Накрутка и мультиаккаунты не засчитываются. Счётчик показывает приглашённых пользователей, а решение о выдаче принимает поддержка после проверки.','free-terms'));
+ async function update(){
+  progress.replaceChildren(el('p','Загружаем приглашения…','muted'));
+  try{
+   const data=await api('referrals');if(!progress.isConnected)return;
+   const count=Number(data.count);if(!Number.isInteger(count)||count<0)throw Error('Не удалось получить количество приглашений.');
+   const title=el('div',undefined,'referral-progress-title');title.append(el('span','Приглашено друзей'),el('strong',count+' / 10'));const bar=el('progress');bar.max=10;bar.value=Math.min(count,10);bar.setAttribute('aria-label','Приглашено '+count+' из 10 друзей');progress.replaceChildren(title,bar,el('small',count>=10?'Можно обратиться в поддержку для проверки.':'До цели: '+Math.max(0,10-count)+'. После достижения — проверка поддержкой.'));
+  }catch(e){if(progress.isConnected){progress.replaceChildren(el('p',clean(e.message),'muted'),btn('Обновить счётчик',update,'subtle'));}}
+ }
+ const username=state.me?.bot_username;
+ if(/^[A-Za-z0-9_]{5,32}$/.test(username||'')){const link='https://t.me/'+username+'?start=ref_'+state.me.user.id;const linkBox=el('div',undefined,'referral-link');linkBox.append(el('small','Твоя реферальная ссылка'),el('span',link));body.append(linkBox,btn('Скопировать ссылку',async()=>{await navigator.clipboard.writeText(link);toast('Реферальная ссылка скопирована');},'primary full'));}
+ else body.append(el('p','Реферальная ссылка доступна в профиле Telegram-бота.','muted'));
+ body.append(btn('Написать в поддержку',async()=>{await SbandUI.close($('modal'));await navigate('messages');if(!$('chat-body').value.trim())$('chat-body').value='Здравствуйте! Хочу проверить 10 рефералов для получения бесплатного Telegram-аккаунта.';$('chat-body').focus();},'full'));
+ await update();
+}
 async function referrals(){const data=await api('referrals');const body=open('Реферальная система');const link='https://t.me/'+state.me.bot_username+'?start=ref_'+state.me.user.id;body.append(el('p','Приглашайте друзей по своей ссылке. Вознаграждения начисляются по действующим условиям магазина.','muted'),el('div',link,'order-data'),btn('Скопировать ссылку',async()=>{await navigator.clipboard.writeText(link);toast('Ссылка скопирована');},'primary full'));if(data.daily)body.append(el('p','Начислено сегодня: '+money(data.daily.issued)+' · Лимит: '+money(data.daily.limit),'muted'));}
 function information(){const body=open('Информация');body.append(el('p','По вопросам покупки обратитесь в раздел «Сообщения».','muted'));for(const [title,url] of [['Пользовательское соглашение','https://telegra.ph/POLZOVATELSKOE-SOGLASHENIE-SBAND-ACCS-11-05'],['Политика конфиденциальности','https://telegra.ph/POLITIKA-KONFIDENCIALNOSTI-SBAND-ACCS-11-05-2']]){const a=el('a',title);a.href=url;a.target='_blank';a.rel='noopener noreferrer';const p=el('p');p.append(a);body.append(p);}}
 const actions={orders,transactions,promo,rewards,referrals,information};
@@ -161,8 +182,12 @@ $('search').addEventListener('input',()=>{clearTimeout(state.searchTimer);state.
 $('close-modal').onclick=()=>SbandUI.close($('modal'));$('modal').addEventListener('cancel',event=>{event.preventDefault();SbandUI.close($('modal'));});
 for(const id of ['wallet','topup'])$(id).onclick=()=>SbandUI.run($(id),topup).catch(e=>toast(e.message));
 $('admin-link').onclick=()=>location.assign('/admin-app');
+$('browse-accounts').onclick=()=>$('catalog-section').scrollIntoView({behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth',block:'start'});
+document.querySelectorAll('.hero-actions button>span,.spotlight-button>span,.invite-arrow').forEach(n=>n.replaceChildren(SbandUI.icon('arrowUp')));
+document.querySelectorAll('[data-free-account]').forEach(b=>b.addEventListener('click',()=>SbandUI.run(b,freeAccount).catch(e=>toast(e.message))));
 document.querySelector('.brand').addEventListener('click',event=>{event.preventDefault();navigate('market');});
 
+const menuIcons={orders:'market',transactions:'history',promo:'ticket',rewards:'gift',referrals:'users',information:'info'};document.querySelectorAll('.menu-list [data-action]').forEach(b=>b.prepend(SbandUI.icon(menuIcons[b.dataset.action])));
 document.querySelectorAll('[data-tab]').forEach(b=>b.prepend(SbandUI.icon(b.dataset.tab)));document.querySelector('.search>span').replaceChildren(SbandUI.icon('search'));
 const polling=setInterval(()=>{if(state.tab==='messages'&&!document.hidden)chat().catch(()=>{});},6000);window.addEventListener('beforeunload',()=>clearInterval(polling));
 (async()=>{try{tg?.ready();tg?.expand();tg?.setHeaderColor('#08090c');tg?.setBackgroundColor('#08090c');await me();await market();}catch(e){$('categories').replaceChildren();empty($('categories'),clean(e.message));}})();

@@ -4,18 +4,22 @@
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="robots" content="noindex,nofollow"><meta name="color-scheme" content="dark">
   <title>Управление магазином</title>
-  <link rel="stylesheet" href="/admin-assets/app.css?v=20261113-ui2">
+  <link rel="stylesheet" href="/admin-assets/app.css?v=20261113-ui3">
   <script src="https://telegram.org/js/telegram-web-app.js" defer></script>
-  <script src="/assets/ui.js?v=20261113-ui2" defer></script><script src="/admin-assets/app.js?v=20261113-ui2" defer></script><script src="/admin-assets/extras.js?v=20261113-ui2" defer></script>
-<link rel="stylesheet" href="/assets/ui.css?v=20261113-ui2"></head>
-<body>
+  <script src="/assets/ui.js?v=20261113-ui3" defer></script><script src="/admin-assets/app.js?v=20261113-ui3" defer></script><script src="/admin-assets/extras.js?v=20261113-ui3" defer></script>
+<link rel="stylesheet" href="/assets/ui.css?v=20261113-ui3"><link rel="stylesheet" href="/assets/premium.css?v=20261113-ui3"></head>
+<body class="premium-admin">
   <p id="access" role="status">Проверяем доступ администратора…</p>
   <div id="app" hidden>
-    <header><div><small>ПАНЕЛЬ УПРАВЛЕНИЯ</small><h1>Магазин</h1></div><span id="identity"></span></header>
+    <header><div><small>SBAND ACCS · УПРАВЛЕНИЕ</small><h1>Рабочее пространство<span class="admin-period">.</span></h1></div><span id="identity"></span></header>
     <nav aria-label="Разделы администратора">
-      <button data-page="overview" aria-current="page">Обзор</button><button data-page="stock">Товары</button>
-      <button data-page="users">Пользователи</button><button data-page="orders">Заказы</button>
-      <button data-page="categories">Категории</button><button data-page="promos">Промокоды</button><button data-page="payments">Платежи</button><button data-page="imports">Залив аккаунтов</button><button data-page="conversations">Сообщения</button><button data-page="app-access">Доступ Mini App</button>
+      <span class="nav-section">Магазин</span>
+      <button data-page="overview" aria-current="page">Обзор</button><button data-page="stock">Товары</button><button data-page="categories">Категории</button><button data-page="imports">Залив аккаунтов</button><button data-page="orders">Заказы</button>
+      <span class="nav-section">Люди и общение</span>
+      <button data-page="users">Пользователи</button><button data-page="conversations">Сообщения</button>
+      <span class="nav-section">Финансы</span>
+      <button data-page="payments">Платежи</button><button data-page="promos">Промокоды</button>
+      <span class="nav-section">Настройки</span><button data-page="app-access">Доступ Mini App</button>
     </nav>
     <main id="content" tabindex="-1"></main>
     <p id="notice" role="status" aria-live="polite"></p>

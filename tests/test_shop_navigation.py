@@ -32,12 +32,23 @@ class ShoppingTests(unittest.IsolatedAsyncioTestCase):
     async def test_entry_matches_type_rows_and_back(self):
         await shop.open_shop(self.call,self.state)
         markup=self.edit.call_args.kwargs['reply_markup']
-        self.assertEqual([[b.text for b in row] for row in markup.inline_keyboard],[['Авторег','С отлегой'],['Премиум'],['Назад']])
+        self.assertEqual([[b.text for b in row] for row in markup.inline_keyboard],[['Авторег','С отлегой'],['Премиум'],['Бесплатный аккаунт'],['Назад']])
         self.assertEqual([b.style for b in flatten(markup)[:3]],['primary']*3)
         self.assertIn('Выберите вид аккаунта',self.edit.call_args.args[1])
 
+    async def test_free_account_is_manual_review_and_links_to_support(self):
+        with patch('database.db.get_referral_count',AsyncMock(return_value=7)):
+            await ui.free_account(self.call,self.state)
+        text=self.edit.call_args.args[1]
+        self.assertIn('7 из 10',text)
+        self.assertIn('После проверки',text)
+        actions={b.text:b.callback_data for b in flatten(self.edit.call_args.kwargs['reply_markup'])}
+        self.assertEqual(actions['Написать в поддержку'],'support')
+        self.assertEqual(actions['Моя реферальная ссылка'],'referral_info')
+        self.assertEqual(actions['Назад'],'buy')
+
     async def test_new_buttons_use_only_requested_pack_and_no_standard_emoji(self):
-        icons={'country':'100001','catalog':'100002','calendar':'100003','premium':'100004','money':'100005','back':'100006'}
+        icons={'country':'100001','catalog':'100002','calendar':'100003','premium':'100004','money':'100005','back':'100006','gift':'100007'}
         with patch.dict(button_icons.PACK_ICONS,icons,clear=True):
             await ui.entry(self.call,self.state)
             markup=button_icons.decorate(self.edit.call_args.kwargs['reply_markup'])

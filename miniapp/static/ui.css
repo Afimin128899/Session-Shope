@@ -85,7 +85,6 @@ button.danger:hover {
   z-index:0
 }
 .has-selection-track {
-  position:relative;
   isolation:isolate
 }
 .has-selection-track>button {

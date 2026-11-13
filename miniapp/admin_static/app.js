@@ -171,7 +171,8 @@ async function load() {
     if (current !== generation) return;
     const changed=content.dataset.page!==selected;content.dataset.page=selected;if(changed)SbandUI.enter(content);content.replaceChildren();
     const titles = {overview:'Обзор',stock:'Товары',users:'Пользователи',orders:'Заказы',categories:'Категории',promos:'Промокоды',payments:'История платежей'};
-    content.append(node('h2',titles[selected]));
+    const heading=node('div',undefined,'admin-page-heading'),headingText=node('div');headingText.append(node('small','SBAND / УПРАВЛЕНИЕ'),node('h2',titles[selected]));
+    const descriptions={overview:'Остатки, заказы и быстрый доступ к работе.',stock:'Контролируй наличие, цены и состояние аккаунтов.',categories:'Структура магазина и цены по категориям.',users:'Найди пользователя и управляй его балансом.',orders:'Все заказы и история выдачи.',promos:'Бонусы и предложения для покупателей.',payments:'Статусы и история пополнений.'};headingText.append(node('p',descriptions[selected]||'','muted'));heading.append(headingText);content.append(heading);
     if (['stock','orders','users','payments'].includes(selected)) {
       const search = node('form',undefined,'tools'); const input = node('input');
       input.type='search'; input.value=query; input.placeholder=selected === 'users' ? 'ID или имя пользователя' : 'Поиск'; input.setAttribute('aria-label','Поиск');
@@ -182,10 +183,12 @@ async function load() {
     if (selected === 'overview') {
       const stats = node('div',undefined,'stats');
       for (const [key,label] of [['stock','Товаров в наличии'],['orders','Заказов'],['users','Пользователей'],['approvals','Возвратов на согласовании']]) {
-        const card=node('div',undefined,'card');card.append(node('span',label,'muted'),node('strong',result[key] ?? 0));stats.append(card);
+        const card=node('div',undefined,'card kpi-card');const top=node('div',undefined,'kpi-top');top.append(node('span',label,'muted'),SbandUI.icon({stock:'market',orders:'history',users:'users',approvals:'info'}[key]));card.append(top,node('strong',result[key] ?? 0));stats.append(card);
       }
       content.append(stats);
-      const info=node('div',undefined,'card');info.append(node('h2','Поддержка напрямую'),node('p','Сообщения приходят администраторам в бота. Чтобы ответить, нажмите кнопку под сообщением пользователя.'));content.append(info);
+      const quick=node('div',undefined,'overview-quick');quick.append(node('div','Быстрые действия','profile-section-label'));
+      for(const [title,detail,target,icon] of [['Загрузить аккаунты','Проверка и публикация архива','imports','market'],['Категории и цены','Управление ассортиментом','categories','ticket'],['Открыть сообщения','Прямая связь с покупателями','conversations','messages']]){const b=button('',()=>document.querySelector('[data-page="'+target+'"]').click());const text=node('span');text.append(node('strong',title),node('small',detail));b.append(SbandUI.icon(icon),text,SbandUI.icon('arrowUp'));quick.append(b);}content.append(quick);
+      const info=node('div',undefined,'card support-overview');info.append(node('div','СВЯЗЬ С ПОКУПАТЕЛЯМИ','eyebrow'),node('h3','Поддержка без лишних шагов'),node('p','Сообщения доступны в разделе «Сообщения» и приходят администраторам в бота. Ответить можно прямо в переписке.','muted'));content.append(info);
       return;
     }
     let refreshSelection;
@@ -213,6 +216,11 @@ async function load() {
           }
           row(list,(item.name||item.country)+' · #'+item.id,item.number+' · '+(statusNames[item.status]||item.status)+' · '+(check.label||'Не проверен')+(check.detail?' · '+check.detail:'')+' · Год регистрации: '+(item.registration_date?String(item.registration_date).slice(0,4):'не указан')+' · Дата: '+(item.registration_date||'не указана'),rub(item.price),actions);
           list.lastElementChild.classList.add('stock-row');
+          const stockRow=list.lastElementChild,detail=stockRow.querySelector('.detail'),title=detail.querySelector('strong');detail.replaceChildren();
+          const titleRow=node('div',undefined,'stock-title'),flag=node('img');const country=/^auto-([a-z]{2})-/.exec(item.country||'')?.[1]||(/^[a-z]{2}$/.test(item.country||'')?item.country:'unknown');flag.src='/assets/flags/'+country+'.svg';flag.alt='';flag.onerror=()=>{flag.onerror=null;flag.src='/assets/flags/unknown.svg';};titleRow.append(flag,title);detail.append(titleRow);
+          const meta=node('div',undefined,'stock-meta');meta.append(node('span',item.number),node('span','Регистрация: '+(item.registration_date?String(item.registration_date).slice(0,4):'не указана')));detail.append(meta);
+          const tags=node('div',undefined,'stock-tags');tags.append(node('span',statusNames[item.status]||item.status,'status-tag status-'+item.status),node('span',check.running?'Проверяется…':check.queued?'В очереди':check.label||'Не проверен','check-tag'));detail.append(tags);if(check.detail)detail.append(node('small',check.detail,'stock-check-detail'));
+
           {
             const label=node('label',undefined,'stock-select');const box=node('input');box.type='checkbox';box.disabled=item.status!=='available';box.dataset.stockId=item.id;box.checked=selectedStock.has(item.id);box.setAttribute('aria-label','Выбрать товар #'+item.id);
             box.addEventListener('change',()=>{

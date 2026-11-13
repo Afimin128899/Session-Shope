@@ -72,8 +72,18 @@ async def clear(state, user_id):
 async def entry(call, state):
     await clear(state, call.from_user.id)
     rows = [[btn(tr('Авторег'), 'sn:home:auto', 'catalog', True), btn(tr('С отлегой'), 'sn:home:aged', 'calendar', True)],
-            [btn(tr('Премиум'), 'sn:home:premium', 'premium', True)], [btn(tr('Назад'), 'back_main', 'back')]]
+            [btn(tr('Премиум'), 'sn:home:premium', 'premium', True)], [btn(tr('Бесплатный аккаунт'), 'free_account', 'gift')], [btn(tr('Назад'), 'back_main', 'back')]]
     await edit_message_safe(call, tr('<b>Купить аккаунт</b>\n\nВыберите вид аккаунта:'), section='catalog', reply_markup=kb(rows))
+    await answer_safe(call)
+
+
+@router.callback_query(F.data == 'free_account')
+async def free_account(call, state):
+    await clear(state,call.from_user.id)
+    from database.db import get_referral_count
+    count=await get_referral_count(call.from_user.id)
+    text=tr('<b>10 рефералов — Telegram-аккаунт бесплатно!</b>\n\nПригласи 10 новых пользователей по своей реферальной ссылке и напиши в поддержку. После проверки приглашений получишь бесплатный аккаунт.\n\nПриглашено: <b>{0} из 10</b>.\n\nКоличество приглашений ещё не означает, что они прошли проверку. Накрутка и мультиаккаунты не засчитываются.',count)
+    await edit_message_safe(call,text,section='catalog',reply_markup=kb([[btn(tr('Моя реферальная ссылка'),'referral_info','users',True)],[btn(tr('Написать в поддержку'),'support','support')],[btn(tr('Назад'),'buy','back')]]))
     await answer_safe(call)
 
 
