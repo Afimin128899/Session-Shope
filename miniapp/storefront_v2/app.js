@@ -52,7 +52,7 @@ async function market(useCache=false){
  const query=$('search').value.trim();$('clear-search').hidden=!query;
  $('search-context').hidden=!query;$('search-context').textContent=query?'Поиск: «'+query+'»':'';
  $('reset-catalog').hidden=!query&&!$('budget-filter').value&&!$('stock-filter').value;$('budget-note').hidden=!$('budget-filter').value;
- saveCatalogPreferences();$('catalog-stock').textContent='';$('count').textContent='Обновляем…';
+ renderActiveConditions();saveCatalogPreferences();$('catalog-stock').textContent='';$('count').textContent='Обновляем…';
  target.setAttribute('aria-busy','true');target.replaceChildren();for(let i=0;i<4;i++)target.append(el('div',undefined,'skeleton'));
  try{
   const params=new URLSearchParams({mode,q:$('search').value.trim()});if(selection)params.set('country',selection);
@@ -84,6 +84,24 @@ async function market(useCache=false){
   }
  }catch(e){if(rev===state.revision){$('count').textContent='Не удалось обновить';target.removeAttribute('aria-busy');target.replaceChildren();SbandUI.errorBox(target,clean(e.message),market);}}
 }
+function renderActiveConditions(){
+ const active=[];
+ for(const id of ['budget-filter','stock-filter']){
+  const select=$(id);if(!select.value)continue;
+  const title=id==='budget-filter'?'Начальная цена до '+select.selectedOptions[0].textContent:select.selectedOptions[0].textContent;
+  const chip=btn(title+' ×',()=>{select.value='';return market(true);},'condition-chip');chip.setAttribute('aria-label','Убрать условие: '+title);active.push(chip);
+ }
+ $('active-conditions').replaceChildren(...active);$('active-conditions').hidden=!active.length;$('active-condition-count').textContent=active.length?' · '+active.length:'';
+ document.querySelectorAll('[data-preset]').forEach(button=>{
+  const preset=button.dataset.preset,budget=$('budget-filter').value,stock=$('stock-filter').value,sort=$('catalog-sort').value;
+  const selected=preset==='all'?!budget&&!stock&&sort==='default':preset==='budget'?budget==='100'&&!stock:preset==='stock'?stock==='10'&&!budget:sort==='price'&&!budget&&!stock;
+  button.setAttribute('aria-pressed',String(selected));
+ });
+}
+document.querySelectorAll('[data-preset]').forEach(button=>button.addEventListener('click',()=>{
+ clearTimeout(state.searchTimer);const preset=button.dataset.preset;
+ $('budget-filter').value=preset==='budget'?'100':'';$('stock-filter').value=preset==='stock'?'10':'';$('catalog-sort').value=preset==='price'?'price':'default';market(true);
+}));
 function resetCatalogFilters(){clearTimeout(state.searchTimer);$('search').value='';$('budget-filter').value='';$('stock-filter').value='';return market(true);}
 $('reset-catalog').onclick=resetCatalogFilters;
 for(const id of ['budget-filter','stock-filter'])$(id).onchange=()=>market(true);
