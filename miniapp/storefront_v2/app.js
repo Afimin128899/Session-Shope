@@ -1,6 +1,15 @@
 'use strict';
 const tg=window.Telegram?.WebApp,$=id=>document.getElementById(id);
 const state={tab:'market',mode:'auto',country:null,revision:0,me:null,chatLast:0,invoice:null};
+// Only display preferences are persisted; search text and account data stay in memory.
+function saveCatalogPreferences(){try{localStorage.setItem('sband_catalog_preferences',JSON.stringify({mode:state.mode,sort:$('catalog-sort').value,view:state.view||'grid'}));}catch(_){}}
+function setCatalogView(view){state.view=view==='list'?'list':'grid';$('categories').classList.toggle('list-view',state.view==='list');document.querySelectorAll('[data-view]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.view===state.view)));}
+function restoreCatalogPreferences(){
+ try{const prefs=JSON.parse(localStorage.getItem('sband_catalog_preferences')||'{}');if(['auto','aged','premium'].includes(prefs?.mode))state.mode=prefs.mode;if(['default','price','stock','name'].includes(prefs?.sort))$('catalog-sort').value=prefs.sort;setCatalogView(prefs?.view);}catch(_){setCatalogView('grid');}
+ document.querySelectorAll('[data-mode]').forEach(b=>{b.classList.toggle('selected',b.dataset.mode===state.mode);b.setAttribute('aria-pressed',String(b.dataset.mode===state.mode));});
+}
+restoreCatalogPreferences();
+document.querySelectorAll('[data-view]').forEach(b=>b.addEventListener('click',()=>{setCatalogView(b.dataset.view);saveCatalogPreferences();}));
 const money=value=>new Intl.NumberFormat('ru-RU',{style:'currency',currency:'RUB'}).format(Number(value||0));
 const clean=value=>String(value||'').replace(/[\p{Extended_Pictographic}\p{Regional_Indicator}\uFE0F]/gu,'').trim();
 function el(tag,text,cls){const n=document.createElement(tag);if(text!==undefined)n.textContent=String(text);if(cls)n.className=cls;return n;}
@@ -35,27 +44,32 @@ function countryAvatar(country,name){
  image.src='/assets/flags/'+code+'.svg';image.alt='Флаг: '+name;image.loading='lazy';
  image.onerror=()=>{image.onerror=null;image.src='/assets/flags/unknown.svg';};frame.append(image);return frame;
 }
-async function market(){
+async function market(useCache=false){
  if(state.tab!=='market')return;
  const rev=++state.revision,target=$('categories'),selection=state.country,mode=state.mode;
- document.querySelector('.market-hero').hidden=Boolean(selection);$('back-countries').hidden=!selection;$('catalog-title').textContent=selection?'Категории':'Каталог';
+ document.querySelector('.market-hero').hidden=Boolean(selection);$('back-countries').hidden=!selection;$('catalog-title').textContent=selection?(state.countryName||'Категории'):'Каталог';
  $('catalog-caption').textContent=selection?'Выберите статус аккаунта. Рядом указана цена из актуального наличия.':'Выберите страну, затем категорию аккаунта.';
  const query=$('search').value.trim();$('clear-search').hidden=!query;
  $('search-context').hidden=!query;$('search-context').textContent=query?'Поиск: «'+query+'»':'';
- $('count').textContent='Обновляем…';
+ $('reset-catalog').hidden=!query&&!$('budget-filter').value&&!$('stock-filter').value;$('budget-note').hidden=!$('budget-filter').value;
+ renderActiveConditions();saveCatalogPreferences();$('catalog-stock').textContent='';$('count').textContent='Обновляем…';
  target.setAttribute('aria-busy','true');target.replaceChildren();for(let i=0;i<4;i++)target.append(el('div',undefined,'skeleton'));
  try{
   const params=new URLSearchParams({mode,q:$('search').value.trim()});if(selection)params.set('country',selection);
-  const data=await api('category-market?'+params);if(rev!==state.revision)return;
-  target.removeAttribute('aria-busy');target.replaceChildren();$('count').textContent=quantity(data.items.length,selection?['категория','категории','категорий']:['страна','страны','стран']);
-  if(!data.items.length){
+  const key=params.toString();const data=useCache===true&&state.catalogCache?.key===key?state.catalogCache.data:await api('category-market?'+params);if(rev!==state.revision)return;state.catalogCache={key,data};
+  const budget=Number($('budget-filter').value),minimumStock=Number($('stock-filter').value);
+  const filtered=data.items.filter(item=>(!budget||Number(item.min_price)<=budget)&&(!minimumStock||Number(item.count)>=minimumStock));
+  const stock=filtered.reduce((total,item)=>total+Number(item.count||0),0);$('catalog-stock').textContent=stock?quantity(stock,['товар','товара','товаров'])+(budget||minimumStock?' в выбранных категориях':' в наличии'):'';
+  target.removeAttribute('aria-busy');target.replaceChildren();$('count').textContent=quantity(filtered.length,selection?['категория','категории','категорий']:['страна','страны','стран']);
+  if(!filtered.length){
    const box=el('div',undefined,'catalog-empty');
-   box.append(SbandUI.icon('search'),el('h3',query?'Ничего не нашлось':'Здесь пока пусто'),el('p',query?'Попробуйте другое название или очистите поиск.':'Попробуйте другой вид аккаунтов или вернитесь позже.','muted'));
-   if(query)box.append(btn('Очистить поиск',clearSearch,'primary'));
+   box.append(SbandUI.icon('search'),el('h3',query||budget||minimumStock?'Ничего не нашлось':'Здесь пока пусто'),el('p',budget||minimumStock?'Измените условия цены и наличия или сбросьте их.':query?'Попробуйте другое название или очистите поиск.':'Попробуйте другой вид аккаунтов или вернитесь позже.','muted'));
+   if(budget||minimumStock)box.append(btn('Сбросить условия',resetCatalogFilters,'primary'));
+   else if(query)box.append(btn('Очистить поиск',clearSearch,'primary'));
    else box.append(btn('Все страны',()=>{state.mode='auto';state.country=null;document.querySelectorAll('[data-mode]').forEach(b=>{b.classList.toggle('selected',b.dataset.mode==='auto');b.setAttribute('aria-pressed',String(b.dataset.mode==='auto'));});return market();},'primary'));
    target.append(box);return;
   }
-  const items=[...data.items];
+  const items=[...filtered];
   const sort=$('catalog-sort').value;
   if(sort==='price')items.sort((a,b)=>Number(a.min_price)-Number(b.min_price));
   else if(sort==='stock')items.sort((a,b)=>Number(b.count)-Number(a.count));
@@ -64,17 +78,38 @@ async function market(){
    const c=el('article',undefined,'category');c.style.setProperty('--delay',Math.min(index,5)*20+'ms');
    const head=el('div',undefined,'category-head');head.append(countryAvatar(item.country,item.name),el('span',quantity(item.count,['товар','товара','товаров']),'stock'));
    const price=el('div',undefined,'category-price');price.append(el('small','от '),document.createTextNode(money(item.min_price)));
-   const action=selection?()=>purchase(item,mode):async()=>{state.country=item.country;$('search').value='';await market();$('catalog-section').scrollIntoView({block:'start',behavior:'instant'});};
+   const action=selection?()=>purchase(item,mode):async()=>{clearTimeout(state.searchTimer);state.parentQuery=$('search').value;state.country=item.country;state.countryName=item.name;$('search').value='';await market();$('catalog-section').scrollIntoView({block:'start',behavior:'instant'});};
    const foot=el('div',undefined,'category-footer'),actionButton=btn(selection?'Купить':'Категории',action,'category-action');actionButton.append(SbandUI.icon('arrowUp'));foot.append(price,actionButton);
    c.append(head,el('small',selection?'ПОДХОДЯЩИЙ ВАРИАНТ':'АККАУНТЫ ПО СТРАНАМ','category-overline'),el('h3',item.name),foot);target.append(c);
   }
  }catch(e){if(rev===state.revision){$('count').textContent='Не удалось обновить';target.removeAttribute('aria-busy');target.replaceChildren();SbandUI.errorBox(target,clean(e.message),market);}}
 }
+function renderActiveConditions(){
+ const active=[];
+ for(const id of ['budget-filter','stock-filter']){
+  const select=$(id);if(!select.value)continue;
+  const title=id==='budget-filter'?'Начальная цена до '+select.selectedOptions[0].textContent:select.selectedOptions[0].textContent;
+  const chip=btn(title+' ×',()=>{select.value='';return market(true);},'condition-chip');chip.setAttribute('aria-label','Убрать условие: '+title);active.push(chip);
+ }
+ $('active-conditions').replaceChildren(...active);$('active-conditions').hidden=!active.length;$('active-condition-count').textContent=active.length?' · '+active.length:'';
+ document.querySelectorAll('[data-preset]').forEach(button=>{
+  const preset=button.dataset.preset,budget=$('budget-filter').value,stock=$('stock-filter').value,sort=$('catalog-sort').value;
+  const selected=preset==='all'?!budget&&!stock&&sort==='default':preset==='budget'?budget==='100'&&!stock:preset==='stock'?stock==='10'&&!budget:sort==='price'&&!budget&&!stock;
+  button.setAttribute('aria-pressed',String(selected));
+ });
+}
+document.querySelectorAll('[data-preset]').forEach(button=>button.addEventListener('click',()=>{
+ clearTimeout(state.searchTimer);const preset=button.dataset.preset;
+ $('budget-filter').value=preset==='budget'?'100':'';$('stock-filter').value=preset==='stock'?'10':'';$('catalog-sort').value=preset==='price'?'price':'default';market(true);
+}));
+function resetCatalogFilters(){clearTimeout(state.searchTimer);$('search').value='';$('budget-filter').value='';$('stock-filter').value='';return market(true);}
+$('reset-catalog').onclick=resetCatalogFilters;
+for(const id of ['budget-filter','stock-filter'])$(id).onchange=()=>market(true);
 function clearSearch(){clearTimeout(state.searchTimer);$('search').value='';$('search').focus();return market();}
 $('clear-search').onclick=clearSearch;
-$('catalog-sort').onchange=()=>market();
+$('catalog-sort').onchange=()=>market(true);
 $('refresh-catalog').onclick=()=>SbandUI.run($('refresh-catalog'),market).catch(e=>toast(e.message));
-$('back-countries').onclick=()=>{state.country=null;$('search').value='';market();};
+$('back-countries').onclick=()=>{clearTimeout(state.searchTimer);state.country=null;state.countryName=null;$('search').value=state.parentQuery||'';market();};
 async function purchase(item,mode=state.mode){const quote=await api('category-quote',{mode,nation:item.nation});const body=open('Покупка категории');body.append(el('h3',quote.name),el('p','Один свободный аккаунт будет подобран автоматически.','muted'));const summary=el('div',undefined,'purchase-summary');summary.append(el('small','К оплате с баланса'),el('strong',money(quote.price),'category-price'));const facts=el('div',undefined,'purchase-facts');row(facts,'Выдача','Автоматически после оплаты');row(facts,'Доступ к данным','В разделе «Мои покупки»');summary.append(facts);body.append(summary);if(quote.warranty_hours)body.append(el('p','Гарантия: '+quote.warranty_hours+' ч.','muted'));body.append(btn('Купить за '+money(quote.price),async()=>{const result=await api('category-buy',{token:quote.token});await me();await order(result.id);toast('Покупка оформлена');market();},'primary full'));}
 async function order(id){
  const data=await api('orders/'+id),body=open('Заказ #'+id);
