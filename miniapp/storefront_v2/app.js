@@ -51,21 +51,25 @@ async function market(useCache=false){
  $('catalog-caption').textContent=selection?'Выберите статус аккаунта. Рядом указана цена из актуального наличия.':'Выберите страну, затем категорию аккаунта.';
  const query=$('search').value.trim();$('clear-search').hidden=!query;
  $('search-context').hidden=!query;$('search-context').textContent=query?'Поиск: «'+query+'»':'';
+ $('reset-catalog').hidden=!query&&!$('budget-filter').value&&!$('stock-filter').value;$('budget-note').hidden=!$('budget-filter').value;
  saveCatalogPreferences();$('catalog-stock').textContent='';$('count').textContent='Обновляем…';
  target.setAttribute('aria-busy','true');target.replaceChildren();for(let i=0;i<4;i++)target.append(el('div',undefined,'skeleton'));
  try{
   const params=new URLSearchParams({mode,q:$('search').value.trim()});if(selection)params.set('country',selection);
   const key=params.toString();const data=useCache===true&&state.catalogCache?.key===key?state.catalogCache.data:await api('category-market?'+params);if(rev!==state.revision)return;state.catalogCache={key,data};
-  const stock=data.items.reduce((total,item)=>total+Number(item.count||0),0);$('catalog-stock').textContent=stock?quantity(stock,['товар','товара','товаров'])+' в наличии':'';
-  target.removeAttribute('aria-busy');target.replaceChildren();$('count').textContent=quantity(data.items.length,selection?['категория','категории','категорий']:['страна','страны','стран']);
-  if(!data.items.length){
+  const budget=Number($('budget-filter').value),minimumStock=Number($('stock-filter').value);
+  const filtered=data.items.filter(item=>(!budget||Number(item.min_price)<=budget)&&(!minimumStock||Number(item.count)>=minimumStock));
+  const stock=filtered.reduce((total,item)=>total+Number(item.count||0),0);$('catalog-stock').textContent=stock?quantity(stock,['товар','товара','товаров'])+(budget||minimumStock?' в выбранных категориях':' в наличии'):'';
+  target.removeAttribute('aria-busy');target.replaceChildren();$('count').textContent=quantity(filtered.length,selection?['категория','категории','категорий']:['страна','страны','стран']);
+  if(!filtered.length){
    const box=el('div',undefined,'catalog-empty');
-   box.append(SbandUI.icon('search'),el('h3',query?'Ничего не нашлось':'Здесь пока пусто'),el('p',query?'Попробуйте другое название или очистите поиск.':'Попробуйте другой вид аккаунтов или вернитесь позже.','muted'));
-   if(query)box.append(btn('Очистить поиск',clearSearch,'primary'));
+   box.append(SbandUI.icon('search'),el('h3',query||budget||minimumStock?'Ничего не нашлось':'Здесь пока пусто'),el('p',budget||minimumStock?'Измените условия цены и наличия или сбросьте их.':query?'Попробуйте другое название или очистите поиск.':'Попробуйте другой вид аккаунтов или вернитесь позже.','muted'));
+   if(budget||minimumStock)box.append(btn('Сбросить условия',resetCatalogFilters,'primary'));
+   else if(query)box.append(btn('Очистить поиск',clearSearch,'primary'));
    else box.append(btn('Все страны',()=>{state.mode='auto';state.country=null;document.querySelectorAll('[data-mode]').forEach(b=>{b.classList.toggle('selected',b.dataset.mode==='auto');b.setAttribute('aria-pressed',String(b.dataset.mode==='auto'));});return market();},'primary'));
    target.append(box);return;
   }
-  const items=[...data.items];
+  const items=[...filtered];
   const sort=$('catalog-sort').value;
   if(sort==='price')items.sort((a,b)=>Number(a.min_price)-Number(b.min_price));
   else if(sort==='stock')items.sort((a,b)=>Number(b.count)-Number(a.count));
@@ -80,6 +84,9 @@ async function market(useCache=false){
   }
  }catch(e){if(rev===state.revision){$('count').textContent='Не удалось обновить';target.removeAttribute('aria-busy');target.replaceChildren();SbandUI.errorBox(target,clean(e.message),market);}}
 }
+function resetCatalogFilters(){clearTimeout(state.searchTimer);$('search').value='';$('budget-filter').value='';$('stock-filter').value='';return market(true);}
+$('reset-catalog').onclick=resetCatalogFilters;
+for(const id of ['budget-filter','stock-filter'])$(id).onchange=()=>market(true);
 function clearSearch(){clearTimeout(state.searchTimer);$('search').value='';$('search').focus();return market();}
 $('clear-search').onclick=clearSearch;
 $('catalog-sort').onchange=()=>market(true);
