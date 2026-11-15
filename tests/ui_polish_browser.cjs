@@ -9,7 +9,7 @@ fs.mkdirSync(artifacts, { recursive: true });
   const errors = []; const widths = [320,390,768,1440];
   for (const width of widths) {
     const context = await browser.newContext({ viewport: { width, height: 900 } });
-    let buyCount=0, failCatalog=false, failPrice=false, priceCount=0, deleted=[], queued=[], chats=[], codeCount=0;
+    let catalogRequests=0, buyCount=0, failCatalog=false, failPrice=false, priceCount=0, deleted=[], queued=[], chats=[], codeCount=0;
     let stock=[1,2,3].map((id)=>({id,country:id===3?'auto-ca-clear':'auto-us-clear',name:id===3?'Канада Без спамблока':'США Без спамблока',number:'+1555111000'+id,price:99,status:'available',registration_date:'2021-04-12',spam_check:{label:'Ограничений не обнаружено'}}));
     await context.addInitScript(()=>{Object.defineProperty(navigator,'clipboard',{configurable:true,value:{writeText:async value=>{window.fixtureClipboard=value;}}});window.Telegram={WebApp:{initData:'offline-fixture',ready(){},expand(){},setHeaderColor(){},setBackgroundColor(){},openInvoice(url){window.fixtureInvoice=url},openLink(url){window.fixtureLink=url}}};});
     await context.route('**/*',async route=>{
@@ -18,7 +18,7 @@ fs.mkdirSync(artifacts, { recursive: true });
       if(p.startsWith('/api/')){
         let data;
         if(p==='/api/me')data={user:{id:42,first_name:'Александр',username:'alex',photo_url:'/assets/sband.png'},balance:1250,is_admin:true,bot_username:'SbandACCSbot'};
-        else if(p==='/api/category-market'){
+        else if(p==='/api/category-market'){catalogRequests++;
           if(failCatalog){failCatalog=false;return route.fulfill({status:503,json:{error:'Каталог временно недоступен.'}});}
           data={items:url.searchParams.has('country')?[{country:'us',nation:'us~clear',name:'США Без спамблока',count:12,min_price:74},{country:'us',nation:'us~permanent',name:'США Вечный СБ',count:5,min_price:59},{country:'us',nation:'us~unverified',name:'США',count:8,min_price:50}]:[{country:'us',name:'США',count:25,min_price:50},{country:'ca',name:'Канада',count:8,min_price:99},{country:'jp',name:'Япония',count:5,min_price:199},{country:'kz',name:'Казахстан',count:4,min_price:229}]};
           const query=url.searchParams.get('q')||'';
@@ -63,10 +63,20 @@ fs.mkdirSync(artifacts, { recursive: true });
     const close=async()=>{await page.getByRole('button',{name:'Закрыть',exact:true}).click();await page.waitForFunction(()=>!document.querySelector('#modal').open);};
     await page.goto('http://sband.test/');await page.locator('.category').first().waitFor();
     await page.waitForFunction(()=>[...document.querySelectorAll('.country-avatar img')].every(i=>i.complete));
+    const requestsBeforeSort=catalogRequests;
     await page.locator('#catalog-sort').selectOption('name');
     await page.waitForFunction(()=>document.querySelector('.category h3')?.textContent==='Казахстан');
     await page.locator('#catalog-sort').selectOption('stock');
     await page.waitForFunction(()=>document.querySelector('.category h3')?.textContent==='США');
+    assert.equal(catalogRequests,requestsBeforeSort,'Sorting should reuse the current catalogue');
+    await page.locator('[data-view=list]').click();
+    assert.equal(await page.locator('#categories').evaluate(n=>n.classList.contains('list-view')),true);
+    await noOverflow();
+    await page.reload();await page.locator('.category').first().waitFor();
+    assert.equal(await page.locator('[data-view=list]').getAttribute('aria-pressed'),'true');
+    assert.equal(await page.locator('#catalog-sort').inputValue(),'stock');
+    assert((await page.locator('#catalog-stock').innerText()).includes('42 товара'));
+    await page.locator('[data-view=grid]').click();
     await page.locator('#catalog-sort').selectOption('default');
     await page.locator('#refresh-catalog').focus();await page.keyboard.press('/');
     assert(await page.locator('#search').evaluate(e=>document.activeElement===e));
@@ -82,6 +92,11 @@ fs.mkdirSync(artifacts, { recursive: true });
     await page.waitForFunction(()=>document.querySelectorAll('.category').length===1&&document.querySelector('.category h3').textContent==='Канада');
     await page.waitForTimeout(550);
     assert.equal(await page.locator('.category').count(),1,'Stale response replaced the latest search');
+    await page.locator('.category').getByRole('button',{name:'Категории',exact:true}).click();
+    await page.waitForFunction(()=>document.querySelector('#catalog-title').textContent==='Канада');
+    await page.locator('#back-countries').click();
+    await page.waitForFunction(()=>document.querySelectorAll('.category').length===1&&document.querySelector('#search').value==='Канада');
+
     await page.locator('#clear-search').click();
     await page.waitForFunction(()=>document.querySelectorAll('.category').length===4);
     await page.locator('[data-mode=auto]').click();
