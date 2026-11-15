@@ -238,7 +238,7 @@ $('close-modal').onclick=()=>SbandUI.close($('modal'));$('modal').addEventListen
 for(const id of ['wallet','topup'])$(id).onclick=()=>SbandUI.run($(id),topup).catch(e=>toast(e.message));
 $('admin-link').onclick=()=>location.assign('/admin-app');
 $('browse-accounts').onclick=()=>$('catalog-section').scrollIntoView({behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth',block:'start'});
-document.querySelectorAll('.hero-actions button>span,.spotlight-button>span,.invite-arrow').forEach(n=>n.replaceChildren(SbandUI.icon('arrowUp')));
+document.querySelectorAll('#browse-accounts>span,.spotlight-button>span,.invite-arrow').forEach(n=>n.replaceChildren(SbandUI.icon('arrowUp')));
 document.querySelectorAll('[data-free-account]').forEach(b=>b.addEventListener('click',()=>SbandUI.run(b,freeAccount).catch(e=>toast(e.message))));
 document.querySelector('.brand').addEventListener('click',event=>{event.preventDefault();navigate('market');});
 

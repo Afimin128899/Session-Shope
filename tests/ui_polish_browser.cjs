@@ -135,6 +135,12 @@ fs.mkdirSync(artifacts, { recursive: true });
     await page.locator('[data-mode=auto]').click();
     assert.equal(await page.locator('[data-mode=auto]').getAttribute('aria-pressed'),'true');
     await page.locator('#catalog-options>summary').click();
+    if(width>=1100){
+      const navBox=await page.locator('.bottom-nav').boundingBox(),contentBox=await page.locator('#catalog-section').boundingBox();
+      assert(navBox.x+navBox.width<contentBox.x,'Desktop navigation should sit beside the catalogue');
+    }else if(width<=600){
+      assert((await page.locator('.category').first().boundingBox()).height<200,'Mobile product card should stay compact');
+    }
     await screen('market');assert.equal(await page.locator('.bottom-nav').evaluate(n=>getComputedStyle(n).position),'fixed','Navigation must stay fixed');
     await page.getByRole('button',{name:'Бесплатный аккаунт',exact:true}).click();
     await page.getByText('7 / 10',{exact:true}).waitFor();await screen('free-account');await page.getByRole('button',{name:'Скопировать ссылку',exact:true}).click();assert.equal(await page.evaluate(()=>window.fixtureClipboard),'https://t.me/SbandACCSbot?start=ref_42');assert.equal(await page.locator('.referral-progress progress').getAttribute('value'),'7');
