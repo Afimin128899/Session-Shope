@@ -1,12 +1,12 @@
 :root {
-  --bg:#08090c;
-  --surface:#11151e;
-  --raised:#181e29;
-  --line:#283140;
+  --bg:#090909;
+  --surface:#151515;
+  --raised:#1e1e1e;
+  --line:#303030;
   --text:#f2f4f8;
-  --muted:#9ba6b8;
-  --blue:#162b49;
-  --accent:#a9c4ec;
+  --muted:#a5a5a5;
+  --blue:#292929;
+  --accent:#c1c1c1;
   --danger:#ed9da5;
   --danger-bg:#321b25;
   --ease:cubic-bezier(.2,.8,.2,1);
@@ -42,7 +42,7 @@ input,textarea,select {
   min-height:48px
 }
 button.primary {
-  color:#10141c;
+  color:#141414;
   background:#f2f4f8;
   border-color:#f2f4f8;
   box-shadow:none
@@ -53,8 +53,8 @@ button.danger {
   border-color:#75404e
 }
 button.primary:hover {
-  background:#dce5f1;
-  border-color:#dce5f1;
+  background:#e4e4e4;
+  border-color:#e4e4e4;
   box-shadow:none
 }
 button.danger:hover {
@@ -78,7 +78,7 @@ button.danger:hover {
   top:0;
   left:0;
   background:var(--blue);
-  border:1px solid #354c6d;
+  border:1px solid #494949;
   border-radius:15px;
   pointer-events:none;
   transition:transform var(--motion) var(--ease),width var(--motion) var(--ease),height var(--motion) var(--ease);
@@ -149,21 +149,21 @@ button.is-busy.loading::after {
   color:#f1b0bb!important
 }
 .ui-status-pending {
-  color:#afc4e5!important
+  color:#c2c2c2!important
 }
 .loading-progress {
   width:100%;
   height:6px;
-  accent-color:#96b7e6;
+  accent-color:#b3b3b3;
   border:0;
   border-radius:6px;
   overflow:hidden
 }
 .loading-progress::-webkit-progress-bar {
-  background:#232c3d
+  background:#2b2b2b
 }
 .loading-progress::-webkit-progress-value {
-  background:#96b7e6;
+  background:#b3b3b3;
   transition:width var(--motion)
 }
 .ui-enter {

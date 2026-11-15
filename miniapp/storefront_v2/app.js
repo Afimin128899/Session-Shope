@@ -245,4 +245,4 @@ document.querySelector('.brand').addEventListener('click',event=>{event.preventD
 const menuIcons={orders:'market',transactions:'history',promo:'ticket',rewards:'gift',referrals:'users',information:'info'};document.querySelectorAll('.menu-list [data-action]').forEach(b=>b.prepend(SbandUI.icon(menuIcons[b.dataset.action])));
 document.querySelectorAll('[data-tab]').forEach(b=>b.prepend(SbandUI.icon(b.dataset.tab)));document.querySelector('.search>span').replaceChildren(SbandUI.icon('search'));
 const polling=setInterval(()=>{if(state.tab==='messages'&&!document.hidden)chat().catch(()=>{});},6000);window.addEventListener('beforeunload',()=>clearInterval(polling));
-(async()=>{try{tg?.ready();tg?.expand();tg?.setHeaderColor('#08090c');tg?.setBackgroundColor('#08090c');await me();await market();}catch(e){$('categories').replaceChildren();empty($('categories'),clean(e.message));}})();
+(async()=>{try{tg?.ready();tg?.expand();tg?.setHeaderColor('#0a0a0a');tg?.setBackgroundColor('#0a0a0a');await me();await market();}catch(e){$('categories').replaceChildren();empty($('categories'),clean(e.message));}})();

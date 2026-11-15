@@ -1,6 +1,6 @@
 :root {
   font:15px/1.55 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
-  background:#08090c;
+  background:#090909;
   color:#f2f4f8
 }
 * {
@@ -19,8 +19,8 @@ button {
   font-weight:580
 }
 button:hover {
-  background:#222c3c;
-  border-color:#465976
+  background:#2b2b2b;
+  border-color:#575757
 }
 .subtle {
   background:transparent;
@@ -37,7 +37,7 @@ button:hover {
   justify-content:space-between;
   gap:16px;
   padding:28px 0;
-  border-bottom:1px solid #1c2330;
+  border-bottom:1px solid #222222;
   margin-bottom:34px
 }
 .brand {
@@ -68,7 +68,7 @@ button:hover {
 }
 .eyebrow {
   font-size:10px;
-  color:#99b0cf;
+  color:#adadad;
   font-weight:650;
   letter-spacing:2px;
   text-transform:uppercase
@@ -113,7 +113,7 @@ h3 {
 input,textarea,select {
   width:auto;
   max-width:100%;
-  background:#0d1119;
+  background:#111111;
   border:1px solid var(--line);
   border-radius:14px;
   padding:13px 16px;
@@ -121,8 +121,8 @@ input,textarea,select {
   transition:border-color 160ms,box-shadow 160ms
 }
 input:focus,textarea:focus,select:focus {
-  border-color:#7493bd;
-  box-shadow:0 0 0 3px #34558024
+  border-color:#8f8f8f;
+  box-shadow:0 0 0 3px #51515124
 }
 textarea {
   resize:vertical;
@@ -136,7 +136,7 @@ textarea {
   padding:5px;
   border:1px solid var(--line);
   border-radius:19px;
-  background:#10151e
+  background:#151515
 }
 .segments button {
   background:transparent;
@@ -185,8 +185,8 @@ textarea {
   height:48px;
   flex-shrink:0;
   padding:7px;
-  background:#1b2331;
-  border:1px solid #303c50;
+  background:#222222;
+  border:1px solid #3b3b3b;
   border-radius:16px
 }
 .country-avatar img {
@@ -242,7 +242,7 @@ textarea {
   color:var(--muted);
   text-align:center;
   padding:42px 20px;
-  border:1px dashed #354154;
+  border:1px dashed #404040;
   border-radius:20px;
   grid-column:1/-1
 }
@@ -255,9 +255,9 @@ textarea {
   display:flex;
   gap:5px;
   padding:6px;
-  border:1px solid #344054;
+  border:1px solid #3f3f3f;
   border-radius:22px;
-  background:#10151ef5;
+  background:#151515f5;
   backdrop-filter:blur(16px);
   box-shadow:0 8px 26px #0006;
   width:min(450px,calc(100% - 28px))
@@ -303,7 +303,7 @@ textarea {
   font-size:26px;
   font-weight:750;
   background:var(--blue);
-  border:1px solid #3a5070
+  border:1px solid #4e4e4e
 }
 .profile-photo {
   width:100%;
@@ -312,7 +312,7 @@ textarea {
 }
 .balance-card {
   border-radius:25px;
-  border:1px solid #35465f;
+  border:1px solid #444444;
   background:var(--surface);
   padding:26px;
   display:flex;
@@ -374,7 +374,7 @@ textarea {
   align-items:center
 }
 .menu-list button:hover {
-  background:#1b2433
+  background:#232323
 }
 .menu-list button:last-child {
   border-bottom:0
@@ -408,12 +408,12 @@ textarea {
   align-self:flex-end;
   border-radius:19px 19px 5px 19px;
   background:var(--blue);
-  border-color:#344a69
+  border-color:#484848
 }
 .bubble small {
   display:block;
   font-size:10px;
-  color:#a1afc2;
+  color:#adadad;
   margin-top:8px
 }
 .composer {
@@ -423,7 +423,7 @@ textarea {
   position:sticky;
   bottom:102px;
   padding:12px 0;
-  background:#08090cf5
+  background:#090909f5
 }
 .composer textarea {
   flex:1;
@@ -462,7 +462,7 @@ textarea {
   white-space:pre-wrap;
   overflow-wrap:anywhere;
   font-variant-numeric:tabular-nums;
-  background:#0a0e16;
+  background:#0e0e0e;
   border:1px solid var(--line);
   padding:18px;
   border-radius:17px;
@@ -498,7 +498,7 @@ textarea {
   line-height:1;
   width:44px;
   padding:8px;
-  background:#1b2230;
+  background:#222222;
   border-radius:50%;
   font-weight:400
 }
@@ -513,11 +513,11 @@ textarea {
   min-width:60px
 }
 a {
-  color:#b3ccef
+  color:#c9c9c9
 }
 dialog {
   background:var(--surface);
-  border:1px solid #3b4a61;
+  border:1px solid #484848;
   color:var(--text);
   border-radius:26px;
   padding:26px;
@@ -542,10 +542,10 @@ dialog::backdrop {
   z-index:20;
   width:max-content;
   max-width:calc(100% - 28px);
-  background:#1d293b;
+  background:#282828;
   color:var(--text);
   padding:14px 20px;
-  border:1px solid #455b7b;
+  border:1px solid #595959;
   border-radius:16px;
   box-shadow:0 8px 24px #0006;
   font-size:13px
@@ -554,7 +554,7 @@ dialog::backdrop {
   height:240px;
   border:1px solid var(--line);
   border-radius:23px;
-  background:#11151e
+  background:#151515
 }
 .skeleton:before {
   content:'';
@@ -563,7 +563,7 @@ dialog::backdrop {
   height:44px;
   margin:22px;
   border-radius:12px;
-  background:#1c2432
+  background:#232323
 }
 .sr-only {
   position:absolute;
@@ -597,8 +597,8 @@ dialog::backdrop {
 }
 .payment-method.selected {
   background:var(--blue);
-  border-color:#91add5;
-  box-shadow:inset 0 0 0 1px #91add5
+  border-color:#aaaaaa;
+  box-shadow:inset 0 0 0 1px #aaaaaa
 }
 .payment-info,.topup-notice {
   font-size:12px;
@@ -613,7 +613,7 @@ dialog::backdrop {
   font-weight:750;
   letter-spacing:6px;
   padding:12px 0;
-  color:#d7e6fb;
+  color:#e4e4e4;
   font-variant-numeric:tabular-nums
 }
 .login-code-result:not(:empty) {
@@ -621,7 +621,7 @@ dialog::backdrop {
   margin-top:16px;
   border:1px solid var(--line);
   border-radius:18px;
-  background:#0a0e16
+  background:#0e0e0e
 }
 .loading:after {
   content:'';
@@ -656,7 +656,7 @@ dialog::backdrop {
 @media(hover:hover) {
   .category:hover {
     transform:translateY(-2px);
-    border-color:#516887
+    border-color:#656565
   }
 }
 @media(min-width:960px) {
@@ -816,7 +816,7 @@ dialog::backdrop {
     width:34px;
     height:4px;
     border-radius:4px;
-    background:#455167;
+    background:#505050;
     margin:-14px auto 20px
   }
   .keyboard-open dialog {

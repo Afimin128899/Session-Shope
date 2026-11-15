@@ -1,0 +1,126 @@
+/* Shared charcoal/crimson theme for the current storefront and admin workspace. */
+:root {
+  --bg: #0a0a0a;
+  --surface: #151515;
+  --panel: #151515;
+  --raised: #202020;
+  --line: #333;
+  --text: #f5f5f5;
+  --muted: #aaa;
+  --blue: #39191c;
+  --accent: #ff616b;
+  --danger: #ff9ca3;
+  --danger-bg: #31181b;
+  background: var(--bg);
+  color: var(--text);
+  accent-color: #f04452;
+}
+.premium-store, .premium-admin {
+  --accent: #ff616b;
+  --line: #333;
+  --raised: #202020;
+  background: #0a0a0a;
+  color: #f5f5f5;
+}
+.premium-store .top, .premium-admin header { border-color: #303030; }
+.premium-store .brand span {
+  color: #ff939b;
+  border-color: #663035;
+  background: #281416;
+}
+.premium-store .wallet { background: #191919; border-color: #3c3c3c; }
+.premium-store .market-hero {
+  background: radial-gradient(ellipse at 0 0, #85202a33, transparent 65%), #131313;
+  border-color: #493034;
+  box-shadow: inset 3px 0 #f04452;
+}
+.premium-store .hero-copy h1 span {
+  color: #ff6973;
+  background: linear-gradient(110deg, #ff9ba2, #f04452);
+  background-clip: text;
+  -webkit-background-clip: text;
+}
+.brand-dot { background: #ff5866; box-shadow: 0 0 0 5px #ef405015; }
+.premium-store .referral-spotlight {
+  background: linear-gradient(130deg, #271719, #181818);
+  border-color: #63343a;
+}
+.premium-store .referral-spotlight:after { background: none; }
+.spotlight-button, .premium-store .referral-spotlight .spotlight-button {
+  background: #351c20; border-color: #79424a; color: #ffd7db;
+}
+.spotlight-button:hover { background: #482329; border-color: #e25b66; }
+.premium-store .primary, .premium-admin .primary,
+.premium-store .category .category-action {
+  color: #fff; background: #b92333; border-color: #d44755;
+  box-shadow: inset 0 1px #ffffff14;
+}
+.premium-store .primary:hover:not(:disabled), .premium-admin .primary:hover:not(:disabled),
+.premium-store .category .category-action:hover:not(:disabled) {
+  background: #ce293b; border-color: #ff7b86;
+}
+.premium-store .primary:disabled, .premium-admin .primary:disabled { opacity: .45; }
+.premium-store .category {
+  background: linear-gradient(145deg, #202020, #151515);
+  border-color: #363636;
+  box-shadow: inset 0 1px #ffffff06;
+}
+.premium-store .category:hover, .premium-store .category:focus-within {
+  background: #21191a; border-color: #b74d57; box-shadow: 0 10px 28px #0004;
+}
+.premium-store .category:after { background: #ef5260; }
+.premium-store .country-avatar { background: #292929; border-color: #444; }
+.premium-store .category-footer { border-color: #ffffff0c; }
+.premium-store .category .stock { background: #222; border-color: #3b3b3b; color: #c8c8c8; }
+.premium-store .stock:before { background: #c8c8c8; }
+.premium-store .search input, .premium-store .catalog-options,
+.premium-store .catalog-refine, .premium-store .catalog-sort select,
+.premium-store .catalog-refine select { background: #161616; border-color: #363636; }
+.premium-store .market-search:focus-within, .premium-store .search input:focus {
+  border-color: #e55764; box-shadow: 0 0 0 3px #ef405018;
+}
+.premium-store .quick-picks button, .premium-store .condition-chip {
+  background: #1b1b1b; border-color: #3a3a3a; color: #bbb;
+}
+.premium-store .quick-picks button[aria-pressed=true],
+.premium-store .condition-chip, .view-toggle button[aria-pressed=true] {
+  background: #381c21; border-color: #95414c; color: #ffc2c9;
+}
+.premium-store .segments, .premium-store .view-toggle {
+  background: #161616; border-color: #363636;
+}
+.selection-track { background: #3e1c22; border-color: #8a3944; }
+.premium-store .segments .selected, .premium-store .bottom-nav .selected { color: #fff; }
+.premium-store .bottom-nav { background: #151515f5; border-color: #414141; box-shadow: 0 12px 40px #0009; }
+.premium-store .balance-card {
+  background: radial-gradient(ellipse at right top, #85202a40, transparent 75%), #191919;
+  border-color: #603339;
+}
+.premium-store .balance-decoration { color: #ed54600e; }
+.premium-store .avatar { background: #3b1d22; border-color: #88404a; }
+.premium-store .profile-invite { background: #211719; border-color: #61353b; }
+.premium-store dialog, .premium-admin dialog {
+  background: #151515; border-color: #494949; box-shadow: 0 24px 100px #000b;
+}
+.premium-store dialog::backdrop, .premium-admin dialog::backdrop { background: #000b; }
+.premium-store .purchase-summary, .premium-store .referral-progress,
+.premium-store .support-status, .premium-store .composer { background: #1b1b1b; border-color: #3b3b3b; }
+.premium-store .bubble.mine { background: #381d22; border-color: #70333d; }
+.premium-store .support-symbol { background: #3b1d22; color: #ff9ba5; border-color: #75404a; }
+.premium-store .catalog-empty, .premium-store .search-context { background: #191919; border-color: #484848; color: #c6c6c6; }
+.premium-admin nav { background: #111; border-color: #333; }
+.premium-admin nav button[aria-current=page] { background: #391c22; color: #ffc4cb; border-color: #823b45; }
+.premium-admin .kpi-card, .premium-admin .stock-row { background: #181818; border-color: #363636; }
+.premium-admin .overview-quick>button { background: #1b1b1b; border-color: #393939; }
+.premium-admin .admin-period { color: #ff616b; }
+.premium-store :is(button,a,input,select,textarea,summary):focus-visible,
+.premium-admin :is(button,a,input,select,textarea,summary):focus-visible {
+  outline: 2px solid #ff7a85; outline-offset: 4px;
+}
+input[type=checkbox], input[type=radio], progress { accent-color: #ed4b5b; }
+progress::-webkit-progress-value { background: #ed4b5b; }
+progress::-moz-progress-bar { background: #ed4b5b; }
+.premium-store .bottom-nav .selection-track,
+.premium-admin .selection-track { background: #3e1c22; border-color: #8a3944; }
+.premium-admin .tools input[type=checkbox]:checked,
+.premium-admin .tools input[type=checkbox]:indeterminate { background: #c63345; border-color: #f27785; }
