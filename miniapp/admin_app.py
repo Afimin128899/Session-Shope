@@ -14,7 +14,8 @@ def register(app, response):
         return web.Response(text=(STATIC / 'index.html').read_text(), content_type='text/html')
 
     async def identity(request):
-        return response({'user': request['user'], 'is_admin': True})
+        from config import ADMIN_IDS
+        return response({'user': request['user'], 'is_admin': request['user']['id'] in ADMIN_IDS, 'is_helper': request.get('is_helper',False)})
 
     app.add_routes([
         web.get('/admin-app', index),

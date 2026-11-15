@@ -228,7 +228,7 @@ async def reverse_deposit(cur, user_id, provider, reference):
     return amount
 
 
-async def register_user(user_id, referrer_id, username=None, *, welcome_bonus=True):
+async def register_user(user_id, referrer_id, username=None, *, welcome_bonus=True, ad_token=None):
     if type(user_id) is not int or not 0 < user_id <= 9223372036854775807:
         raise ValueError(tr('Некорректный пользователь.'))
     clean = username.lstrip('@').strip() if username else None
@@ -239,6 +239,10 @@ async def register_user(user_id, referrer_id, username=None, *, welcome_bonus=Tr
         new = cur.rowcount == 1
         if not new:
             return Decimal(0)
+        if ad_token is not None:
+            from database.advertising import attribute_new_user
+            await attribute_new_user(cur, user_id, ad_token)
+            referrer_id = None
         awarded = Decimal(0)
         if welcome_bonus:
             from database.welcome import credit_new_user

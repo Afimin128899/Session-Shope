@@ -123,7 +123,8 @@ def is_admin(user_id: int | str) -> bool:
 @admin_router.message(F.text.in_(["/admin", "Админ-панель", "🎮 Админ-панель", "🖥 Админ-панель", "Админ панель"]))
 async def admin_start(message: Message, state: FSMContext):
     if not is_admin(message.from_user.id):
-        return
+        from handlers.admin.advertising import helper_entry
+        return await helper_entry(message,state)
     await state.clear()
     await answer_screen(message, tr('{0} <b>Премиум админ-панель</b>\n\n{1} Добро пожаловать в центр управления.\n\n{2} Версия бота: <code>{3}</code>', f'{PANEL}', f'{CROWN}', f'{ROBOT}', f'{BOT_VERSION}'), reply_markup=get_admin_panel(), section='admin')
 
@@ -131,7 +132,14 @@ async def admin_start(message: Message, state: FSMContext):
 @admin_router.callback_query(F.data.in_(["admin_home", "admin_panel_button"]))
 async def admin_home(call: CallbackQuery, state: FSMContext):
     if not is_admin(call.from_user.id):
-        await answer_safe(call, tr('❌ Доступ запрещён.'), show_alert=True)
+        from database.advertising import is_helper
+        if await is_helper(call.from_user.id):
+            from handlers.admin.advertising import helper_keyboard
+            await state.clear()
+            await edit_message_safe(call,'Кабинет помощника',reply_markup=helper_keyboard())
+            await answer_safe(call)
+        else:
+            await answer_safe(call, tr('❌ Доступ запрещён.'), show_alert=True)
         return
     await state.clear()
     await edit_message_safe(call, tr('{0} <b>Премиум админ-панель</b>\n\n{1} Управляйте магазином, балансами и аккаунтами.\n\n{2} Версия бота: <code>{3}</code>', f'{PANEL}', f'{CROWN}', f'{ROBOT}', f'{BOT_VERSION}'), reply_markup=get_admin_panel())

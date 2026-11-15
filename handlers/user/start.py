@@ -17,6 +17,9 @@ start_router = Router()
 @start_router.message(CommandStart())
 async def cmd_start(message: Message, command, state=None):
     from utils.referral_link import pending
+    from utils.advertising_link import pending_ad
+    from database.advertising import token_from_payload
+    ad_token = token_from_payload(command.args) or await pending_ad(state)
     saved_referrer = await pending(state)
     if state is not None:
         await state.clear()
@@ -30,7 +33,11 @@ async def cmd_start(message: Message, command, state=None):
         except ValueError:
             referrer_id = None
     is_new = await is_new_user(message.from_user.id)
-    welcome_bonus = await create_user_with_referrer(message.from_user.id, referrer_id if is_new else None, message.from_user.username)
+    if ad_token:
+        from database.referrals import register_user
+        welcome_bonus = await register_user(message.from_user.id, None, message.from_user.username, ad_token=ad_token)
+    else:
+        welcome_bonus = await create_user_with_referrer(message.from_user.id, referrer_id if is_new else None, message.from_user.username)
     if welcome_bonus:
         await message.answer(tr('🎁 Приветственный бонус: {0} ₽ зачислены на баланс. Используйте их для покупок в магазине.', f'{welcome_bonus:.2f}'))
     await update_user_username(message.from_user.id, message.from_user.username)
