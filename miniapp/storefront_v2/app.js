@@ -36,16 +36,31 @@ function countryAvatar(country,name){
  image.onerror=()=>{image.onerror=null;image.src='/assets/flags/unknown.svg';};frame.append(image);return frame;
 }
 async function market(){
+ if(state.tab!=='market')return;
  const rev=++state.revision,target=$('categories'),selection=state.country,mode=state.mode;
  document.querySelector('.market-hero').hidden=Boolean(selection);$('back-countries').hidden=!selection;$('catalog-title').textContent=selection?'Категории':'Каталог';
  $('catalog-caption').textContent=selection?'Выберите статус аккаунта. Рядом указана цена из актуального наличия.':'Выберите страну, затем категорию аккаунта.';
+ const query=$('search').value.trim();$('clear-search').hidden=!query;
+ $('search-context').hidden=!query;$('search-context').textContent=query?'Поиск: «'+query+'»':'';
+ $('count').textContent='Обновляем…';
  target.setAttribute('aria-busy','true');target.replaceChildren();for(let i=0;i<4;i++)target.append(el('div',undefined,'skeleton'));
  try{
   const params=new URLSearchParams({mode,q:$('search').value.trim()});if(selection)params.set('country',selection);
   const data=await api('category-market?'+params);if(rev!==state.revision)return;
   target.removeAttribute('aria-busy');target.replaceChildren();$('count').textContent=quantity(data.items.length,selection?['категория','категории','категорий']:['страна','страны','стран']);
-  if(!data.items.length)return empty(target,'В этом разделе пока нет доступных товаров.');
-  for(const [index,item] of data.items.entries()){
+  if(!data.items.length){
+   const box=el('div',undefined,'catalog-empty');
+   box.append(SbandUI.icon('search'),el('h3',query?'Ничего не нашлось':'Здесь пока пусто'),el('p',query?'Попробуйте другое название или очистите поиск.':'Попробуйте другой вид аккаунтов или вернитесь позже.','muted'));
+   if(query)box.append(btn('Очистить поиск',clearSearch,'primary'));
+   else box.append(btn('Все страны',()=>{state.mode='auto';state.country=null;document.querySelectorAll('[data-mode]').forEach(b=>{b.classList.toggle('selected',b.dataset.mode==='auto');b.setAttribute('aria-pressed',String(b.dataset.mode==='auto'));});return market();},'primary'));
+   target.append(box);return;
+  }
+  const items=[...data.items];
+  const sort=$('catalog-sort').value;
+  if(sort==='price')items.sort((a,b)=>Number(a.min_price)-Number(b.min_price));
+  else if(sort==='stock')items.sort((a,b)=>Number(b.count)-Number(a.count));
+  else if(sort==='name')items.sort((a,b)=>a.name.localeCompare(b.name,'ru'));
+  for(const [index,item] of items.entries()){
    const c=el('article',undefined,'category');c.style.setProperty('--delay',Math.min(index,5)*20+'ms');
    const head=el('div',undefined,'category-head');head.append(countryAvatar(item.country,item.name),el('span',quantity(item.count,['товар','товара','товаров']),'stock'));
    const price=el('div',undefined,'category-price');price.append(el('small','от '),document.createTextNode(money(item.min_price)));
@@ -53,8 +68,12 @@ async function market(){
    const foot=el('div',undefined,'category-footer'),actionButton=btn(selection?'Купить':'Категории',action,'category-action');actionButton.append(SbandUI.icon('arrowUp'));foot.append(price,actionButton);
    c.append(head,el('small',selection?'ПОДХОДЯЩИЙ ВАРИАНТ':'АККАУНТЫ ПО СТРАНАМ','category-overline'),el('h3',item.name),foot);target.append(c);
   }
- }catch(e){if(rev===state.revision){target.removeAttribute('aria-busy');target.replaceChildren();SbandUI.errorBox(target,clean(e.message),market);}}
+ }catch(e){if(rev===state.revision){$('count').textContent='Не удалось обновить';target.removeAttribute('aria-busy');target.replaceChildren();SbandUI.errorBox(target,clean(e.message),market);}}
 }
+function clearSearch(){clearTimeout(state.searchTimer);$('search').value='';$('search').focus();return market();}
+$('clear-search').onclick=clearSearch;
+$('catalog-sort').onchange=()=>market();
+$('refresh-catalog').onclick=()=>SbandUI.run($('refresh-catalog'),market).catch(e=>toast(e.message));
 $('back-countries').onclick=()=>{state.country=null;$('search').value='';market();};
 async function purchase(item,mode=state.mode){const quote=await api('category-quote',{mode,nation:item.nation});const body=open('Покупка категории');body.append(el('h3',quote.name),el('p','Один свободный аккаунт будет подобран автоматически.','muted'));const summary=el('div',undefined,'purchase-summary');summary.append(el('small','К оплате с баланса'),el('strong',money(quote.price),'category-price'));const facts=el('div',undefined,'purchase-facts');row(facts,'Выдача','Автоматически после оплаты');row(facts,'Доступ к данным','В разделе «Мои покупки»');summary.append(facts);body.append(summary);if(quote.warranty_hours)body.append(el('p','Гарантия: '+quote.warranty_hours+' ч.','muted'));body.append(btn('Купить за '+money(quote.price),async()=>{const result=await api('category-buy',{token:quote.token});await me();await order(result.id);toast('Покупка оформлена');market();},'primary full'));}
 async function order(id){
@@ -175,10 +194,11 @@ async function referrals(){const data=await api('referrals');const body=open('Р
 function information(){const body=open('Информация');body.append(el('p','По вопросам покупки обратитесь в раздел «Сообщения».','muted'));for(const [title,url] of [['Пользовательское соглашение','https://telegra.ph/POLZOVATELSKOE-SOGLASHENIE-SBAND-ACCS-11-05'],['Политика конфиденциальности','https://telegra.ph/POLITIKA-KONFIDENCIALNOSTI-SBAND-ACCS-11-05-2']]){const a=el('a',title);a.href=url;a.target='_blank';a.rel='noopener noreferrer';const p=el('p');p.append(a);body.append(p);}}
 const actions={orders,transactions,promo,rewards,referrals,information};
 document.querySelectorAll('[data-action]').forEach(b=>b.addEventListener('click',()=>SbandUI.run(b,()=>actions[b.dataset.action]()).catch(e=>toast(e.message))));
-async function navigate(tab){state.tab=tab;document.querySelectorAll('.page').forEach(p=>p.hidden=p.id!==tab);document.querySelectorAll('[data-tab]').forEach(b=>{b.classList.toggle('selected',b.dataset.tab===tab);if(b.dataset.tab===tab)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current');});SbandUI.enter($(tab));try{if(tab==='market')await market();else if(tab==='profile')await profile();else await chat();}catch(e){toast(e.message);}}
+async function navigate(tab){clearTimeout(state.searchTimer);state.revision++;state.tab=tab;document.querySelectorAll('.page').forEach(p=>p.hidden=p.id!==tab);document.querySelectorAll('[data-tab]').forEach(b=>{b.classList.toggle('selected',b.dataset.tab===tab);if(b.dataset.tab===tab)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current');});SbandUI.enter($(tab));try{if(tab==='market')await market();else if(tab==='profile')await profile();else await chat();}catch(e){toast(e.message);}}
 document.querySelectorAll('[data-tab]').forEach(b=>b.addEventListener('click',()=>navigate(b.dataset.tab)));
-document.querySelectorAll('[data-mode]').forEach(b=>b.addEventListener('click',()=>{state.mode=b.dataset.mode;state.country=null;document.querySelectorAll('[data-mode]').forEach(other=>other.classList.toggle('selected',other===b));market();}));
-$('search').addEventListener('input',()=>{clearTimeout(state.searchTimer);state.searchTimer=setTimeout(market,220);});
+document.querySelectorAll('[data-mode]').forEach(b=>b.addEventListener('click',()=>{clearTimeout(state.searchTimer);state.mode=b.dataset.mode;state.country=null;document.querySelectorAll('[data-mode]').forEach(other=>{other.classList.toggle('selected',other===b);other.setAttribute('aria-pressed',String(other===b));});market();}));
+$('search').addEventListener('input',()=>{state.revision++;$('clear-search').hidden=!$('search').value;clearTimeout(state.searchTimer);state.searchTimer=setTimeout(market,220);});
+document.addEventListener('keydown',event=>{if(event.key!=='/'||event.ctrlKey||event.metaKey||event.altKey||event.isComposing||state.tab!=='market'||$('modal').open||event.target.closest('input,textarea,select,[contenteditable]'))return;event.preventDefault();$('search').focus();});
 $('close-modal').onclick=()=>SbandUI.close($('modal'));$('modal').addEventListener('cancel',event=>{event.preventDefault();SbandUI.close($('modal'));});
 for(const id of ['wallet','topup'])$(id).onclick=()=>SbandUI.run($(id),topup).catch(e=>toast(e.message));
 $('admin-link').onclick=()=>location.assign('/admin-app');

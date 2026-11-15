@@ -21,6 +21,9 @@ fs.mkdirSync(artifacts, { recursive: true });
         else if(p==='/api/category-market'){
           if(failCatalog){failCatalog=false;return route.fulfill({status:503,json:{error:'Каталог временно недоступен.'}});}
           data={items:url.searchParams.has('country')?[{country:'us',nation:'us~clear',name:'США Без спамблока',count:12,min_price:74},{country:'us',nation:'us~permanent',name:'США Вечный СБ',count:5,min_price:59},{country:'us',nation:'us~unverified',name:'США',count:8,min_price:50}]:[{country:'us',name:'США',count:25,min_price:50},{country:'ca',name:'Канада',count:8,min_price:99},{country:'jp',name:'Япония',count:5,min_price:199},{country:'kz',name:'Казахстан',count:4,min_price:229}]};
+          const query=url.searchParams.get('q')||'';
+          if(query==='slow')await new Promise(resolve=>setTimeout(resolve,500));
+          if(query)data.items=data.items.filter(item=>item.name.toLowerCase().includes(query.toLowerCase()));
         }else if(p==='/api/category-quote')data={token:'fixture',name:'США Без спамблока',price:74,warranty_hours:24};
         else if(p==='/api/category-buy'){buyCount++;await new Promise(r=>setTimeout(r,180));data={id:11};}
         else if(p==='/api/orders/11')data={id:11,status:'issued',status_label:'Выдан',number:'+15551112222',password:'fixture-password'};
@@ -60,10 +63,33 @@ fs.mkdirSync(artifacts, { recursive: true });
     const close=async()=>{await page.getByRole('button',{name:'Закрыть',exact:true}).click();await page.waitForFunction(()=>!document.querySelector('#modal').open);};
     await page.goto('http://sband.test/');await page.locator('.category').first().waitFor();
     await page.waitForFunction(()=>[...document.querySelectorAll('.country-avatar img')].every(i=>i.complete));
+    await page.locator('#catalog-sort').selectOption('name');
+    await page.waitForFunction(()=>document.querySelector('.category h3')?.textContent==='Казахстан');
+    await page.locator('#catalog-sort').selectOption('stock');
+    await page.waitForFunction(()=>document.querySelector('.category h3')?.textContent==='США');
+    await page.locator('#catalog-sort').selectOption('default');
+    await page.locator('#refresh-catalog').focus();await page.keyboard.press('/');
+    assert(await page.locator('#search').evaluate(e=>document.activeElement===e));
+    await page.locator('#search').fill('<img src=x onerror=alert(1)>');
+    await page.locator('.catalog-empty').waitFor();
+    assert.equal(await page.locator('#search-context img').count(),0);
+    assert((await page.locator('#search-context').innerText()).includes('<img'));
+    await page.locator('.catalog-empty').getByRole('button',{name:'Очистить поиск',exact:true}).click();
+    await page.waitForFunction(()=>document.querySelectorAll('.category').length===4);
+    await page.locator('#search').fill('slow');
+    await page.waitForRequest(r=>r.url().includes('q=slow'));
+    await page.locator('#search').fill('Канада');
+    await page.waitForFunction(()=>document.querySelectorAll('.category').length===1&&document.querySelector('.category h3').textContent==='Канада');
+    await page.waitForTimeout(550);
+    assert.equal(await page.locator('.category').count(),1,'Stale response replaced the latest search');
+    await page.locator('#clear-search').click();
+    await page.waitForFunction(()=>document.querySelectorAll('.category').length===4);
+    await page.locator('[data-mode=auto]').click();
+    assert.equal(await page.locator('[data-mode=auto]').getAttribute('aria-pressed'),'true');
     await screen('market');assert.equal(await page.locator('.bottom-nav').evaluate(n=>getComputedStyle(n).position),'fixed','Navigation must stay fixed');
     await page.getByRole('button',{name:'Бесплатный аккаунт',exact:true}).click();
     await page.getByText('7 / 10',{exact:true}).waitFor();await screen('free-account');await page.getByRole('button',{name:'Скопировать ссылку',exact:true}).click();assert.equal(await page.evaluate(()=>window.fixtureClipboard),'https://t.me/SbandACCSbot?start=ref_42');assert.equal(await page.locator('.referral-progress progress').getAttribute('value'),'7');
-    await page.getByRole('button',{name:'Написать в поддержку',exact:true}).click();await page.getByRole('textbox',{name:'Сообщение поддержке'}).waitFor();assert((await page.getByRole('textbox',{name:'Сообщение поддержке'}).inputValue()).includes('10 рефералов'));assert.equal(chats.length,0,'Support message sent without submit');
+    await page.getByRole('button',{name:'Написать в поддержку',exact:true}).click();await page.waitForFunction(()=>document.querySelector('#chat-body').value.includes('10 рефералов'));assert.equal(chats.length,0,'Support message sent without submit');
     await page.getByRole('button',{name:'Маркет',exact:true}).click();await page.locator('.category').first().waitFor();
     const navBefore=await page.locator('.bottom-nav .selection-track').getAttribute('style');
     if(width===390){await page.locator('[data-mode=auto]').hover();await page.mouse.down();assert(await page.evaluate(()=>document.getAnimations().some(a=>a.playState==='running')),'Press animation missing');await page.mouse.up();await page.waitForFunction(()=>document.querySelectorAll('.category').length===4);}
