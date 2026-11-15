@@ -252,7 +252,17 @@ document.querySelectorAll('[data-page]').forEach(b => b.addEventListener('click'
     tg?.ready();tg?.expand();
     if (!tg?.initData) throw Error('Откройте администраторское приложение из Telegram.');
     const identity=await api('identity');
-    if (!identity.is_admin) throw Error('Доступ только администратору.');
+    if (!identity.is_admin && !identity.is_helper) throw Error('Доступ только сотруднику.');
+    window.SBAND_HELPER=Boolean(identity.is_helper);
+    document.querySelector('[data-page=helpers]').hidden=!identity.is_admin;
+    document.querySelector('[data-page=advertising]').hidden=!identity.is_helper;
+    if(identity.is_helper){
+      page='advertising';
+      document.querySelectorAll('nav [data-page]').forEach(b=>{b.hidden=b.dataset.page!=='advertising';b.removeAttribute('aria-current');});
+      document.querySelector('[data-page=advertising]').setAttribute('aria-current','page');
+      document.querySelectorAll('.nav-section').forEach(n=>n.hidden=true);
+      document.querySelector('header h1').textContent='Кабинет помощника';
+    }
     $('identity').textContent=identity.user.username ? '@' + identity.user.username : String(identity.user.id);
     $('access').hidden=true;$('app').hidden=false;await load();
   } catch(error) {$('access').textContent=error.message;}

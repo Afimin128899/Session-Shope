@@ -154,6 +154,8 @@ async def init_db ():
                     await cur.execute('INSERT IGNORE INTO referral_settings (id) VALUES (1)')
                     from database.referrals import init_schema as init_referral_schema
                     await init_referral_schema(cur, DB_CONFIG['db'])
+                    from database.advertising import init_schema as init_advertising_schema
+                    await init_advertising_schema(cur, DB_CONFIG['db'])
 
                     await cur.execute('''
                         CREATE TABLE IF NOT EXISTS button_labels (

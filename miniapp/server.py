@@ -47,8 +47,11 @@ def response(value, status=200):
 
 @web.middleware
 async def security(request, handler):
+    from database.advertising import AccessDenied
     try:
         result = await handler(request)
+    except AccessDenied as exc:
+        result = response({'error': str(exc), 'code': 'forbidden'}, 403)
     except AuthError as exc:
         result = response({'error': str(exc), 'code': 'unauthorized'}, 401)
     except storage.CheckoutError as exc:
@@ -104,9 +107,17 @@ async def authenticate(request, handler):
         STORE.exit(user['id'])
     if STORE.active(user['id']) and request.method not in {'GET', 'HEAD'}:
         return response({'error': tr('Сначала завершите тестовый режим. Рабочие операции отключены.'), 'code': 'test_mode'}, 409)
+    from database.advertising import helper_profile
+    request['is_helper'] = helper_profile(profile,user['id'])
     if request.path.startswith('/api/admin/') or request.path == '/api/admin':
         if user['id'] not in config.ADMIN_IDS:
-            return response({'error': tr('Доступ только администратору.'), 'code': 'forbidden'}, 403)
+            import re
+            allowed = (request.path == '/api/admin/identity' and request.method == 'GET') or (request.path == '/api/admin/advertising' and request.method in {'GET','POST'}) or (re.fullmatch(r'/api/admin/advertising/[0-9]+/users',request.path) and request.method=='GET')
+            if not request['is_helper'] or not allowed:
+                return response({'error': tr('Доступ только администратору.'), 'code': 'forbidden'}, 403)
+            if limited(request.app,user['id']):
+                return response({'error': 'Подождите перед повтором.', 'code': 'rate_limited'},429)
+            return await handler(request)
     if limited(request.app, user['id'], request.method == 'POST' and (request.path in {'/api/purchase', '/api/cart/checkout', '/api/invoices', '/api/promo/preview', '/api/promo/redeem', '/api/reviews', '/api/rewards/claim', '/api/support'} or request.path.endswith('/warranty-claim') or (request.path.startswith('/api/support/') and request.method=='POST'))):
         return response({'error': tr('Слишком много запросов. Подождите минуту.'), 'code': 'rate_limited'}, 429)
     settings = await storage.access_settings()
@@ -145,7 +156,7 @@ async def me(request):
     return response({'user': request['user'], 'balance': str(user['balance']), 'balance_usdt': str(user['balance_usdt']),
                      'language':language(user.get('language')), 'shop_status':request['shop_status'],
                      'welcome_bonus': str(await welcome.received(request['user']['id'])),
-                     'bot_username': request.app[BOT_USERNAME], 'test_mode_active': STORE.active(request['user']['id']), 'version': BOT_VERSION, 'is_admin': request['user']['id'] in config.ADMIN_IDS})
+                     'bot_username': request.app[BOT_USERNAME], 'test_mode_active': STORE.active(request['user']['id']), 'version': BOT_VERSION, 'is_helper':bool(user.get('is_helper') == 1 and request['user']['id'] not in config.ADMIN_IDS), 'is_admin': request['user']['id'] in config.ADMIN_IDS})
 
 
 async def referral_info(request):
@@ -575,6 +586,8 @@ def create_app(*, token=None, bot=None, bot_username='', customer_enabled=None, 
     register_admin_app(app, response)
     from miniapp.storefront_api import register as register_storefront
     register_storefront(app, response)
+    from miniapp.advertising_api import register as register_advertising
+    register_advertising(app,response)
     return app
 
 

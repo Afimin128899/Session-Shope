@@ -25,7 +25,7 @@ async function me(){
  state.me=await api('me');const user=state.me.user;
  $('wallet').replaceChildren(SbandUI.icon('wallet'),document.createTextNode(money(state.me.balance)));$('balance').textContent=money(state.me.balance);
  $('username').textContent=user.username?'@'+user.username:user.first_name;
- $('user-id').textContent='ID: '+user.id;$('admin-link').hidden=!state.me.is_admin;
+ $('user-id').textContent='ID: '+user.id;$('admin-link').hidden=!(state.me.is_admin||state.me.is_helper);
  if(state.avatarOwner!==user.id){
   state.avatarOwner=user.id;$('avatar').textContent=(user.first_name||'S').slice(0,1).toUpperCase();
   async function loadPhoto(){

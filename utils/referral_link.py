@@ -10,6 +10,10 @@ async def pending(state):
 
 
 async def remember(message, state):
+    from utils.advertising_link import remember_ad, pending_ad
+    await remember_ad(message,state)
+    if await pending_ad(state):
+        return
     parts = (message.text or '').strip().split(maxsplit=1)
     if len(parts) != 2 or parts[0].split('@')[0] != '/start' or not parts[1].startswith('ref_'):
         return
@@ -21,6 +25,13 @@ async def remember(message, state):
 
 
 async def complete(user, state):
+    from utils.advertising_link import pending_ad
+    token = await pending_ad(state)
+    if token:
+        from database.referrals import register_user
+        await register_user(user.id, None, getattr(user, 'username', None), ad_token=token)
+        await state.update_data(pending_ad=None,pending_referrer=None)
+        return
     referrer = await pending(state)
     if referrer is not None:
         from database.db import create_user_with_referrer
