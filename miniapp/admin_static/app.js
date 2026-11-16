@@ -105,6 +105,11 @@ function promoEditor() {
     values => api('promos','POST',{...values,percent:Number(values.percent),limit:Number(values.limit)}));
 }
 function sessionJobEditor(action) {
+  if(action==='diagnose') {
+    return api('session-jobs','POST',{action}).then(()=>{
+      $('notice').textContent='Диагностика запущена. JSON-отчёт придёт в личный чат с ботом; вход в Telegram не проверяется.';
+    });
+  }
   const reauthorize=action==='reauthorize';
   form(reauthorize?'Новая авторизация всех непроданных аккаунтов':'Отправить все сессии и JSON в личный чат',[
     ['confirm',reauthorize?'Введите ПЕРЕСОЗДАТЬ. Сессия заменится только после успешного входа.':'Введите ОТПРАВИТЬ. ZIP содержит данные входа.',''],
@@ -195,7 +200,7 @@ async function load() {
     if (selected === 'stock') {
       const toolbar=node('div',undefined,'stock-toolbar');toolbar.append(button('Загрузить аккаунты',()=>{page='imports';document.querySelectorAll('[data-page]').forEach(b=>b.dataset.page==='imports'?b.setAttribute('aria-current','page'):b.removeAttribute('aria-current'));return load();},true));
       const details=node('details'),summary=node('summary','Операции с сессиями'),actions=node('div',undefined,'detail-actions');
-      actions.append(button('Проверить на спамблок все',()=>queueSpam()),button('Все сессии и JSON в чат',()=>sessionJobEditor('export')),button('Пересоздать все сессии',()=>sessionJobEditor('reauthorize')));details.append(summary,actions);toolbar.append(details);content.append(toolbar);refreshSelection=stockSelectionTools(result.items||[]);
+      actions.append(button('Диагностика сессий',()=>sessionJobEditor('diagnose')),button('Проверить на спамблок все',()=>queueSpam()),button('Все сессии и JSON в чат',()=>sessionJobEditor('export')),button('Пересоздать все сессии',()=>sessionJobEditor('reauthorize')));details.append(summary,actions);toolbar.append(details);content.append(toolbar);refreshSelection=stockSelectionTools(result.items||[]);
     }
     if (selected === 'categories') content.append(button('Добавить категорию', () => categoryEditor(), true));
     if (selected === 'promos') content.append(button('Создать промокод',promoEditor,true));
@@ -282,3 +287,4 @@ async function queueSpam(id){
  const result=await api(id?'stock/'+id+'/spam-check':'spam-checks','POST',{});
  await load();$('notice').textContent=result.queued?'Поставлено в очередь: '+result.queued+'. Результат обновится автоматически.':'Повтор пока недоступен: проверка уже идёт, не прошло 5 минут или действует ограничение Telegram.';
 }
+

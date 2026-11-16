@@ -126,8 +126,8 @@ def register(app, response, page_number):
         from services.session_inventory_jobs import run
         body=await read_body(request)
         action=body.get('action')
-        if action not in {'export','reauthorize'}:
-            raise ValueError(tr('Выберите выгрузку или новую авторизацию.'))
+        if action not in {'export','reauthorize','diagnose'}:
+            raise ValueError(tr('Выберите диагностику, выгрузку или новую авторизацию.'))
         if app[SESSION_JOBS]:
             return response({'error':tr('Дождитесь завершения текущей операции с сессиями.')},409)
         bot=request.app[BOT]
@@ -137,17 +137,21 @@ def register(app, response, page_number):
         # Do not begin changes if the administrator has not opened the bot's chat.
         app[SESSION_JOBS].add(admin)
         try:
-            await asyncio.wait_for(bot.send_message(admin,'Начинаю выгрузку сессий.' if action=='export' else 'Начинаю новую авторизацию непроданных аккаунтов. Результаты придут в ZIP.'),12)
+            await asyncio.wait_for(bot.send_message(admin,'Начинаю локальную диагностику сессий. JSON-отчёт придёт в этот чат.' if action=='diagnose' else 'Начинаю выгрузку сессий.' if action=='export' else 'Начинаю новую авторизацию непроданных аккаунтов. Результаты придут в ZIP.'),12)
         except BaseException:
             app[SESSION_JOBS].discard(admin)
             raise ValueError(tr('Не удалось написать вам. Откройте личный чат с ботом и нажмите /start.')) from None
         async def perform():
             try:
-                await run(bot,admin,action)
+                if action=='diagnose':
+                    from services.session_diagnostics import send_report
+                    await send_report(bot,admin)
+                else:
+                    await run(bot,admin,action)
             except asyncio.CancelledError:
                 raise
             except Exception:
-                try: await bot.send_message(admin,'Операция прервана. Уже отправленные ZIP сохраните. Можно повторить операцию; подробности подключения проверьте на сервере.')
+                try: await bot.send_message(admin,'Операция прервана. Уже отправленные файлы сохраните. Можно повторить операцию; подробности подключения проверьте на сервере.')
                 except Exception: pass
             finally:
                 app[SESSION_JOBS].discard(admin)
@@ -394,3 +398,4 @@ def register(app, response, page_number):
             task.cancel()
         await asyncio.gather(housekeeping, *tasks, return_exceptions=True)
     app.cleanup_ctx.append(lifecycle)
+
