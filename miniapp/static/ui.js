@@ -21,6 +21,7 @@ window.SbandUI=(()=>{
  function viewport(){const view=window.visualViewport;const raised=view&&window.innerHeight-view.height>140&&document.activeElement?.matches('input,textarea,select');document.documentElement.classList.toggle('keyboard-open',Boolean(raised));}
  window.visualViewport?.addEventListener('resize',viewport);document.addEventListener('focusin',viewport);document.addEventListener('focusout',()=>setTimeout(viewport,100));
  document.querySelectorAll('.bottom-nav,.segments,nav[aria-label="Разделы администратора"]').forEach(indicator);
- async function request(url,options){let response;try{response=await fetch(url,options);}catch(_){throw Error('Нет соединения. Проверьте интернет и повторите.');}let data;try{data=await response.json();}catch(_){throw Error('Не удалось прочитать ответ. Повторите запрос позже.');}return {response,data};}
- return {run,enter,open,close,indicator,errorBox,fieldError,icon,request};
+ function scopeHeaders(){const id=new URLSearchParams(location.search).get('partner');return /^[1-9][0-9]{0,15}$/.test(id||'')?{'X-Partner-ID':id}:{};}
+ async function request(url,options){options={...options,headers:{...options?.headers,...scopeHeaders()}};let response;try{response=await fetch(url,options);}catch(_){throw Error('Нет соединения. Проверьте интернет и повторите.');}let data;try{data=await response.json();}catch(_){throw Error('Не удалось прочитать ответ. Повторите запрос позже.');}return {response,data};}
+ return {run,enter,open,close,indicator,errorBox,fieldError,icon,request,scopeHeaders};
 })();

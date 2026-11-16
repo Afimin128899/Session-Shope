@@ -9,7 +9,9 @@
     return;
   }
   try {
-    const response = await fetch('/api/storefront-preview', {headers:{Authorization:'tma ' + tg.initData},cache:'no-store'});
+    const partner=new URLSearchParams(location.search).get('partner');
+    const scope=/^[1-9][0-9]{0,15}$/.test(partner||'')?{'X-Partner-ID':partner}:{};
+    const response = await fetch('/api/storefront-preview', {headers:{...scope,Authorization:'tma ' + tg.initData},cache:'no-store'});
     if (!response.ok) {
       status.textContent = response.status === 403 ? 'Доступ к Mini App есть только у администраторов.' : 'Не удалось проверить доступ. Закройте Mini App и откройте снова.';
       return;

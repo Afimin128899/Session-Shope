@@ -15,3 +15,6 @@ venv/
 
 # Private durable Telegram Stars receipts
 data/star-receipts/
+
+# Per-bot branding uploads
+data/partner-assets/

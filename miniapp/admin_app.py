@@ -15,6 +15,7 @@ def register(app, response):
 
     async def identity(request):
         from config import ADMIN_IDS
+        if request.get('is_partner_owner'):return response({'user':request['user'],'is_admin':False,'is_helper':False,'is_partner_owner':True})
         return response({'user': request['user'], 'is_admin': request['user']['id'] in ADMIN_IDS, 'is_helper': request.get('is_helper',False)})
 
     app.add_routes([

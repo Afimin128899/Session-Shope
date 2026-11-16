@@ -40,6 +40,8 @@ async def status(user_id):
 
 async def claim(user_id):
     async with _transaction() as cur:
+        from database.partners import active
+        await active(cur)
         await cur.execute('SELECT balance FROM users WHERE id=%s FOR UPDATE', (user_id,))
         user = await cur.fetchone()
         if not user:
@@ -51,6 +53,7 @@ async def claim(user_id):
         if Decimal(str(user['balance'])) + amount > Decimal('9999999999.99999999'):
             raise ValueError(tr('Достигнут лимит баланса.'))
         await cur.execute('INSERT INTO reward_claims(user_id,amount,created_at) VALUES(%s,%s,UTC_TIMESTAMP())', (user_id, amount))
-        await cur.execute('UPDATE users SET balance=balance+%s WHERE id=%s', (amount, user_id))
+        from database.partners import bonus_credit
+        await bonus_credit(cur,user_id,amount)
         await _record(cur, 0, 'wheel_reward', 'user', user_id, {'amount': str(amount)})
         return {'amount': str(amount), 'balance': str(Decimal(str(user['balance'])) + amount)}

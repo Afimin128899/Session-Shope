@@ -61,7 +61,8 @@ def register(app,response):
         cache=app[QUOTES]
         for old,value in list(cache.items()):
             if value['expires']<now: cache.pop(old,None)
-        cache[key]={'user':request['user']['id'],'item':item,'expires':now+300}
+        from utils.partner_context import bot_id
+        cache[key]={'wallet_bot_id':bot_id(),'user':request['user']['id'],'item':item,'expires':now+300}
         while len(cache)>4096: cache.popitem(last=False)
         return response({'token':key,'name':category_name(nation),'price':str(item['price']),'warranty_hours':item['warranty_hours']})
 
@@ -123,7 +124,8 @@ def register(app,response):
         async with single_action(user,'purchase') as acquired:
             if not acquired: return response({'error':'Покупка уже обрабатывается.'},409)
             saved=app[QUOTES].get(key)
-            if not saved or saved['user']!=user or saved['expires']<time.time():
+            from utils.partner_context import bot_id
+            if not saved or saved['user']!=user or saved.get('wallet_bot_id',0)!=bot_id() or saved['expires']<time.time():
                 return response({'error':'Предложение истекло. Выберите категорию заново.'},409)
             item=saved['item']
             result=await storage.checkout(user,item['id'],Decimal(str(item['price'])),warranty_hours=item['warranty_hours'],spam_status=item['spam_status'])

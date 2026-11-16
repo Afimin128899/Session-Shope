@@ -100,6 +100,17 @@ async def authenticate(request, handler):
         if limited(request.app, user['id'], False):
             return response({'error': tr('Подождите перед повтором.'), 'code': 'rate_limited'}, 429)
         return await handler(request)
+    from database import partners
+    from utils.partner_context import CURRENT
+    p=CURRENT.get()
+    if p and (request.path.startswith('/api/admin/') or request.path=='/api/admin'):
+        allowed=request.path=='/api/admin/identity' and request.method=='GET' or request.path in {'/api/admin/partner-bans','/api/admin/partner-content'} and request.method in {'GET','POST'}
+        if user['id']!=p['owner_id'] or not allowed:return response({'error':'Нет доступа.','code':'forbidden'},403)
+        request['is_partner_owner']=True
+        if limited(request.app,user['id']):return response({'error':'Подождите.','code':'rate_limited'},429)
+        return await handler(request)
+    if await partners.banned(user['id']):return response({'error':'Доступ к магазину заблокирован.','code':'banned'},403)
+    if p and request.path=='/api/invoices' and request.method=='POST':return response({'error':'Пополните баланс через основной бот.','code':'main_topup'},409)
     profile = await db.get_user(user['id'])
     LANGUAGE.set(language(profile.get('language') if profile else 'ru'))
     request['language'] = LANGUAGE.get()
@@ -152,11 +163,13 @@ def order_id(request):
 
 
 async def me(request):
+    from utils.partner_context import CURRENT
+    p=CURRENT.get()
     user = await db.get_user(request['user']['id'])
     return response({'user': request['user'], 'balance': str(user['balance']), 'balance_usdt': str(user['balance_usdt']),
                      'language':language(user.get('language')), 'shop_status':request['shop_status'],
                      'welcome_bonus': str(await welcome.received(request['user']['id'])),
-                     'bot_username': request.app[BOT_USERNAME], 'test_mode_active': STORE.active(request['user']['id']), 'version': BOT_VERSION, 'is_helper':bool(user.get('is_helper') == 1 and request['user']['id'] not in config.ADMIN_IDS), 'is_admin': request['user']['id'] in config.ADMIN_IDS})
+                     'cash_balance':str(user.get('cash_balance',user['balance'])), 'bonus_balance':str(user.get('bonus_balance',0)), 'partner_id':p['bot_id'] if p else 0, 'is_partner_owner':bool(p and p['owner_id']==request['user']['id']), 'bot_username': request.app[BOT_USERNAME], 'test_mode_active': STORE.active(request['user']['id']), 'version': BOT_VERSION, 'is_helper':bool(not p and user.get('is_helper') == 1 and request['user']['id'] not in config.ADMIN_IDS), 'is_admin':not p and request['user']['id'] in config.ADMIN_IDS})
 
 
 async def referral_info(request):
@@ -506,6 +519,8 @@ async def wallet_transactions(request):
 
 async def payment_history(request):
     import aiomysql
+    from utils.partner_context import bot_id
+    if bot_id():return response({'items':[],'has_more':False,'note':'Внешние платежи находятся в основном боте. Переводы в этот магазин показаны в истории кошелька.'})
     before = request.query.get('before', '0')
     if not before.isascii() or not before.isdigit() or len(before) > 10:
         raise ValueError
@@ -544,7 +559,8 @@ async def index(request):
 def create_app(*, token=None, bot=None, bot_username='', customer_enabled=None, admin_enabled=None, admin_only=None, enable_cart=False):
     from utils.app_access import CUSTOMER_MINIAPP_ENABLED, ADMIN_MINIAPP_ENABLED, CUSTOMER_MINIAPP_ADMIN_ONLY
     from miniapp.access import app_access, retired_support, CUSTOMER_ENABLED, ADMIN_ENABLED, ADMIN_ONLY
-    app = web.Application(middlewares=[locale_context, security, app_access, authenticate, retired_support], client_max_size=8192)
+    from miniapp.partner_scope import partner_scope
+    app = web.Application(middlewares=[locale_context, security, partner_scope, app_access, authenticate, retired_support], client_max_size=8192)
     app[CUSTOMER_ENABLED] = CUSTOMER_MINIAPP_ENABLED if customer_enabled is None else customer_enabled
     app[ADMIN_ENABLED] = ADMIN_MINIAPP_ENABLED if admin_enabled is None else admin_enabled
     app[ADMIN_ONLY] = CUSTOMER_MINIAPP_ADMIN_ONLY if admin_only is None else admin_only
@@ -588,6 +604,8 @@ def create_app(*, token=None, bot=None, bot_username='', customer_enabled=None, 
     register_storefront(app, response)
     from miniapp.advertising_api import register as register_advertising
     register_advertising(app,response)
+    from miniapp.partners_api import register as register_partners
+    register_partners(app,response)
     return app
 
 

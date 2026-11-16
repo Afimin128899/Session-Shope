@@ -32,6 +32,14 @@ async def refund_order(admin_id, purchase_id, reason):
         referrer = order['referrer_id']
         if referrer is None and bonus:
             raise ValueError(tr('Не найден получатель реферального бонуса.'))
+        from database import partners
+        funding=None
+        if currency=='RUB':
+            await cur.execute('SELECT * FROM order_wallet_funding WHERE purchase_id=%s',(purchase_id,))
+            funding=await cur.fetchone()
+            if funding and funding['bot_id']:
+                await cur.execute('SELECT status FROM partner_bots WHERE bot_id=%s LOCK IN SHARE MODE',(funding['bot_id'],))
+                await cur.fetchone()
         balance_col = 'balance_usdt' if currency == 'USDT' else 'balance'
         users = sorted({order['user_id'], referrer} - {None})
         await cur.execute(f'SELECT id, {balance_col} AS balance FROM users WHERE id IN (' + ','.join(['%s'] * len(users)) + ') ORDER BY id FOR UPDATE', tuple(users))
@@ -39,14 +47,18 @@ async def refund_order(admin_id, purchase_id, reason):
         if any((user not in balances for user in users)):
             raise ValueError(tr('Покупатель или получатель бонуса не найден.'))
         after = dict(balances)
-        after[order['user_id']] += amount
-        if referrer is not None:
+        if not funding:after[order['user_id']] += amount
+        if referrer is not None and not funding:
             after[referrer] -= bonus
         if any((abs(value) > Decimal('9999999999.99999999') for value in after.values())):
             raise ValueError(tr('Возврат превышает допустимый размер баланса.'))
         await cur.execute('INSERT INTO order_refunds (purchase_id, admin_id, user_id, amount, currency, reason, referral_reversed, legacy_referral, created_at) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,UTC_TIMESTAMP())', (purchase_id, admin_id, order['user_id'], amount, currency, reason, bonus, order['referral_bonus'] is None))
         for user, value in after.items():
             await cur.execute(f'UPDATE users SET {balance_col} = %s WHERE id = %s', (value, user))
+        if funding:
+            await partners.credit_refund(cur,order['user_id'],funding)
+            if referrer is not None and bonus:
+                await partners.bonus_credit(cur,referrer,-bonus,0)
         from database.referrals import mark_purchase_reversed
         await mark_purchase_reversed(cur, purchase_id)
         await cur.execute("UPDATE purchases SET status = 'refunded' WHERE id = %s", (purchase_id,))

@@ -8,6 +8,7 @@ services:
       MINIAPP_URL: https://sbandsub.space
       MINIAPP_HOST: 0.0.0.0
       MINIAPP_PORT: '8080'
+      PARTNER_ASSET_DIR: /app/runtime
       BOT_LOG_PATH: /app/runtime/bot.log
     expose:
       - '8080'

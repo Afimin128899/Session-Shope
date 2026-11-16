@@ -252,8 +252,18 @@ document.querySelectorAll('[data-page]').forEach(b => b.addEventListener('click'
     tg?.ready();tg?.expand();
     if (!tg?.initData) throw Error('Откройте администраторское приложение из Telegram.');
     const identity=await api('identity');
-    if (!identity.is_admin && !identity.is_helper) throw Error('Доступ только сотруднику.');
+    if (!identity.is_admin && !identity.is_helper && !identity.is_partner_owner) throw Error('Доступ только сотруднику.');
     window.SBAND_HELPER=Boolean(identity.is_helper);
+    document.querySelector('[data-page=partners]').hidden=!identity.is_admin;
+    document.querySelector('[data-page=partner-content]').hidden=!(identity.is_admin||identity.is_partner_owner);
+    document.querySelector('[data-page=partner-bans]').hidden=!identity.is_partner_owner;
+    if(identity.is_partner_owner){
+      page='partner-bans';
+      document.querySelectorAll('nav [data-page]').forEach(b=>{b.hidden=!['partner-bans','partner-content'].includes(b.dataset.page);b.removeAttribute('aria-current');});
+      document.querySelector('[data-page=partner-bans]').setAttribute('aria-current','page');
+      document.querySelectorAll('.nav-section').forEach(n=>n.hidden=true);
+      document.querySelector('header h1').textContent='Кабинет партнёра';
+    }
     document.querySelector('[data-page=helpers]').hidden=!identity.is_admin;
     document.querySelector('[data-page=advertising]').hidden=!identity.is_helper;
     if(identity.is_helper){

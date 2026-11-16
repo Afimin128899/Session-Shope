@@ -27,6 +27,10 @@ async def promo_event(cur,user_id,promo):
 
 
 async def history(user_id,page=0):
+    from utils.partner_context import bot_id
+    if bot_id():
+        from database.partners import wallet_history
+        return await wallet_history(user_id,page)
     async with _get_pool().acquire() as conn:
         async with conn.cursor(aiomysql.DictCursor) as cur:
             await cur.execute('''SELECT * FROM (

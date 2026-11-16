@@ -36,6 +36,7 @@ async def my_profile(call: CallbackQuery, state: FSMContext):
     ref_count = await get_referral_count(call.from_user.id)
     username = call.from_user.username or '—'
     text = tr("<tg-emoji emoji-id='5258362837411045098'>👤</tg-emoji> <b>Мой профиль</b>\n\n┏ <tg-emoji emoji-id='5258011929993026890'>👤</tg-emoji> <b>Пользователь:</b> <code>@{0}</code>\n┣ <tg-emoji emoji-id='5258476306152038031'>🔒</tg-emoji> <b>ID:</b> <code>{1}</code>\n┣ <tg-emoji emoji-id='5406841020769936275'>💵</tg-emoji> <b>Баланс:</b> <code>{2} ₽</code>\n┗ <tg-emoji emoji-id='{3}'>✋</tg-emoji> <b>Рефералов:</b> <code>{4}</code>", f'{username}', f'{call.from_user.id}', f'{balance:.2f}', f'{EMOJI_HAND}', f'{ref_count}')
+    text+=f"\nВнесённые: {float((user or {}).get('cash_balance',balance)):.2f} ₽ · Бонусы: {float((user or {}).get('bonus_balance',0)):.2f} ₽"
     if await welcome.received(call.from_user.id):
         text += '\n\n' + tr('🎁 Приветственный бонус 4 ₽ уже зачислен.')
     kb = await profile_menu()
