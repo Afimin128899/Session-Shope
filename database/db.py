@@ -156,6 +156,8 @@ async def init_db ():
                     await init_referral_schema(cur, DB_CONFIG['db'])
                     from database.advertising import init_schema as init_advertising_schema
                     await init_advertising_schema(cur, DB_CONFIG['db'])
+                    from database.partners import init_schema as init_partner_schema
+                    await init_partner_schema(cur)
 
                     await cur.execute('''
                         CREATE TABLE IF NOT EXISTS button_labels (
@@ -373,8 +375,18 @@ async def init_db ():
 async def get_user(user_id: int):
     async with _get_pool().acquire() as conn:
         async with conn.cursor(aiomysql.DictCursor) as cur:
-            await cur.execute("SELECT * FROM users WHERE id = %s", (user_id,))
-            return await cur.fetchone()
+            await cur.execute("SELECT u.*,COALESCE((SELECT bonus FROM scoped_wallets w WHERE w.bot_id=0 AND w.user_id=u.id),0) AS bonus_balance FROM users u WHERE u.id=%s", (user_id,))
+            row=await cur.fetchone()
+            if row:
+                from decimal import Decimal
+                from utils.partner_context import bot_id
+                row['cash_balance']=row['balance']
+                if bot_id():
+                    await cur.execute('SELECT cash,bonus FROM scoped_wallets WHERE bot_id=%s AND user_id=%s',(bot_id(),user_id))
+                    wallet=await cur.fetchone() or {}
+                    row['cash_balance']=wallet.get('cash',0);row['bonus_balance']=wallet.get('bonus',0);row['balance_usdt']=0
+                row['balance']=Decimal(str(row['cash_balance']))+Decimal(str(row.get('bonus_balance',0)))
+            return row
 
 
 async def get_user_by_username(username: str):
@@ -404,27 +416,23 @@ async def add_balance (user_id :int ,amount :float ):
 
 
 async def add_deposit_with_first_bonus(user_id: int, amount: float) -> tuple[float, float]:
-    """Зачисляет пополнение и одноразовый бонус 10% за первое пополнение."""
-    amount = round(float(amount), 2)
-    if amount <= 0:
+    """Compatibility helper; real receipts use idempotent credit_paid_deposit."""
+    from decimal import Decimal, ROUND_HALF_UP
+    from database.admin_tools import _transaction
+    from database.partners import bonus_credit
+    amount = Decimal(str(amount)).quantize(Decimal('.01'), rounding=ROUND_HALF_UP)
+    if not amount.is_finite() or amount <= 0:
         return 0.0, 0.0
-
-    async with _get_pool().acquire() as conn:
-        async with conn.cursor() as cur:
-            bonus = round(amount * 0.10, 2)
-            await cur.execute(
-                "UPDATE users SET balance = balance + %s, first_deposit_bonus_used = 1 "
-                "WHERE id = %s AND first_deposit_bonus_used = 0",
-                (amount + bonus, user_id),
-            )
-            if cur.rowcount > 0:
-                return amount + bonus, bonus
-
-            await cur.execute(
-                "UPDATE users SET balance = balance + %s WHERE id = %s",
-                (amount, user_id),
-            )
-            return amount, 0.0
+    async with _transaction() as cur:
+        await cur.execute('SELECT first_deposit_bonus_used FROM users WHERE id=%s FOR UPDATE', (user_id,))
+        user = await cur.fetchone()
+        if not user:
+            raise ValueError('Deposit user does not exist')
+        bonus = (amount * Decimal('.10')).quantize(Decimal('.01'), rounding=ROUND_HALF_UP) if not user['first_deposit_bonus_used'] else Decimal(0)
+        await cur.execute('UPDATE users SET balance=balance+%s,first_deposit_bonus_used=1 WHERE id=%s', (amount,user_id))
+        if bonus:
+            await bonus_credit(cur,user_id,bonus,0)
+    return float(amount+bonus),float(bonus)
 
 async def credit_paid_deposit(
     user_id: int, amount, provider: str, invoice_id: str,
@@ -483,8 +491,11 @@ async def credit_paid_deposit(
                 credited = amount + bonus
                 await cur.execute(
                     "UPDATE users SET balance = balance + %s, first_deposit_bonus_used = 1 WHERE id = %s",
-                    (credited, user_id),
+                    (amount, user_id),
                 )
+                if bonus:
+                    from database.partners import bonus_credit
+                    await bonus_credit(cur,user_id,bonus,0)
                 await cur.execute(
                     "INSERT INTO payment_logs (user_id, amount, currency, method, reference) "
                     "VALUES (%s, %s, %s, %s, %s)",
@@ -571,6 +582,8 @@ async def get_first_available_account_by_country (country :str ):
 
 
 async def buy_account(user_id: int, account_id: int, price: float, date_str: str, currency: str = "TON"):
+    from utils.partner_context import bot_id
+    if bot_id() and currency!='RUB':raise ValueError('В партнёрском боте доступен только рублёвый баланс.')
     if currency == 'RUB':
         from miniapp.storage import checkout
         from decimal import Decimal
@@ -632,27 +645,19 @@ async def buy_account(user_id: int, account_id: int, price: float, date_str: str
             await conn.autocommit(True)
 
 
-async def get_user_purchases (user_id :int ):
-    async with _get_pool().acquire() as conn :
-        async with conn .cursor (aiomysql .DictCursor )as cur :
-            await cur .execute ("""
-                SELECT p.id, p.account_id, a.country, a.number, a.password, a.data, p.date, p.currency, p.status, p.paid_amount, t.status AS ticket_status
-                FROM purchases p JOIN accounts a ON p.account_id = a.id
-                LEFT JOIN support_tickets t ON t.purchase_id = p.id
-                WHERE p.user_id = %s ORDER BY p.id DESC
-            """,(user_id ,))
-            return await cur .fetchall ()
+async def get_user_purchases(user_id: int):
+    from database.partners import order_clause
+    async with _get_pool().acquire() as conn:
+        async with conn.cursor(aiomysql.DictCursor) as cur:
+            await cur.execute("SELECT p.id,p.account_id,a.country,a.number,a.password,a.data,p.date,p.currency,p.status,p.paid_amount,t.status AS ticket_status FROM purchases p JOIN accounts a ON p.account_id=a.id LEFT JOIN support_tickets t ON t.purchase_id=p.id WHERE p.user_id=%s"+order_clause()+" ORDER BY p.id DESC",(user_id,))
+            return await cur.fetchall()
 
-async def get_purchase_for_user (purchase_id :int ,user_id :int ):
-    async with _get_pool().acquire() as conn :
-        async with conn .cursor (aiomysql .DictCursor )as cur :
-            await cur .execute ("""
-                SELECT p.*, a.country, a.code, a.number, a.password, a.data, a.price, a.telegram_user_id, t.status AS ticket_status
-                FROM purchases p JOIN accounts a ON p.account_id = a.id
-                LEFT JOIN support_tickets t ON t.purchase_id = p.id
-                WHERE p.id = %s AND p.user_id = %s
-            """,(purchase_id ,user_id ))
-            return await cur .fetchone ()
+async def get_purchase_for_user(purchase_id: int,user_id: int):
+    from database.partners import order_clause
+    async with _get_pool().acquire() as conn:
+        async with conn.cursor(aiomysql.DictCursor) as cur:
+            await cur.execute("SELECT p.*,a.country,a.code,a.number,a.password,a.data,a.price,a.telegram_user_id,t.status AS ticket_status FROM purchases p JOIN accounts a ON p.account_id=a.id LEFT JOIN support_tickets t ON t.purchase_id=p.id WHERE p.id=%s AND p.user_id=%s"+order_clause(),(purchase_id,user_id))
+            return await cur.fetchone()
 
 async def complete_user_purchase(account_id: int):
     from database.admin_tools import _transaction
@@ -822,27 +827,19 @@ async def get_setting(key: str, default: str = "") -> str:
     except Exception as e:
         logging.error(f"[db] get_setting error for key {key}: {e}")
     return default
-async def get_user_purchases (user_id :int ):
-    async with _get_pool().acquire() as conn :
-        async with conn .cursor (aiomysql .DictCursor )as cur :
-            await cur .execute ("""
-                SELECT p.id, p.account_id, a.country, a.number, a.password, a.data, p.date, p.currency, p.status, p.paid_amount, t.status AS ticket_status
-                FROM purchases p JOIN accounts a ON p.account_id = a.id
-                LEFT JOIN support_tickets t ON t.purchase_id = p.id
-                WHERE p.user_id = %s ORDER BY p.id DESC
-            """,(user_id ,))
-            return await cur .fetchall ()
+async def get_user_purchases(user_id: int):
+    from database.partners import order_clause
+    async with _get_pool().acquire() as conn:
+        async with conn.cursor(aiomysql.DictCursor) as cur:
+            await cur.execute("SELECT p.id,p.account_id,a.country,a.number,a.password,a.data,p.date,p.currency,p.status,p.paid_amount,t.status AS ticket_status FROM purchases p JOIN accounts a ON p.account_id=a.id LEFT JOIN support_tickets t ON t.purchase_id=p.id WHERE p.user_id=%s"+order_clause()+" ORDER BY p.id DESC",(user_id,))
+            return await cur.fetchall()
 
-async def get_purchase_for_user (purchase_id :int ,user_id :int ):
-    async with _get_pool().acquire() as conn :
-        async with conn .cursor (aiomysql .DictCursor )as cur :
-            await cur .execute ("""
-                SELECT p.*, a.country, a.code, a.number, a.password, a.data, a.price, a.telegram_user_id, t.status AS ticket_status
-                FROM purchases p JOIN accounts a ON p.account_id = a.id
-                LEFT JOIN support_tickets t ON t.purchase_id = p.id
-                WHERE p.id = %s AND p.user_id = %s
-            """,(purchase_id ,user_id ))
-            return await cur .fetchone ()
+async def get_purchase_for_user(purchase_id: int,user_id: int):
+    from database.partners import order_clause
+    async with _get_pool().acquire() as conn:
+        async with conn.cursor(aiomysql.DictCursor) as cur:
+            await cur.execute("SELECT p.*,a.country,a.code,a.number,a.password,a.data,a.price,a.telegram_user_id,t.status AS ticket_status FROM purchases p JOIN accounts a ON p.account_id=a.id LEFT JOIN support_tickets t ON t.purchase_id=p.id WHERE p.id=%s AND p.user_id=%s"+order_clause(),(purchase_id,user_id))
+            return await cur.fetchone()
 
 async def complete_user_purchase(account_id: int):
     from database.admin_tools import _transaction
@@ -1039,6 +1036,8 @@ async def buy_account_with_referral(
     date_str: str, discount_pct: float, bonus_pct: float,
     referrer_id: int | None = None, currency: str = "USDT",
 ) -> int | None:
+    from utils.partner_context import bot_id
+    if bot_id() and currency!='RUB':raise ValueError('В партнёрском боте доступен только рублёвый баланс.')
     if currency == 'RUB':
         from miniapp.storage import checkout
         from decimal import Decimal, ROUND_HALF_UP
@@ -1131,6 +1130,8 @@ async def buy_account_with_referral(
 # ── ButtonLabelManager DB functions ───────────────────────────────────
 
 async def get_button_label(key: str) -> dict | None:
+    from utils.partner_context import CONTENT
+    if key in CONTENT.get():return {'label':CONTENT.get()[key],'emoji_id':None}
     async with _get_pool().acquire() as conn:
         async with conn.cursor(aiomysql.DictCursor) as cur:
             await cur.execute("SELECT label, emoji_id FROM button_labels WHERE btn_key = %s", (key,))

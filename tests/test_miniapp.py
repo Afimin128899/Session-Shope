@@ -51,6 +51,7 @@ class TelegramAuthTests(unittest.TestCase):
 class MiniAppAPITests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.patchers = [
+            patch('database.partners.banned',AsyncMock(return_value=False)),
             patch.object(storage, 'access_settings', AsyncMock(return_value={})),
             patch.object(db, 'create_user', AsyncMock()),
             patch.object(server.welcome, 'received', AsyncMock(return_value=Decimal(0))),
@@ -199,6 +200,11 @@ class CheckoutTests(unittest.IsolatedAsyncioTestCase):
         pool = MagicMock(); pool.acquire.return_value.__aenter__.return_value = self.conn
         patcher = patch.object(admin_tools, '_get_pool', return_value=pool)
         patcher.start(); self.addCleanup(patcher.stop)
+
+        # Pricing tests retain a cash-only wallet fixture; scoped/bonus money is tested against MariaDB.
+        async def cash_funds(cur,user,cash):return {'cash':Decimal(str(cash)),'bonus':Decimal(0),'bot_id':0}
+        funds=patch('database.partners.lock_funds',AsyncMock(side_effect=cash_funds))
+        funds.start();self.addCleanup(funds.stop)
 
         # Sales switch locking and rejection are covered in test_shop_control.
         # These tests isolate the existing price, balance and order transaction.

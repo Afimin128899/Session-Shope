@@ -18,7 +18,8 @@ async def init_schema(cur):
 async def credit_new_user(cur, user_id):
     """Caller has just inserted the user and owns its lock. Never backfill old users."""
     await cur.execute('INSERT INTO welcome_bonuses(user_id,amount,created_at) VALUES(%s,%s,UTC_TIMESTAMP())', (user_id, AMOUNT))
-    await cur.execute('UPDATE users SET balance=balance+%s WHERE id=%s', (AMOUNT, user_id))
+    from database.partners import bonus_credit
+    await bonus_credit(cur,user_id,AMOUNT)
     await _record(cur, 0, 'welcome_bonus', 'user', user_id, {'amount': str(AMOUNT), 'currency': 'RUB'})
     return AMOUNT
 

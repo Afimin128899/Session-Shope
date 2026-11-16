@@ -195,7 +195,9 @@ async def _award(cur, user_id, referrer, kind, provider, reference, base, rate, 
         return None
     if amount:
         await cur.execute('UPDATE referral_daily_totals SET issued=issued+%s WHERE referrer_id=%s AND reward_day=%s', (amount, referrer, day))
-        await cur.execute('UPDATE users SET balance=balance+%s WHERE id=%s', (amount, referrer))
+        from database.partners import bonus_credit
+        await bonus_credit(cur,referrer,amount,0)
+        await cur.execute('INSERT INTO bonus_reward_sources(event_key) VALUES(%s)',(key,))
         await cur.execute("INSERT INTO payment_logs(user_id,amount,currency,method,reference) VALUES(%s,%s,'RUB',%s,%s)", (referrer, amount, 'referral_' + kind, key))
     return amount
 
@@ -222,7 +224,13 @@ async def reverse_deposit(cur, user_id, provider, reference):
         return None
     amount = Decimal(str(found['amount']))
     if amount:
-        await cur.execute('UPDATE users SET balance=balance-%s WHERE id=%s', (amount, found['referrer_id']))
+        await cur.execute('SELECT event_key FROM bonus_reward_sources WHERE event_key=%s',(key,))
+        marker=await cur.fetchone()
+        if marker and 'event_key' in marker:
+            from database.partners import bonus_credit
+            await bonus_credit(cur,found['referrer_id'],-amount,0)
+        else:
+            await cur.execute('UPDATE users SET balance=balance-%s WHERE id=%s', (amount, found['referrer_id']))
         await cur.execute("INSERT INTO payment_logs(user_id,amount,currency,method,reference) VALUES(%s,%s,'RUB','referral_reversal',%s)", (found['referrer_id'], -amount, key))
     await cur.execute('UPDATE referral_rewards SET reversed=1,reversed_at=UTC_TIMESTAMP() WHERE event_key=%s', (key,))
     return amount
@@ -233,6 +241,8 @@ async def register_user(user_id, referrer_id, username=None, *, welcome_bonus=Tr
         raise ValueError(tr('Некорректный пользователь.'))
     clean = username.lstrip('@').strip() if username else None
     async with _transaction() as cur:
+        from database.partners import active
+        await active(cur)
         # Upsert takes an exclusive row lock immediately. INSERT IGNORE followed
         # by UPDATE can deadlock when the bot and Mini App enter concurrently.
         await cur.execute("INSERT INTO users(id,balance,balance_usdt,username) VALUES(%s,0,0,%s) ON DUPLICATE KEY UPDATE username=IF(VALUES(username) IS NOT NULL AND VALUES(username)!='',VALUES(username),username)", (user_id, clean))

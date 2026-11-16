@@ -41,6 +41,18 @@ async def cmd_start(message: Message, command, state=None):
     if welcome_bonus:
         await message.answer(tr('🎁 Приветственный бонус: {0} ₽ зачислены на баланс. Используйте их для покупок в магазине.', f'{welcome_bonus:.2f}'))
     await update_user_username(message.from_user.id, message.from_user.username)
+    if args and args.startswith('shop_') and args[5:].isascii() and args[5:].isdigit():
+        from utils.partner_context import CURRENT
+        from database import partners
+        from utils.miniapp import miniapp_url
+        p=await partners.get(int(args[5:]))
+        if CURRENT.get() is None and p and p['status']=='enabled' and miniapp_url():
+            await message.answer('Открыть магазин партнёра через защищённый вход основного бота.',reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text='Открыть магазин',web_app=WebAppInfo(url=miniapp_url()+'?partner='+str(p['bot_id'])))]]));return
+    if args and args.startswith('fund_') and args[5:].isascii() and args[5:].isdigit():
+        from utils.partner_context import CURRENT
+        if CURRENT.get() is None:
+            from handlers.partners import funding_entry
+            await funding_entry(message,int(args[5:]));return
     if args == 'miniapp':
         from utils.miniapp import customer_miniapp_url
         url=customer_miniapp_url()

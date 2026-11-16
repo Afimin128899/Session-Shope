@@ -37,12 +37,17 @@ async def main_menu(user_id: int | None=None) -> InlineKeyboardMarkup:
     from utils.app_access import CUSTOMER_MINIAPP_ADMIN_ONLY
     app_url = miniapp_url() if CUSTOMER_MINIAPP_ADMIN_ONLY else customer_miniapp_url()
     if app_url:
-        rows.insert(0, [InlineKeyboardButton(text=tr('Mini App'), web_app=WebAppInfo(url=app_url), style='primary')])
+        from utils.partner_context import CURRENT
+        p=CURRENT.get()
+        button=InlineKeyboardButton(text=tr('Mini App'),url=f"https://t.me/{p['main_username']}?start=shop_{p['bot_id']}",style='primary') if p else InlineKeyboardButton(text=tr('Mini App'),web_app=WebAppInfo(url=app_url),style='primary')
+        rows.insert(0,[button])
     is_admin_user = False
     try:
         is_admin_user = int(user_id) in [int(x) for x in ADMIN_IDS]
     except Exception:
         is_admin_user = False
+    from utils.partner_context import CURRENT
+    if CURRENT.get():is_admin_user=user_id==CURRENT.get()['owner_id']
     if is_admin_user:
         label_admin, emoji_admin = await _btn_text('btn_admin_panel', tr('Админ-панель'), EMOJI_GAME)
         rows.append([InlineKeyboardButton(text=pack_text(label_admin), callback_data='admin_panel_button', icon_custom_emoji_id=pack_icon_for('settings'))])

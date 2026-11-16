@@ -49,8 +49,9 @@ class PaymentTransactionTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(await db.credit_paid_deposit(42, '100.10', 'crypto', '123'), (110.11, 10.01))
         calls = self.cur.execute.call_args_list
         self.assertIn('FOR UPDATE', calls[1].args[0])
-        self.assertEqual(calls[2].args[1], (Decimal('110.11'), 42))
-        self.assertEqual(calls[3].args[1], (42, Decimal('100.10'), 'RUB', 'crypto_pay', '123'))
+        self.assertEqual(calls[2].args[1], (Decimal('100.10'), 42))
+        self.assertEqual(calls[3].args[1], (0,42,Decimal('10.01')))
+        self.assertEqual(calls[4].args[1], (42, Decimal('100.10'), 'RUB', 'crypto_pay', '123'))
         self.conn.begin.assert_awaited_once()
         self.conn.commit.assert_awaited_once()
         self.conn.rollback.assert_not_awaited()

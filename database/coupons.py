@@ -47,6 +47,8 @@ async def consume(cur,user_id,promo):
 
 async def redeem_balance(user_id, value):
     async with _transaction() as cur:
+        from database.partners import active
+        await active(cur)
         promo = await validate(cur, user_id, value, lock=True)
         if promo['kind'] != 'balance':
             raise ValueError(tr('Этот код даёт скидку и применяется при оплате корзины.'))
@@ -54,7 +56,8 @@ async def redeem_balance(user_id, value):
         if not await cur.fetchone():
             raise ValueError(tr('Покупатель не найден.'))
         await consume(cur, user_id, promo)
-        await cur.execute('UPDATE users SET balance=balance+%s WHERE id=%s', (promo['value'], user_id))
+        from database.partners import bonus_credit
+        await bonus_credit(cur,user_id,promo['value'])
         return Decimal(str(promo['value']))
 
 

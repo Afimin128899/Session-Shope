@@ -15,6 +15,8 @@ def miniapp_url():
 
 
 def customer_miniapp_url():
+    from utils.partner_context import CURRENT
+    if CURRENT.get():return None
     from utils.app_access import CUSTOMER_MINIAPP_ENABLED
     return miniapp_url() if CUSTOMER_MINIAPP_ENABLED else None
 

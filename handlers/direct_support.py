@@ -112,11 +112,13 @@ async def relay(message, *, order=None, warranty=False):
         context += tr('\nЗаказ #{0}.', order)
     if warranty:
         context += tr('\nГарантия действует на момент отправки.')
+    from services.partner_runtime import MAIN,copy_between
+    delivery_bot=MAIN or message.bot
     delivered = 0
     for admin in sorted(set(ADMIN_IDS)):
         try:
-            await asyncio.wait_for(message.bot.send_message(admin, context, parse_mode='HTML', reply_markup=reply_keyboard(user.id)), timeout=15)
-            await asyncio.wait_for(message.bot.copy_message(chat_id=admin, from_chat_id=message.chat.id, message_id=message.message_id), timeout=15)
+            await asyncio.wait_for(delivery_bot.send_message(admin, context, parse_mode='HTML', reply_markup=reply_keyboard(user.id)), timeout=15)
+            await asyncio.wait_for(copy_between(message,delivery_bot,admin), timeout=15)
             delivered += 1
         except Exception as exc:
             logger.warning('Direct support delivery failed [%s], recipient=%s', type(exc).__name__, admin)
@@ -161,11 +163,13 @@ async def admin_message(message, state):
     if type(target) is not int or not 0 < target <= 4503599627370495:
         await state.clear()
         return
+    from services.partner_runtime import client_for,copy_between
+    delivery_bot=await client_for(target) or message.bot
     try:
-        await message.bot.send_message(target, tr('<b>Ответ поддержки</b>'), parse_mode='HTML', reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
+        await delivery_bot.send_message(target, tr('<b>Ответ поддержки</b>'), parse_mode='HTML', reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
             InlineKeyboardButton(text=tr('Написать в поддержку'), callback_data='support'),
         ]]))
-        await message.bot.copy_message(chat_id=target, from_chat_id=message.chat.id, message_id=message.message_id)
+        await copy_between(message,delivery_bot,target)
     except Exception as exc:
         logger.warning('Direct support reply failed [%s], recipient=%s', type(exc).__name__, target)
         await message.answer(tr('Не удалось доставить ответ. Пользователь мог заблокировать бота.'))

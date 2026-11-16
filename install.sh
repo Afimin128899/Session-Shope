@@ -94,6 +94,10 @@ if ((fresh)); then
   "$project_dir/.venv-miniapp/bin/python" "$project_dir/deploy/bootstrap_env.py" --project "$project_dir"
 fi
 
+if [[ -f "$project_dir/.env" ]]; then
+  "$project_dir/.venv-miniapp/bin/python" "$project_dir/deploy/partner_key.py" --env "$project_dir/.env"
+fi
+
 printf '\n[3/4] Настройка systemd и запуск Mini App\n'
 service_args=(--python "$project_dir/.venv-miniapp/bin/python")
 if [[ -n "$bot_service" ]]; then service_args+=(--service "$bot_service"); fi

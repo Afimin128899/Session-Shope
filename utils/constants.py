@@ -90,6 +90,10 @@ f"• <a href='https://telegra.ph/POLITIKA-KONFIDENCIALNOSTI-SBAND-ACCS-11-05-2'
 
 # Resolve text at request time, after the customer's persisted language is known.
 def start_text(name):
+    from utils.partner_context import CONTENT
+    from html import escape
+    custom=CONTENT.get().get('welcome')
+    if custom:return escape(custom).replace('{name}',name)
     from utils.i18n import LANGUAGE
     if LANGUAGE.get() == 'en':
         return (f'<b>SBAND ACCS</b>\n{name}, welcome to your account store.\n\n'

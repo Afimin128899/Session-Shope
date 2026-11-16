@@ -123,6 +123,8 @@ _UNSET = object()
 
 async def checkout(user_id, account_id, quoted_price, *, warranty_hours=_UNSET, spam_status=_UNSET, promo_code=None, expected_total=None):
     async with _transaction() as cur:
+        from database import partners
+        await partners.active(cur)
         await cur.execute("SELECT a.id, a.price, a.country, a.warranty_hours, a.spam_status, a.spam_lease_until>UTC_TIMESTAMP() AS spam_running FROM accounts a JOIN categories c ON c.slug = a.country WHERE a.id = %s AND a.status = 'available' AND c.is_active = 1 FOR UPDATE", (account_id,))
         account = await cur.fetchone()
         if account is None:
@@ -162,14 +164,18 @@ async def checkout(user_id, account_id, quoted_price, *, warranty_hours=_UNSET, 
         users = sorted({user_id, referrer} - {None})
         await cur.execute('SELECT id, balance FROM users WHERE id IN (' + ','.join(['%s'] * len(users)) + ') ORDER BY id FOR UPDATE', tuple(users))
         balances = {row['id']: row['balance'] for row in await cur.fetchall()}
+        if user_id not in balances:raise CheckoutError('Покупатель не найден.','unavailable')
+        funds=await partners.lock_funds(cur,user_id,balances[user_id])
+        balances[user_id]=funds['cash']+funds['bonus']
         if user_id not in balances or Decimal(str(balances[user_id])) < actual_price:
             raise CheckoutError(tr('Недостаточно средств. Пополните баланс в боте.'), 'insufficient_balance')
         if promo:
             await coupons.consume(cur, user_id, promo)
-        await cur.execute('UPDATE users SET balance = balance - %s WHERE id = %s', (actual_price, user_id))
+        cash_used,bonus_used=await partners.debit(cur,user_id,actual_price,funds)
         await cur.execute("UPDATE accounts SET status = 'sold' WHERE id = %s", (account_id,))
         await cur.execute('INSERT INTO purchases (user_id, account_id, date, currency, paid_amount) VALUES (%s, %s, %s, %s, %s)', (user_id, account_id, datetime.now(ZoneInfo('Europe/Moscow')).strftime('%Y-%m-%d %H:%M:%S'), 'RUB', actual_price))
         order_id = cur.lastrowid
+        await partners.record_funding(cur,order_id,cash_used,bonus_used)
         await quality.snapshot(cur, order_id)
         if referrer in balances:
             from database.referrals import credit_purchase
@@ -181,13 +187,14 @@ async def checkout(user_id, account_id, quoted_price, *, warranty_hours=_UNSET, 
 
 
 async def orders(user_id, page=0, query=''):
+    from database.partners import order_clause
     async with _get_pool().acquire() as conn:
         async with conn.cursor(aiomysql.DictCursor) as cur:
             await cur.execute(
                 'SELECT p.id, p.date, p.currency, p.paid_amount, p.status, a.number, c.name, '
                 't.id AS ticket_id, t.status AS ticket_status FROM purchases p '
                 'LEFT JOIN accounts a ON a.id = p.account_id LEFT JOIN categories c ON c.slug = a.country '
-                'LEFT JOIN support_tickets t ON t.purchase_id = p.id WHERE p.user_id = %s '
+                'LEFT JOIN support_tickets t ON t.purchase_id = p.id WHERE p.user_id = %s '+order_clause()+' '
                 "AND (CAST(p.id AS CHAR)=%s OR c.name LIKE %s OR a.country=%s OR p.date LIKE %s OR %s='') ORDER BY p.id DESC LIMIT 25 OFFSET %s", (user_id,query,'%'+query+'%',query,query+'%',query,page*24),
             )
             rows = list(await cur.fetchall())
@@ -203,6 +210,8 @@ async def checkout_cart(user_id, requested, promo_code=None, expected_total=None
     ids = sorted(quotes)
     placeholders = ','.join(['%s'] * len(ids))
     async with _transaction() as cur:
+        from database import partners
+        await partners.active(cur)
         await cur.execute('SELECT a.id,a.price,a.warranty_hours,a.spam_status,a.registration_date,a.is_premium,a.spam_lease_until>UTC_TIMESTAMP() AS spam_running FROM accounts a JOIN categories c ON c.slug=a.country WHERE a.id IN (' + placeholders + ") AND a.status='available' AND c.is_active=1 ORDER BY a.id FOR UPDATE", tuple(ids))
         accounts = list(await cur.fetchall())
         if len(accounts) != len(ids):
@@ -255,6 +264,9 @@ async def checkout_cart(user_id, requested, promo_code=None, expected_total=None
         total = sum(prices.values(), Decimal('0'))
         if total > Decimal('10000'):
             raise CheckoutError(tr('Сумма корзины не должна превышать 10 000 ₽.'), 'amount_limit')
+        if user_id not in balances:raise CheckoutError('Покупатель не найден.','unavailable')
+        funds=await partners.lock_funds(cur,user_id,balances[user_id])
+        balances[user_id]=funds['cash']+funds['bonus']
         if user_id not in balances or balances[user_id] < total:
             raise CheckoutError(tr('Недостаточно средств для всей корзины.'), 'insufficient_balance')
         await cur.execute('SELECT account_id FROM shopping_cart WHERE user_id=%s AND account_id IN (' + placeholders + ') FOR UPDATE', (user_id, *ids))
@@ -262,13 +274,15 @@ async def checkout_cart(user_id, requested, promo_code=None, expected_total=None
             raise CheckoutError(tr('Корзина изменилась. Обновите страницу.'), 'cart_changed')
         if promo:
             await coupons.consume(cur, user_id, promo)
-        await cur.execute('UPDATE users SET balance=balance-%s WHERE id=%s', (total, user_id))
+        cash_used,bonus_left=await partners.debit(cur,user_id,total,funds)
         order_ids = []
         for account in accounts:
             bonus = Decimal('0')
             await cur.execute("UPDATE accounts SET status='sold' WHERE id=%s", (account['id'],))
             await cur.execute('INSERT INTO purchases (user_id,account_id,date,currency,paid_amount,referrer_id,referral_bonus) VALUES (%s,%s,%s,%s,%s,%s,%s)', (user_id, account['id'], datetime.now(ZoneInfo('Europe/Moscow')).strftime('%Y-%m-%d %H:%M:%S'), 'RUB', prices[account['id']], referrer if referrer in balances else None, bonus))
             purchase_id = cur.lastrowid
+            part_bonus=min(bonus_left,prices[account['id']]);bonus_left-=part_bonus
+            await partners.record_funding(cur,purchase_id,prices[account['id']]-part_bonus,part_bonus)
             if referrer in balances:
                 from database.referrals import credit_purchase
                 bonus = await credit_purchase(cur, user_id, referrer, prices[account['id']], bonus_pct, purchase_id)

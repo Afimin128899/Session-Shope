@@ -112,11 +112,19 @@ def banner_for(section):
     from utils.i18n import LANGUAGE
     if LANGUAGE.get() == 'en':
         path = ROOT / 'miniapp/static/sband.png'
+    from utils.partner_context import CONTENT,bot_id
+    custom=CONTENT.get().get('photo')
+    if section=='home' and custom:
+        import os
+        from pathlib import PurePosixPath
+        root=Path(os.getenv('PARTNER_ASSET_DIR','data')).resolve()
+        candidate=(root/custom).resolve()
+        if candidate.is_relative_to(root) and candidate.is_file():path=candidate
     try:
         stat = path.stat()
     except OSError:
         return None
-    return Banner('brand_en' if LANGUAGE.get() == 'en' else section, path, (stat.st_mtime_ns, stat.st_size))
+    return Banner((str(bot_id())+':'+section) if custom else ('brand_en' if LANGUAGE.get() == 'en' else section), path, (stat.st_mtime_ns, stat.st_size))
 
 
 def _key(message, banner):

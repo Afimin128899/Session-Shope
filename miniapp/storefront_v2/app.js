@@ -23,14 +23,14 @@ function empty(parent,text){parent.append(el('p',text,'empty'));}
 function date(value){if(!value)return '';const iso=String(value).replace(' ','T');const d=new Date(/[Z+]\d*/.test(iso)?iso:iso+'Z');return Number.isNaN(+d)?String(value):d.toLocaleString('ru-RU');}
 async function me(){
  state.me=await api('me');const user=state.me.user;
- $('wallet').replaceChildren(SbandUI.icon('wallet'),document.createTextNode(money(state.me.balance)));$('balance').textContent=money(state.me.balance);
+ $('wallet').replaceChildren(SbandUI.icon('wallet'),document.createTextNode(money(state.me.balance)));$('balance').textContent=money(state.me.balance);$('wallet-cash').textContent='Внесённые средства: '+money(state.me.cash_balance??state.me.balance);$('wallet-bonus').textContent='Бонусы: '+money(state.me.bonus_balance||0);
  $('username').textContent=user.username?'@'+user.username:user.first_name;
- $('user-id').textContent='ID: '+user.id;$('admin-link').hidden=!(state.me.is_admin||state.me.is_helper);
+ $('user-id').textContent='ID: '+user.id;$('admin-link').hidden=!(state.me.is_admin||state.me.is_helper||state.me.is_partner_owner);
  if(state.avatarOwner!==user.id){
   state.avatarOwner=user.id;$('avatar').textContent=(user.first_name||'S').slice(0,1).toUpperCase();
   async function loadPhoto(){
    let src=user.photo_url;
-   if(!src){const r=await fetch('/api/avatar',{headers:{Authorization:'tma '+(tg?.initData||'')},cache:'no-store'});if(!r.ok)return;src=URL.createObjectURL(await r.blob());state.avatarObjectURL=src;}
+   if(!src){const r=await fetch('/api/avatar',{headers:{...SbandUI.scopeHeaders(),Authorization:'tma '+(tg?.initData||'')},cache:'no-store'});if(!r.ok)return;src=URL.createObjectURL(await r.blob());state.avatarObjectURL=src;}
    const image=el('img',undefined,'profile-photo');image.alt='Фото профиля Telegram';image.referrerPolicy='no-referrer';
    image.onload=()=>{if(state.avatarOwner===user.id)$('avatar').replaceChildren(image);};image.src=src;
   }
@@ -138,6 +138,7 @@ $('older-chat').onclick=()=>chat(true).catch(e=>toast(e.message));
 $('chat-form').addEventListener('submit',async event=>{event.preventDefault();const value=$('chat-body').value.trim();if(!value)return;const b=event.currentTarget.querySelector('button');if(b.disabled)return;b.disabled=true;b.classList.add('is-busy');b.setAttribute('aria-busy','true');try{await api('chat',{body:value});$('chat-body').value='';await chat();}catch(e){SbandUI.fieldError($('chat-body'),clean(e.message));}finally{b.disabled=false;b.classList.remove('is-busy');b.removeAttribute('aria-busy');}});
 async function topup(){
  const body=open('Пополнить баланс'),content=el('div'),notice=el('p',undefined,'topup-notice');
+ if(state.me.partner_id){body.append(el('p','Пополнение — в основном боте. После оплаты подтвердите перевод внесённых средств в этот магазин. Бонусы не переводятся.','muted'));const link=el('a','Открыть основной бот','primary full');link.href='https://t.me/'+state.me.bot_username+'?start=fund_'+state.me.partner_id;link.target='_blank';link.rel='noopener noreferrer';body.append(link);return;}
  notice.setAttribute('role','status');notice.setAttribute('aria-live','polite');body.append(content,notice);
  function note(text,error=true){notice.textContent=clean(text);notice.classList.toggle('inline-error',error&&Boolean(text));const input=content.querySelector('input');if(input)input.setAttribute('aria-invalid',String(error&&Boolean(text)));}
  try{
@@ -236,7 +237,7 @@ $('search').addEventListener('input',()=>{state.revision++;$('clear-search').hid
 document.addEventListener('keydown',event=>{if(event.key!=='/'||event.ctrlKey||event.metaKey||event.altKey||event.isComposing||state.tab!=='market'||$('modal').open||event.target.closest('input,textarea,select,[contenteditable]'))return;event.preventDefault();$('search').focus();});
 $('close-modal').onclick=()=>SbandUI.close($('modal'));$('modal').addEventListener('cancel',event=>{event.preventDefault();SbandUI.close($('modal'));});
 for(const id of ['wallet','topup'])$(id).onclick=()=>SbandUI.run($(id),topup).catch(e=>toast(e.message));
-$('admin-link').onclick=()=>location.assign('/admin-app');
+$('admin-link').onclick=()=>location.assign('/admin-app'+location.search);
 $('browse-accounts').onclick=()=>$('catalog-section').scrollIntoView({behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth',block:'start'});
 document.querySelectorAll('#browse-accounts>span,.spotlight-button>span,.invite-arrow').forEach(n=>n.replaceChildren(SbandUI.icon('arrowUp')));
 document.querySelectorAll('[data-free-account]').forEach(b=>b.addEventListener('click',()=>SbandUI.run(b,freeAccount).catch(e=>toast(e.message))));

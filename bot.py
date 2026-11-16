@@ -12,6 +12,7 @@ from aiogram.fsm.storage.memory import MemoryStorage
 from config import BOT_TOKEN
 from database.db import init_db
 
+from handlers.partners import router as partners_router
 from handlers.user.start import start_router
 from handlers.user.stars import stars_router
 from handlers.navigation import commands_router, fallback_router
@@ -87,6 +88,11 @@ async def main():
     bot.session.middleware(MissingButtonIcons())
     dp = Dispatcher(storage=MemoryStorage())
 
+    from services.partner_runtime import BotScope,PartnerPermissions
+    dp.update.outer_middleware(BotScope())
+    dp.message.middleware(PartnerPermissions())
+    dp.callback_query.middleware(PartnerPermissions())
+
     # Protect the bot from spam and flood abuse
     dp.message.outer_middleware(ThrottlingMiddleware(limit=0.5))
     dp.callback_query.outer_middleware(ThrottlingMiddleware(limit=0.4))
@@ -106,7 +112,7 @@ async def main():
     dp.callback_query.outer_middleware(MaintenanceMiddleware())
 
     dp.include_routers(
-        stars_router, DEMO_ROUTER, language_router, commands_router, support_router, start_router, balance_router, shop_navigation_router, shop_router, purchases_router, promo_router, profile_router, rewards_router,
+        partners_router, stars_router, DEMO_ROUTER, language_router, commands_router, support_router, start_router, balance_router, shop_navigation_router, shop_router, purchases_router, promo_router, profile_router, rewards_router,
         advertising_router, admin_router, referral_admin_router, sbp_admin_router, control_router, manage_router, broadcast_router, add_account_router, button_editor_router,
         cat_router, restock_router, admin_tools_router, spam_router, refund_router, quality_router, expansion_router, fallback_router,
     )
@@ -122,7 +128,8 @@ async def main():
         app_url = miniapp_url()
         if app_url:
             from miniapp.server import start_server
-            web_runner = await start_server(bot)
+            from services.partner_runtime import RoutingBot
+            web_runner = await start_server(RoutingBot(bot))
         from utils.app_access import configure_chat_menu
         await configure_chat_menu(bot)
         from services.payments import payment_worker
@@ -130,7 +137,9 @@ async def main():
         from services.spam_check import spam_worker
         from services.stars import stars_worker
         from services.star_reconcile import star_reconcile_worker
-        notification_tasks = [asyncio.create_task(worker(bot)) for worker in (restock_worker, payment_worker, market_worker, spam_worker, stars_worker, star_reconcile_worker)]
+        from services.partner_runtime import RoutingBot,manager
+        notification_tasks = [asyncio.create_task(manager(dp,bot))]
+        notification_tasks += [asyncio.create_task(worker(bot if worker in (payment_worker, stars_worker, star_reconcile_worker) else RoutingBot(bot))) for worker in (restock_worker, payment_worker, market_worker, spam_worker, stars_worker, star_reconcile_worker)]
         await dp.start_polling(bot, close_bot_session=False)
     finally:
         for task in notification_tasks:

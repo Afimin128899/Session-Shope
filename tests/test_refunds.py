@@ -17,7 +17,7 @@ class RefundTransactionTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         self.order = dict(id=5, user_id=42, account_id=8, paid_amount=Decimal('95'), currency='RUB',
                           status='issued', referrer_id=43, referral_bonus=Decimal('5'))
-        self.cur = MagicMock(execute=AsyncMock(), fetchone=AsyncMock(side_effect=[self.order, None]),
+        self.cur = MagicMock(execute=AsyncMock(), fetchone=AsyncMock(side_effect=[self.order, None, None]),
                              fetchall=AsyncMock(return_value=[{'id': 42, 'balance': Decimal('100')}, {'id': 43, 'balance': Decimal('2')}]))
         self.conn = MagicMock(begin=AsyncMock(), commit=AsyncMock(), rollback=AsyncMock())
         self.conn.cursor.return_value.__aenter__.return_value = self.cur

@@ -37,8 +37,9 @@ class ReferralLedgerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(await referrals.credit_deposit(cur,100,43,Decimal('100'),'crypto','invoice-1'),Decimal('5.25'))
         insert=next(c for c in cur.execute.call_args_list if 'INSERT IGNORE INTO referral_rewards' in c.args[0])
         self.assertEqual(insert.args[1][6:9],(Decimal(100),Decimal('5.25'),Decimal('5.25')))
-        credit=next(c for c in cur.execute.call_args_list if 'UPDATE users' in c.args[0])
-        self.assertEqual(credit.args[1],(Decimal('5.25'),43))
+        credit=next(c for c in cur.execute.call_args_list if 'INSERT INTO scoped_wallets' in c.args[0])
+        self.assertEqual(credit.args[1],(0,43,Decimal('5.25')))
+        self.assertFalse(any('UPDATE users SET balance=' in c.args[0] for c in cur.execute.call_args_list))
 
     async def test_duplicate_reward_never_credits_or_logs_money(self):
         cur=self.cursor({'discount_pct':5,'bonus_pct':5,'signup_bonus':3,'deposit_pct':5},rowcount=0)
