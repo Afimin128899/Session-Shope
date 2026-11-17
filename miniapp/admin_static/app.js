@@ -1,5 +1,5 @@
 'use strict';
-const tg = window.Telegram?.WebApp;
+const tg = (()=>{try{if(window.parent!==window && window.parent.location.origin===location.origin)return window.parent.Telegram?.WebApp;}catch(_){}return window.Telegram?.WebApp;})();
 const $ = id => document.getElementById(id);
 const content = $('content');
 const statusNames = {available:'В наличии',review:'На проверке',sold:'Продан',issued:'Выдан',completed:'Завершён',refunded:'Возвращён',pending:'Ожидает оплаты',credited:'Зачислен',expired:'Истёк',replaced:'Заменён'};
@@ -37,6 +37,7 @@ function row(parent, title, detail, trailing, action) {
   parent.append(line);
 }
 function form(title, fields, submit) {
+  if(window.parent!==window)window.parent.postMessage({type:'tg-market:admin-modal'},location.origin);
   $('edit-title').textContent = title; $('fields').replaceChildren(); $('form-error').textContent = '';
   const controls = {};
   for (const [key,label,value,type = 'text',options] of fields) {

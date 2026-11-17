@@ -66,7 +66,7 @@ async def security(request, handler):
     except Exception as exc:
         logger.error('Mini App request failed: %s [%s]', request.path, type(exc).__name__)
         result = response({'error': tr('Сервис временно недоступен. Попробуйте позже.'), 'code': 'unavailable'}, 503)
-    result.headers.update({'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer', 'Cache-Control': 'no-store', 'Content-Security-Policy': "default-src 'self'; script-src 'self' https://telegram.org; style-src 'self'; img-src 'self' data: blob: https://t.me https://*.t.me https://telegram.org https://*.telegram.org; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors https://web.telegram.org https://*.telegram.org"})
+    result.headers.update({'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer', 'Cache-Control': 'no-store', 'Content-Security-Policy': "default-src 'self'; script-src 'self' https://telegram.org; style-src 'self' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https://t.me https://*.t.me https://telegram.org https://*.telegram.org; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'self' https://web.telegram.org https://*.telegram.org"})
     return result
 
 
@@ -602,6 +602,8 @@ def create_app(*, token=None, bot=None, bot_username='', customer_enabled=None, 
     register_admin_app(app, response)
     from miniapp.storefront_api import register as register_storefront
     register_storefront(app, response)
+    from miniapp.configurator_api import register as register_configurator
+    register_configurator(app,response)
     from miniapp.advertising_api import register as register_advertising
     register_advertising(app,response)
     from miniapp.partners_api import register as register_partners
