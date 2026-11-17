@@ -30,8 +30,8 @@ async def stock(query='',status='available',page=0):
     if status:
         condition+=' AND a.status=%s';args.append(status)
     if query:
-        condition+=" AND (CAST(a.id AS CHAR)=%s OR CAST(a.telegram_user_id AS CHAR)=%s OR a.number LIKE %s OR c.name LIKE %s)";args += [query,query,'%'+query+'%','%'+query+'%']
-    items=await rows('SELECT a.id,a.country,a.number,a.telegram_user_id,a.price,a.status,a.review_reason,a.review_admin_id,a.review_started_at,a.warranty_hours,a.registration_date,a.is_premium,a.features_note,a.spam_status,a.spam_checked_at,a.spam_lease_until,a.spam_requested,a.spam_reason,c.name FROM accounts a LEFT JOIN categories c ON c.slug=a.country WHERE '+condition+' ORDER BY a.id DESC LIMIT 31 OFFSET %s',(*args,page*30))
+        condition+=" AND (CAST(a.id AS CHAR)=%s OR CAST(a.telegram_user_id AS CHAR)=%s OR a.number LIKE %s OR c.name LIKE %s OR EXISTS (SELECT 1 FROM purchases sp WHERE sp.account_id=a.id AND CAST(sp.id AS CHAR)=%s))";args += [query,query,'%'+query+'%','%'+query+'%',query]
+    items=await rows('SELECT a.id,a.country,a.number,a.telegram_user_id,a.price,a.status,a.review_reason,a.review_admin_id,a.review_started_at,a.warranty_hours,a.registration_date,a.is_premium,a.features_note,a.spam_status,a.spam_checked_at,a.spam_lease_until,a.spam_requested,a.spam_reason,c.name,p.id AS order_id,p.user_id AS buyer_id,p.date AS purchased_at,p.paid_amount,p.currency,p.access_revoked_at FROM accounts a LEFT JOIN categories c ON c.slug=a.country LEFT JOIN purchases p ON p.id=(SELECT MAX(lp.id) FROM purchases lp WHERE lp.account_id=a.id) WHERE '+condition+' ORDER BY a.id DESC LIMIT 31 OFFSET %s',(*args,page*30))
     from database.spam_checks import public as spam_status
     for item in items:
         item['spam_check']=spam_status(item)
@@ -53,8 +53,8 @@ async def stock(query='',status='available',page=0):
 async def orders(query='',page=0):
     condition='1=1';args=[]
     if query:
-        condition+=' AND (CAST(p.id AS CHAR)=%s OR CAST(p.user_id AS CHAR)=%s OR u.username LIKE %s)';args=[query,query,'%'+query+'%']
-    items=await rows('SELECT p.id,p.user_id,p.account_id,p.date,p.currency,p.paid_amount,p.status,u.username,c.name,t.id AS ticket_id FROM purchases p LEFT JOIN users u ON u.id=p.user_id LEFT JOIN accounts a ON a.id=p.account_id LEFT JOIN categories c ON c.slug=a.country LEFT JOIN support_tickets t ON t.purchase_id=p.id WHERE '+condition+' ORDER BY p.id DESC LIMIT 31 OFFSET %s',(*args,page*30))
+        condition+=' AND (CAST(p.id AS CHAR)=%s OR CAST(p.user_id AS CHAR)=%s OR u.username LIKE %s OR CAST(p.account_id AS CHAR)=%s OR a.number LIKE %s)';args=[query,query,'%'+query+'%',query,'%'+query+'%']
+    items=await rows('SELECT p.id,p.user_id,p.account_id,p.date,p.currency,p.paid_amount,p.status,p.access_revoked_at,a.number,u.username,c.name,t.id AS ticket_id FROM purchases p LEFT JOIN users u ON u.id=p.user_id LEFT JOIN accounts a ON a.id=p.account_id LEFT JOIN categories c ON c.slug=a.country LEFT JOIN support_tickets t ON t.purchase_id=p.id WHERE '+condition+' ORDER BY p.id DESC LIMIT 31 OFFSET %s',(*args,page*30))
     return {'items':items[:30],'has_more':len(items)>30}
 
 

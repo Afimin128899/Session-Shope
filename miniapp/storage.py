@@ -191,7 +191,7 @@ async def orders(user_id, page=0, query=''):
     async with _get_pool().acquire() as conn:
         async with conn.cursor(aiomysql.DictCursor) as cur:
             await cur.execute(
-                'SELECT p.id, p.date, p.currency, p.paid_amount, p.status, a.number, c.name, '
+                'SELECT p.id, p.date, p.currency, p.paid_amount, p.status, p.access_revoked_at, a.number, c.name, '
                 't.id AS ticket_id, t.status AS ticket_status FROM purchases p '
                 'LEFT JOIN accounts a ON a.id = p.account_id LEFT JOIN categories c ON c.slug = a.country '
                 'LEFT JOIN support_tickets t ON t.purchase_id = p.id WHERE p.user_id = %s '+order_clause()+' '

@@ -649,19 +649,25 @@ async def get_user_purchases(user_id: int):
     from database.partners import order_clause
     async with _get_pool().acquire() as conn:
         async with conn.cursor(aiomysql.DictCursor) as cur:
-            await cur.execute("SELECT p.id,p.account_id,a.country,a.number,a.password,a.data,p.date,p.currency,p.status,p.paid_amount,t.status AS ticket_status FROM purchases p JOIN accounts a ON p.account_id=a.id LEFT JOIN support_tickets t ON t.purchase_id=p.id WHERE p.user_id=%s"+order_clause()+" ORDER BY p.id DESC",(user_id,))
-            return await cur.fetchall()
+            await cur.execute("SELECT p.id,p.account_id,a.country,a.number,a.password,a.data,p.date,p.currency,p.status,p.paid_amount,p.access_revoked_at,t.status AS ticket_status FROM purchases p JOIN accounts a ON p.account_id=a.id LEFT JOIN support_tickets t ON t.purchase_id=p.id WHERE p.user_id=%s"+order_clause()+" ORDER BY p.id DESC",(user_id,))
+            from database.order_access import customer_view
+            return [customer_view(row) for row in await cur.fetchall()]
 
 async def get_purchase_for_user(purchase_id: int,user_id: int):
     from database.partners import order_clause
     async with _get_pool().acquire() as conn:
         async with conn.cursor(aiomysql.DictCursor) as cur:
             await cur.execute("SELECT p.*,a.country,a.code,a.number,a.password,a.data,a.price,a.telegram_user_id,t.status AS ticket_status FROM purchases p JOIN accounts a ON p.account_id=a.id LEFT JOIN support_tickets t ON t.purchase_id=p.id WHERE p.id=%s AND p.user_id=%s"+order_clause(),(purchase_id,user_id))
-            return await cur.fetchone()
+            row = await cur.fetchone()
+            from database.order_access import customer_view
+            return customer_view(row)
 
 async def complete_user_purchase(account_id: int):
     from database.admin_tools import _transaction
     async with _transaction() as cur:
+        await cur.execute('SELECT id,access_revoked_at FROM purchases WHERE account_id=%s FOR UPDATE', (account_id,))
+        if any(row.get('access_revoked_at') for row in await cur.fetchall()):
+            raise ValueError('Access through the shop has been revoked.')
         await cur.execute("UPDATE purchases SET status = 'completed' WHERE account_id = %s AND status <> 'refunded'", (account_id,))
         await cur.execute("UPDATE accounts SET data = '✅ Сессия удалена (Покупка завершена)' WHERE id = %s AND status <> 'refunded'", (account_id,))
 
@@ -831,19 +837,25 @@ async def get_user_purchases(user_id: int):
     from database.partners import order_clause
     async with _get_pool().acquire() as conn:
         async with conn.cursor(aiomysql.DictCursor) as cur:
-            await cur.execute("SELECT p.id,p.account_id,a.country,a.number,a.password,a.data,p.date,p.currency,p.status,p.paid_amount,t.status AS ticket_status FROM purchases p JOIN accounts a ON p.account_id=a.id LEFT JOIN support_tickets t ON t.purchase_id=p.id WHERE p.user_id=%s"+order_clause()+" ORDER BY p.id DESC",(user_id,))
-            return await cur.fetchall()
+            await cur.execute("SELECT p.id,p.account_id,a.country,a.number,a.password,a.data,p.date,p.currency,p.status,p.paid_amount,p.access_revoked_at,t.status AS ticket_status FROM purchases p JOIN accounts a ON p.account_id=a.id LEFT JOIN support_tickets t ON t.purchase_id=p.id WHERE p.user_id=%s"+order_clause()+" ORDER BY p.id DESC",(user_id,))
+            from database.order_access import customer_view
+            return [customer_view(row) for row in await cur.fetchall()]
 
 async def get_purchase_for_user(purchase_id: int,user_id: int):
     from database.partners import order_clause
     async with _get_pool().acquire() as conn:
         async with conn.cursor(aiomysql.DictCursor) as cur:
             await cur.execute("SELECT p.*,a.country,a.code,a.number,a.password,a.data,a.price,a.telegram_user_id,t.status AS ticket_status FROM purchases p JOIN accounts a ON p.account_id=a.id LEFT JOIN support_tickets t ON t.purchase_id=p.id WHERE p.id=%s AND p.user_id=%s"+order_clause(),(purchase_id,user_id))
-            return await cur.fetchone()
+            row = await cur.fetchone()
+            from database.order_access import customer_view
+            return customer_view(row)
 
 async def complete_user_purchase(account_id: int):
     from database.admin_tools import _transaction
     async with _transaction() as cur:
+        await cur.execute('SELECT id,access_revoked_at FROM purchases WHERE account_id=%s FOR UPDATE', (account_id,))
+        if any(row.get('access_revoked_at') for row in await cur.fetchall()):
+            raise ValueError('Access through the shop has been revoked.')
         await cur.execute("UPDATE purchases SET status = 'completed' WHERE account_id = %s AND status <> 'refunded'", (account_id,))
         await cur.execute("UPDATE accounts SET data = '✅ Сессия удалена (Покупка завершена)' WHERE id = %s AND status <> 'refunded'", (account_id,))
 
