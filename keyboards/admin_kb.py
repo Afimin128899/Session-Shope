@@ -34,19 +34,73 @@ ICON_CHANGE = EMOJI_CHANGE
 ICON_COIN = EMOJI_COIN
 
 
-def get_admin_panel() -> InlineKeyboardMarkup:
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text=tr('Инструменты магазина'), callback_data='expand_tools')], [InlineKeyboardButton(text=tr('⚙️ Режимы магазина'), callback_data='shop_status')], [InlineKeyboardButton(text=tr('🔎 На проверке'), callback_data='review_list:0')], [InlineKeyboardButton(text=tr('Тестовый магазин'), callback_data='demo:open')], [InlineKeyboardButton(text=tr('Проверить спамблок всех аккаунтов'), callback_data='spam_all')], [InlineKeyboardButton(text=tr('🎟 Создать промокод скидки'), callback_data='quality_discount')], [InlineKeyboardButton(text=tr('📊 Отчёт за вчера'), callback_data='market_report')], [InlineKeyboardButton(text=tr('🔎 Поиск'), callback_data='adm_search'), InlineKeyboardButton(text=tr('📋 Журнал действий'), callback_data='adm_audit')], [InlineKeyboardButton(text=tr('📞 По номеру'), callback_data='add_account_telethon', icon_custom_emoji_id=ICON_HELPER), InlineKeyboardButton(text='📁 .session', callback_data='add_account_session', icon_custom_emoji_id=ICON_ACCOUNTS)], [InlineKeyboardButton(text=tr('Удалить'), callback_data='admin_del_account', icon_custom_emoji_id=ICON_DELETE), InlineKeyboardButton(text=tr('Аккаунты'), callback_data='admin_accounts_list', icon_custom_emoji_id=ICON_ACCOUNTS)], [InlineKeyboardButton(text=tr('Пользователи'), callback_data='admin_users', icon_custom_emoji_id=ICON_USERS), InlineKeyboardButton(text=tr('Баланс'), callback_data='admin_balance_menu', icon_custom_emoji_id=ICON_BALANCE)], [InlineKeyboardButton(text=tr('Промокоды'), callback_data='admin_promos_menu', icon_custom_emoji_id=ICON_PROMOS), InlineKeyboardButton(text=tr('Цены'), callback_data='admin_prices_menu', icon_custom_emoji_id=ICON_PRICES)], [InlineKeyboardButton(text=tr('Статистика'), callback_data='admin_stats', icon_custom_emoji_id=ICON_STATS), InlineKeyboardButton(text=tr('Рассылка'), callback_data='admin_broadcast', icon_custom_emoji_id=ICON_BROADCAST)], [InlineKeyboardButton(text=tr('Категории'), callback_data='admin_categories', icon_custom_emoji_id=ICON_COUNTRY), InlineKeyboardButton(text=tr('Редактор кнопок'), callback_data='admin_btn_editor', icon_custom_emoji_id=ICON_SETTINGS)], [InlineKeyboardButton(text=tr('Обязательная подписка'), callback_data='admin_sub_menu', icon_custom_emoji_id=EMOJI_MEGA), InlineKeyboardButton(text=tr('Настройки'), callback_data='admin_settings_menu', icon_custom_emoji_id=ICON_SETTINGS)], [InlineKeyboardButton(text=tr('🔧 Техработы'), callback_data='admin_maintenance', icon_custom_emoji_id=ICON_WARNING)], [InlineKeyboardButton(text=tr('Выйти из админки'), callback_data='main_menu', icon_custom_emoji_id=ICON_HOME)]])
+# Keep callback identifiers stable: existing operation handlers remain unchanged.
+ADMIN_CATEGORIES = {
+    'inventory': ('Товары и аккаунты', ICON_ACCOUNTS, [
+        ('Все аккаунты', 'admin_accounts_list', ICON_LIST),
+        ('На проверке', 'review_list:0', ICON_WARNING),
+        ('Добавить по номеру', 'add_account_telethon', ICON_ADD),
+        ('Загрузить .session', 'add_account_session', ICON_ACCOUNTS),
+        ('Категории', 'admin_categories', ICON_COUNTRY),
+        ('Цены', 'admin_prices_menu', ICON_PRICES),
+        ('Проверить спамблок', 'spam_all', ICON_HELPER),
+        ('Удалить аккаунт', 'admin_del_account', ICON_DELETE),
+    ]),
+    'finance': ('Заказы и финансы', ICON_COIN, [
+        ('Поиск заказа', 'adm_search', ICON_LIST),
+        ('Инструменты магазина', 'expand_tools', ICON_SETTINGS),
+        ('Статистика', 'admin_stats', ICON_STATS),
+        ('Отчёт за вчера', 'market_report', ICON_STATS),
+        ('Баланс покупателя', 'admin_balance_menu', ICON_BALANCE),
+    ]),
+    'people': ('Пользователи и промо', ICON_USERS, [
+        ('Пользователи', 'admin_users', ICON_USERS),
+        ('Помощники', 'helper_manage', ICON_HELPER),
+        ('Промокоды', 'admin_promos_menu', ICON_PROMOS),
+        ('Создать скидку', 'quality_discount', ICON_ADD),
+        ('Рассылка', 'admin_broadcast', ICON_BROADCAST),
+        ('Заблокировать', 'p:main_ban', ICON_DELETE),
+        ('Разблокировать', 'p:main_unban', ICON_USERS),
+    ]),
+    'system': ('Настройки и безопасность', ICON_SETTINGS, [
+        ('Режимы магазина', 'shop_status', ICON_SETTINGS),
+        ('Тестовый магазин', 'demo:open', ICON_CODE),
+        ('Партнёрские боты', 'p:list', ICON_USERS),
+        ('Оформление бота', 'pedit:menu:0', ICON_CHANGE),
+        ('Редактор кнопок', 'admin_btn_editor', ICON_CHANGE),
+        ('Обязательная подписка', 'admin_sub_menu', EMOJI_MEGA),
+        ('Настройки', 'admin_settings_menu', ICON_SETTINGS),
+        ('Журнал действий', 'adm_audit', ICON_LIST),
+        ('Техработы', 'admin_maintenance', ICON_WARNING),
+    ]),
+}
 
-    keyboard.inline_keyboard.insert(0,[InlineKeyboardButton(text='Партнёрские боты',callback_data='p:list')])
-    keyboard.inline_keyboard.insert(0,[InlineKeyboardButton(text='Оформление основного бота',callback_data='pedit:menu:0')])
-    keyboard.inline_keyboard.insert(0,[InlineKeyboardButton(text='Общая блокировка пользователей',callback_data='p:main_ban'),InlineKeyboardButton(text='Снять общую блокировку',callback_data='p:main_unban')])
-    keyboard.inline_keyboard.insert(0,[InlineKeyboardButton(text='Помощник',callback_data='helper_manage')])
+
+def get_admin_panel(category=None) -> InlineKeyboardMarkup:
+    if category is not None:
+        if category not in ADMIN_CATEGORIES:
+            raise ValueError('Неизвестный раздел администратора.')
+        entries = ADMIN_CATEGORIES[category][2]
+        buttons = [InlineKeyboardButton(
+            text=tr(title), callback_data=callback, icon_custom_emoji_id=icon,
+            style='danger' if callback in {'admin_del_account', 'p:main_ban'} else None,
+        ) for title, callback, icon in entries]
+        rows = [buttons[i:i+2] for i in range(0, len(buttons), 2)]
+        rows.append([InlineKeyboardButton(text=tr('Назад в админку'), callback_data='admin_home', icon_custom_emoji_id=ICON_BACK)])
+        return InlineKeyboardMarkup(inline_keyboard=rows)
+
+    rows = [[InlineKeyboardButton(text=tr(title), callback_data='admin_category:'+key,
+                                  icon_custom_emoji_id=icon)]
+            for key, (title, icon, _) in ADMIN_CATEGORIES.items()]
+    rows.append([InlineKeyboardButton(text=tr('Поиск'), callback_data='adm_search', icon_custom_emoji_id=ICON_LIST),
+                 InlineKeyboardButton(text=tr('Журнал'), callback_data='adm_audit', icon_custom_emoji_id=ICON_LIST)])
     from utils.miniapp import admin_miniapp_url
     url = admin_miniapp_url()
     if url:
         from aiogram.types import WebAppInfo
-        keyboard.inline_keyboard.insert(0, [InlineKeyboardButton(text=tr('Управление Mini App'), web_app=WebAppInfo(url=url))])
-    return keyboard
+        rows.append([InlineKeyboardButton(text=tr('Открыть Mini App'), web_app=WebAppInfo(url=url), icon_custom_emoji_id=ICON_SETTINGS, style='primary')])
+    rows.append([InlineKeyboardButton(text=tr('В главное меню'), callback_data='main_menu', icon_custom_emoji_id=ICON_HOME)])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def get_settings_menu() -> InlineKeyboardMarkup:

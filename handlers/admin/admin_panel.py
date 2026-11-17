@@ -146,6 +146,22 @@ async def admin_home(call: CallbackQuery, state: FSMContext):
     await answer_safe(call)
 
 
+@admin_router.callback_query(F.data.startswith('admin_category:'))
+async def admin_category(call: CallbackQuery, state: FSMContext):
+    if not is_admin(call.from_user.id):
+        await answer_safe(call, tr('Доступ запрещён.'), show_alert=True)
+        return
+    from keyboards.admin_kb import ADMIN_CATEGORIES
+    category = call.data.partition(':')[2]
+    if category not in ADMIN_CATEGORIES:
+        await answer_safe(call, tr('Раздел не найден.'), show_alert=True)
+        return
+    await state.clear()
+    title = ADMIN_CATEGORIES[category][0]
+    await edit_message_safe(call, tr('<b>{0}</b>\n\nВыберите действие.', tr(title)), reply_markup=get_admin_panel(category))
+    await answer_safe(call)
+
+
 @admin_router.callback_query(F.data == "admin_stats")
 async def show_stats(call: CallbackQuery):
     if not is_admin(call.from_user.id):
