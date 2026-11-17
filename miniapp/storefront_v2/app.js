@@ -13,7 +13,7 @@ document.querySelectorAll('[data-view]').forEach(b=>b.addEventListener('click',(
 const money=value=>new Intl.NumberFormat('ru-RU',{style:'currency',currency:'RUB'}).format(Number(value||0));
 const clean=value=>String(value||'').replace(/[\p{Extended_Pictographic}\p{Regional_Indicator}\uFE0F]/gu,'').trim();
 function el(tag,text,cls){const n=document.createElement(tag);if(text!==undefined)n.textContent=String(text);if(cls)n.className=cls;return n;}
-function toast(value){$('toast').textContent=clean(value);$('toast').hidden=false;clearTimeout(toast.timer);toast.timer=setTimeout(()=>$('toast').hidden=true,5000);}
+function toast(value){$('toast').textContent=clean(value);$('toast').hidden=false;SbandUI.enter($('toast'));clearTimeout(toast.timer);toast.timer=setTimeout(()=>$('toast').hidden=true,5000);}
 function btn(text,action,cls=''){const b=el('button',text,cls);b.type='button';b.addEventListener('click',async()=>{try{await SbandUI.run(b,action);}catch(e){toast(e.message);}});return b;}
 async function api(path,body){const {response:r,data:d}=await SbandUI.request('/api/'+path,{method:body===undefined?'GET':'POST',headers:{Authorization:'tma '+(tg?.initData||''),...(body!==undefined?{'Content-Type':'application/json'}:{})},body:body===undefined?undefined:JSON.stringify(body),cache:'no-store'});if(!r.ok)throw Error(d.error||'Не удалось выполнить запрос.');return d;}
 function open(title){$('modal-title').textContent=title;$('modal-content').replaceChildren();SbandUI.open($('modal'));return $('modal-content');}

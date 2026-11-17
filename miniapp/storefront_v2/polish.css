@@ -26,3 +26,40 @@
  .premium-store dialog{width:calc(100% - 24px);padding:22px 18px}
 }
 @media(prefers-reduced-motion:reduce){.premium-store *, .premium-store *:before{scroll-behavior:auto!important;animation:none!important;transition:none!important}}
+
+/* Interaction finish: retain Studio geometry and charcoal/crimson palette. */
+.premium-store{--studio-ease:cubic-bezier(.22,1,.36,1)}
+.premium-store button{transition:background-color 180ms ease,border-color 180ms ease,color 180ms ease,box-shadow 180ms ease,transform 180ms var(--studio-ease)}
+.premium-store :is(input,textarea,select){transition:border-color 180ms ease,box-shadow 180ms ease;caret-color:#ff939b}
+.premium-store :is(input,textarea,select):focus-visible{outline-offset:2px;box-shadow:0 0 0 4px #a84b561f}
+.premium-store .category{transition:background-color 180ms ease,border-color 180ms ease,box-shadow 220ms ease,transform 220ms var(--studio-ease)}
+.premium-store .category .ui-icon,.premium-store .spotlight-button .ui-icon,.premium-store .invite-arrow .ui-icon,.premium-store .menu-list button>span{transition:transform 200ms var(--studio-ease)}
+.premium-store .catalog-section{scroll-margin-top:24px}
+.premium-store .category-price,.premium-store .stats strong,.premium-store #balance{font-variant-numeric:tabular-nums}
+.premium-store .bottom-nav button[aria-current=page]{color:#ffc6ce}
+.premium-store .search:focus-within>span{color:#ff939b}
+.premium-store .catalog-options summary{border-radius:8px}
+.premium-store .catalog-options[open]>:not(summary){animation:studio-reveal 200ms var(--studio-ease)}
+.premium-store .catalog-options summary::marker{color:#b97981}
+.premium-store .category[aria-busy=true]{cursor:progress}
+.premium-store .field-error:empty{display:none}
+.premium-store .field-error:not(:empty){animation:studio-reveal 180ms ease}
+.premium-store #toast{border:1px solid #70424b;box-shadow:0 12px 36px #0006;line-height:1.55;animation:studio-reveal 200ms var(--studio-ease)}
+.premium-store dialog[open]{animation:studio-reveal 220ms var(--studio-ease)}
+.premium-store dialog::backdrop{background:#0009;animation:studio-backdrop 180ms ease}
+.premium-store progress{accent-color:#b97981}
+.premium-store button.is-busy{opacity:.8}
+.premium-store .ui-icon{pointer-events:none}
+@media(hover:hover) and (pointer:fine){
+ .premium-store button:not(:disabled):hover{border-color:#a84b56}
+ .premium-store .category:hover{transform:translateY(-3px);box-shadow:var(--depth-edge),0 14px 26px -18px #000b}
+ .premium-store :is(.category-action,.spotlight-button):hover .ui-icon,.premium-store .profile-invite:hover .invite-arrow .ui-icon{transform:translate(2px,-2px)}
+ .premium-store .menu-list button:hover>span{transform:translateX(3px)}
+ .premium-store .primary:not(:disabled):hover{box-shadow:inset 0 1px 0 #ffffff24,0 6px 20px -8px #a84b5680}
+}
+@keyframes studio-reveal{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+@keyframes studio-backdrop{from{opacity:0}to{opacity:1}}
+@media(prefers-reduced-motion:reduce){
+ .premium-store *,.premium-store *::before,.premium-store *::after,.premium-store dialog::backdrop{animation:none!important;transition:none!important;scroll-behavior:auto!important}
+ .premium-store .category:hover{transform:none}
+}

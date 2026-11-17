@@ -67,6 +67,17 @@ fs.mkdirSync(artifacts, { recursive: true });
     assert.equal(await page.locator('#catalog-options').getAttribute('open'),null);
     assert.equal(await page.locator('body').evaluate(e=>getComputedStyle(e).backgroundColor),'rgb(10, 10, 10)');
     assert.equal(await page.locator('.category-action').first().evaluate(e=>getComputedStyle(e).backgroundColor),'rgb(185, 35, 51)');
+    await page.locator('#catalog-options>summary').click();
+    if(width===390){
+      assert(await page.evaluate(()=>{
+        const host=document.createElement('div'),hint=document.createElement('p'),select=document.createElement('select');
+        hint.id='fixture-field-hint';hint.textContent='Подсказка';select.setAttribute('aria-describedby',hint.id);host.append(hint,select);document.body.append(host);
+        SbandUI.fieldError(select,'Выберите значение');
+        const preserved=select.getAttribute('aria-describedby').split(' ').includes(hint.id);
+        select.dispatchEvent(new Event('change',{bubbles:true}));
+        const cleared=select.getAttribute('aria-invalid')==='false';host.remove();return preserved&&cleared;
+      }),'Field validation must preserve hints and clear select errors');
+    }
     const requestsBeforePreset=catalogRequests;
     await page.locator('[data-preset=budget]').click();
     await page.waitForFunction(()=>document.querySelectorAll('.category').length===2);
@@ -75,7 +86,6 @@ fs.mkdirSync(artifacts, { recursive: true });
     await page.locator('#active-conditions button').click();
     await page.waitForFunction(()=>document.querySelectorAll('.category').length===4);
     assert.equal(catalogRequests,requestsBeforePreset,'Quick picks should use the current catalogue');
-    await page.locator('#catalog-options>summary').click();
     const requestsBeforeFilters=catalogRequests;
     await page.locator('#budget-filter').selectOption('100');
     await page.waitForFunction(()=>document.querySelectorAll('.category').length===2);
@@ -159,6 +169,14 @@ fs.mkdirSync(artifacts, { recursive: true });
     await page.getByRole('button',{name:'Ввести промокод',exact:false}).click();await page.getByRole('button',{name:'Активировать',exact:true}).click();await page.getByText('Введите промокод.',{exact:true}).waitFor();await page.getByLabel('Промокод',{exact:true}).fill('BAD');await page.getByRole('button',{name:'Активировать',exact:true}).click();await page.getByText('Промокод не найден.',{exact:true}).waitFor();assert.equal(await page.getByLabel('Промокод',{exact:true}).inputValue(),'BAD');await close();
     await page.getByRole('button',{name:'Пополнить баланс',exact:true}).click();const amount=page.getByLabel('Сумма, ₽',{exact:true});await amount.fill('bad');await page.getByRole('button',{name:'Перейти к оплате',exact:true}).click();await page.getByText('Введите корректное положительное число.',{exact:true}).waitFor();await amount.fill('100');await page.getByRole('button',{name:'Перейти к оплате',exact:true}).click();await page.getByText('Платёжный сервис временно недоступен.',{exact:true}).waitFor();assert.equal(await amount.inputValue(),'100');await screen('topup');await close();
     await page.getByRole('button',{name:'Сообщения',exact:true}).click();await page.getByRole('textbox',{name:'Сообщение поддержке'}).fill('Здравствуйте! Нужна помощь с покупкой.');await page.getByRole('button',{name:'Отправить',exact:true}).click();await page.locator('.bubble.mine').waitFor();await noOverflow();
+    if(process.env.SBAND_STOREFRONT_ONLY==='1'){
+      await page.emulateMedia({reducedMotion:'reduce'});
+      await page.getByRole('button',{name:'Маркет',exact:true}).click();
+      await page.locator('.category').first().waitFor();
+      await page.waitForTimeout(250);
+      assert.equal(await page.evaluate(()=>document.getAnimations().filter(a=>a.playState==='running').length),0,'Store reduced motion ignored');
+      await noOverflow();await context.close();continue;
+    }
     await page.goto('http://sband.test/admin-app');await page.getByRole('heading',{name:'Обзор',exact:true}).waitFor();assert.equal(await page.locator('body').evaluate(e=>getComputedStyle(e).backgroundColor),'rgb(10, 10, 10)');await screen('dashboard');await page.getByRole('button',{name:'Товары',exact:true}).click();await page.getByRole('combobox',{name:'Статус товара'}).selectOption('available');await page.getByRole('checkbox',{name:'Выбрать товар #1',exact:true}).check();await page.getByRole('checkbox',{name:'Выбрать товар #2',exact:true}).check();await screen('admin');assert(await page.locator('.stock-select input').first().evaluate(e=>e.getBoundingClientRect().width<=25),'Selection checkbox expanded');
     await page.getByRole('button',{name:'Изменить цену',exact:true}).click();await page.getByLabel('Новая цена, ₽').fill('79');failPrice=true;await page.getByRole('button',{name:'Сохранить',exact:true}).click();await page.locator('#form-error').getByText('Обработано: 0 из 2. Проверьте цену.',{exact:true}).waitFor();assert.equal(await page.getByLabel('Новая цена, ₽').inputValue(),'79');await page.getByRole('button',{name:'Сохранить',exact:true}).click();await page.getByText('Обработано товаров: 2',{exact:true}).waitFor();assert.equal(priceCount,2);
     await page.getByRole('checkbox',{name:'Выбрать товар #1',exact:true}).check();await page.getByRole('button',{name:'Удалить выбранные',exact:true}).click();await page.getByRole('heading',{name:'Удалить выбранные товары: 1',exact:true}).waitFor();assert.equal(deleted.length,0);await page.getByLabel('Для удаления введите УДАЛИТЬ').fill('УДАЛИТЬ');await page.locator('#editor').getByRole('button',{name:'Удалить выбранные',exact:true}).click();await page.getByText('Обработано товаров: 1',{exact:true}).waitFor();assert.deepEqual(deleted,[1]);
@@ -167,5 +185,5 @@ fs.mkdirSync(artifacts, { recursive: true });
     if(width===390){await page.emulateMedia({reducedMotion:'reduce'});await page.getByRole('button',{name:'Товары',exact:true}).click();await page.waitForTimeout(250);assert.equal(await page.evaluate(()=>document.getAnimations().filter(a=>a.playState==='running').length),0,'Reduced motion ignored');}
     await noOverflow();await context.close();
   }
-  assert.deepEqual(errors,[]);await browser.close();console.log(JSON.stringify({viewports:widths,purchase:true,loginCode:true,topup:true,chat:true,selection:true,price:true,categoryPrice:true,delete:true,freeAccount:true,reducedMotion:true,errors,artifacts}));
+  assert.deepEqual(errors,[]);await browser.close();console.log(JSON.stringify({scope:process.env.SBAND_STOREFRONT_ONLY==='1'?'storefront':'full',viewports:widths,purchase:true,loginCode:true,topup:true,chat:true,selection:true,price:true,categoryPrice:true,delete:process.env.SBAND_STOREFRONT_ONLY!=='1',freeAccount:true,reducedMotion:true,errors,artifacts}));
 })().catch(e=>{console.error(e);process.exit(1);});
