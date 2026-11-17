@@ -7,20 +7,17 @@
   <link rel="stylesheet" href="/admin-assets/app.css?v=20261116-partners1">
   <script src="https://telegram.org/js/telegram-web-app.js" defer></script>
   <script src="/assets/ui.js?v=20261116-partners1" defer></script><script src="/admin-assets/app.js?v=20261116-partners1" defer></script><script src="/admin-assets/extras.js?v=20261116-partners1" defer></script>
-<link rel="stylesheet" href="/assets/ui.css?v=20261116-partners1"><script src="/admin-assets/staff.js?v=20261116-partners1" defer></script><link rel="stylesheet" href="/admin-assets/staff.css?v=20261116-partners1"><script src="/admin-assets/partners.js?v=20261116-partners1" defer></script><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet"><link rel="stylesheet" href="/admin-assets/terminal.css?v=20261117"><script src="/admin-assets/terminal.js?v=20261117" defer></script></head>
+<link rel="stylesheet" href="/assets/ui.css?v=20261116-partners1"><link rel="stylesheet" href="/assets/premium.css?v=20261116-partners1"><link rel="stylesheet" href="/assets/crimson.css?v=20261116-partners1"><script src="/admin-assets/staff.js?v=20261116-partners1" defer></script><link rel="stylesheet" href="/admin-assets/staff.css?v=20261116-partners1"><script src="/admin-assets/partners.js?v=20261116-partners1" defer></script><link rel="stylesheet" href="/admin-assets/polish.css?v=20261117-restore"><script src="/admin-assets/terminal.js?v=20261117-restore" defer></script></head>
 <body class="premium-admin">
   <p id="access" role="status">Проверяем доступ администратора…</p>
   <div id="app" hidden>
-    <header><div><small>TG MARKET / CONTROL CENTER</small><h1>Центр управления</h1></div><span id="identity"></span></header>
+    <header><div><small>SBAND ACCS · УПРАВЛЕНИЕ</small><h1>Рабочее пространство<span class="admin-period">.</span></h1></div><span id="identity"></span></header>
     <nav aria-label="Разделы администратора">
-      <span class="nav-section">Магазин</span>
-      <button data-page="overview" aria-current="page">Обзор</button><button data-page="stock">Товары</button><button data-page="categories">Категории</button><button data-page="imports">Залив аккаунтов</button><button data-page="orders">Заказы</button>
-      <span class="nav-section">Люди и общение</span>
-      <button data-page="users">Пользователи</button><button data-page="conversations">Сообщения</button>
-      <span class="nav-section">Финансы</span>
-      <button data-page="payments">Платежи</button><button data-page="promos">Промокоды</button>
-      <span class="nav-section">Настройки</span><button data-page="app-access">Доступ Mini App</button>
-    <button data-page="helpers" hidden>Помощник</button><button data-page="advertising" hidden>Реклама</button><button data-page="partners" hidden>Партнёрские боты</button><button data-page="partner-content" hidden>Оформление бота</button><button data-page="partner-bans" hidden>Блокировки</button></nav>
+<button data-page="overview" aria-current="page">Обзор</button>
+<div class="admin-nav-group"><span class="nav-section">Товары и база</span><button data-page="stock">Товары</button><button data-page="imports">Залив аккаунтов</button><button data-page="categories">Категории и цены</button></div>
+<div class="admin-nav-group"><span class="nav-section">Заказы и финансы</span><button data-page="orders">Заказы</button><button data-page="payments">Платежи</button></div>
+<div class="admin-nav-group"><span class="nav-section">Пользователи и поддержка</span><button data-page="users">Пользователи</button><button data-page="conversations">Сообщения</button><button data-page="promos">Промокоды</button><button data-page="helpers" hidden>Помощники</button><button data-page="advertising" hidden>Реклама</button></div>
+<div class="admin-nav-group"><span class="nav-section">Система и безопасность</span><button data-page="app-access">Доступ Mini App</button><button data-page="partners" hidden>Партнёрские боты</button><button data-page="partner-content" hidden>Оформление бота</button><button data-page="partner-bans" hidden>Блокировки партнёра</button></div></nav>
     <main id="content" tabindex="-1"></main>
     <p id="notice" role="status" aria-live="polite"></p>
   </div>

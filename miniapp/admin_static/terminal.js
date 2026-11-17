@@ -46,17 +46,20 @@
   const revision=++generation;clearTimeout(stockTimer);content.setAttribute('aria-busy','true');content.replaceChildren();
   try{
    const data=await api('overview');if(revision!==generation)return;
-   content.dataset.page='overview';const head=node('div',undefined,'control-intro');head.append(node('div','ОБЗОР / ОСНОВНОЙ МАГАЗИН','eyebrow'),node('h2','Всё под контролем.'),node('p','Реальные операции магазина. Единая точка управления.','muted'));content.append(head);
+   content.dataset.page='overview';const head=node('div',undefined,'control-intro');head.append(node('div','ОБЗОР / ОСНОВНОЙ МАГАЗИН','eyebrow'),node('h2','Управление магазином'),node('p','Выберите нужную категорию.','muted'));content.append(head);
    const sales=(data.sales||[]).map(s=>s.currency==='RUB'?rub(s.amount):s.amount+' '+s.currency).join(' · ')||'0 ₽';
    const stats=node('div',undefined,'stats control-stats');for(const [name,value,note] of [['Выручка сегодня',sales,'Продажи · МСК'],['Активное наличие',data.stock,'Непроданные аккаунты'],['Возвраты на согласовании',data.approvals,'Требуют решения'],['Подключение чекера','Direct','Пул прокси не настроен']]){const c=node('div',undefined,'card');c.append(node('span',name,'muted'),node('strong',value),node('small',note));stats.append(c);}content.append(stats);
    const grid=node('div',undefined,'control-grid');grid.append(
     actionCard(1,'Товары и база аккаунтов','Импорт, качество и ценообразование','market',[
+     ['Открыть товары','Наличие, характеристики и проверка аккаунтов',()=>go('stock')],
+     ['Категории и цены','Структура каталога и цены',()=>go('categories')],
      ['Загрузить архивы аккаунтов','ZIP · .session + JSON · проверка перед публикацией',()=>go('imports'),'primary'],
      ['Проверить спамблок массово','Реальная очередь проверок через @SpamBot',()=>queueSpam(),'success'],
      ['Матрица цен и оптовые скидки','Цены по категориям и порог опта',()=>{inspect('Цены и скидки','Выберите действие.');$('fields').append(button('Цены по категориям',()=>{$('editor').close();return go('categories');}),button('Оптовые скидки',discounts));}],
      ['Экспорт непроданных сессий','ZIP с сессиями и JSON в личный чат',()=>sessionJobEditor('export')],
      ['Удалить невалидные аккаунты','Выбор товаров и обязательное подтверждение',purge,'danger'],
     ]),actionCard(2,'Заказы и финансы','Выдача, платежи и гарантийные решения','history',[
+     ['История платежей','Пополнения и статусы операций',()=>go('payments')],
      ['Заказы и журнал оплат','Номера заказов, покупатели и история доступа',()=>go('orders')],
      ['Выдать замену вручную','По номеру заказа и ID нового аккаунта',replacement,'warning'],
      ['Платёжные шлюзы и кошельки','Реальное состояние способов пополнения',gateways],
@@ -64,11 +67,16 @@
      ['Возврат на баланс покупателя','Проверка суммы и согласование по правилам',refund],
     ]),actionCard(3,'Пользователи и поддержка','Покупатели, промо и коммуникации','users',[
      ['Управление балансами','Поиск по Telegram ID или @username',()=>go('users')],
+     ['Список промокодов','Действующие коды и использованные лимиты',()=>go('promos')],
+     ['Помощники','Назначение и снятие роли помощника',()=>go('helpers')],
      ['Промокоды и скидки','Процентные и балансовые коды с лимитом',promoEditor],
      ['Заблокировать / разблокировать','Доступ покупателя к основному и партнёрским ботам',()=>go('user-bans'),'danger'],
      ['Очередь поддержки','Открытых обращений: '+data.tickets,()=>go('conversations')],
      ['Рассылка через бота','Предпросмотр и подтверждение в /admin',broadcast],
     ]),actionCard(4,'Система и безопасность','Подключения, доступ и журнал операций','info',[
+     ['Доступ к Mini App','Управление доступом покупателей',()=>go('app-access')],
+     ['Партнёрские боты','Состояние и управление магазинами партнёров',()=>go('partners')],
+     ['Оформление основного бота','Тексты и кнопки Telegram-бота',()=>go('partner-content')],
      ['Прокси SOCKS5 / HTTP','Настройка подключения чекера',()=>infrastructure('proxy')],
      ['Telegram-бот и webhook','Конфигурация сервера без раскрытия токенов',()=>infrastructure('bot')],
      ['Режим обслуживания','Пауза продаж и технические работы',maintenance,'warning'],

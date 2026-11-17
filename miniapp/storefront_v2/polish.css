@@ -1,0 +1,28 @@
+/* Small usability improvements over the original SBAND Studio skin. */
+.premium-store{--muted:#b7b0b2;-webkit-tap-highlight-color:transparent}
+.premium-store [hidden]{display:none!important}
+.premium-store :focus-visible{outline:2px solid #ff939b;outline-offset:4px}
+.premium-store button:disabled{cursor:not-allowed;opacity:.5}
+.premium-store .category h3{overflow-wrap:anywhere;line-height:1.35}
+.premium-store .category-footer{gap:12px}
+.premium-store .category-price{font-variant-numeric:tabular-nums;white-space:nowrap}
+.premium-store .category:focus-within{border-color:#a84b56}
+.premium-store .catalog-options summary{min-height:44px;display:flex;align-items:center;gap:8px}
+.premium-store .catalog-result-meta{line-height:1.6;gap:12px}
+.premium-store .form-label{line-height:1.6}
+.premium-store dialog{max-height:calc(100dvh - 32px);overflow-y:auto;overscroll-behavior:contain}
+.premium-store #toast{max-width:calc(100vw - 32px);overflow-wrap:anywhere}
+.premium-store .menu-list button{min-height:52px}
+.premium-store .bubble{overflow-wrap:anywhere}
+.premium-store input,.premium-store select,.premium-store textarea{font-size:16px}
+@media(max-width:700px){
+ .premium-store .shell{padding-bottom:calc(115px + env(safe-area-inset-bottom))}
+ .premium-store .bottom-nav{bottom:max(12px,env(safe-area-inset-bottom))}
+ .premium-store .category .category-action{min-height:44px}
+ .premium-store .quick-picks button{min-height:42px}
+ .premium-store .hero-copy>p{display:block;font-size:11px;line-height:1.7;margin-top:14px;max-width:240px}
+ .premium-store .category-price{font-size:20px}
+ .premium-store .payment-method{min-height:66px}
+ .premium-store dialog{width:calc(100% - 24px);padding:22px 18px}
+}
+@media(prefers-reduced-motion:reduce){.premium-store *, .premium-store *:before{scroll-behavior:auto!important;animation:none!important;transition:none!important}}
