@@ -51,6 +51,8 @@ async def topup_balance_menu(call: CallbackQuery, state: FSMContext):
     await state.clear()
     methods = [method for method in await payments.get_methods() if method['enabled']]
     rows = [button(method['name'] + (' · 1 ⭐ = 1,20 ₽' if method['id'] == 'stars' else ('' if method['id'] in {'platega','heleket'} else ' · USDT')), 'deposit_' + method['id'], 'money') for method in methods]
+    if not methods:
+        rows.append(button(tr('Написать в поддержку'), 'support', 'support'))
     rows.append(button(tr('Назад к балансу'), 'balance'))
     text = tr('<b>Пополнение баланса</b>\n\nСумма задаётся в рублях. Выберите способ оплаты.') if methods else tr('<b>Пополнение баланса</b>\n\nСервисы оплаты пока не настроены. Обратитесь в поддержку.')
     await edit_message_safe(call, text, reply_markup=InlineKeyboardMarkup(inline_keyboard=rows))
@@ -65,7 +67,7 @@ async def _start_deposit(call, state, method):
     await state.clear()
     await state.set_state(LaveDepositState.waiting_amount)
     await state.update_data(payment_method=method)
-    await edit_message_safe(call, tr('<b>Пополнение через {0}</b>\n\nВведите сумму от {1} до {2} ₽. Например: <code>500</code> или <code>1000,50</code>.\n\nОтмена: /cancel', configured['name'], str(configured['min']), '10 000' if method == 'platega' else '1 000 000'), reply_markup=InlineKeyboardMarkup(inline_keyboard=[button(tr('Назад'), 'topup_balance')]))
+    await edit_message_safe(call, tr('<b>Пополнение через {0}</b>\n\nВведите сумму от {1} до {2} ₽. Например: <code>500</code> или <code>1000,50</code>.\n\nОтмена: /cancel', configured['name'], str(configured['min']), f"{configured['max']:,}".replace(',', ' ')), reply_markup=InlineKeyboardMarkup(inline_keyboard=[button(tr('Назад'), 'topup_balance')]))
     await answer_safe(call)
 
 

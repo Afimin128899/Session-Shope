@@ -1,7 +1,9 @@
 from utils.i18n import tr
+from html import escape
+from urllib.parse import urlencode
 from aiogram import Router, F
 from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
+from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, CopyTextButton
 
 from database.db import get_user, get_referral_count, get_referral_settings
 from database import welcome
@@ -34,7 +36,7 @@ async def my_profile(call: CallbackQuery, state: FSMContext):
     user = await get_user(call.from_user.id)
     balance = float(user.get('balance', 0.0)) if user else 0.0
     ref_count = await get_referral_count(call.from_user.id)
-    username = call.from_user.username or '—'
+    username = escape(call.from_user.username or '—')
     text = tr("<tg-emoji emoji-id='5258362837411045098'>👤</tg-emoji> <b>Мой профиль</b>\n\n┏ <tg-emoji emoji-id='5258011929993026890'>👤</tg-emoji> <b>Пользователь:</b> <code>@{0}</code>\n┣ <tg-emoji emoji-id='5258476306152038031'>🔒</tg-emoji> <b>ID:</b> <code>{1}</code>\n┣ <tg-emoji emoji-id='5406841020769936275'>💵</tg-emoji> <b>Баланс:</b> <code>{2} ₽</code>\n┗ <tg-emoji emoji-id='{3}'>✋</tg-emoji> <b>Рефералов:</b> <code>{4}</code>", f'{username}', f'{call.from_user.id}', f'{balance:.2f}', f'{EMOJI_HAND}', f'{ref_count}')
     text+=f"\nВнесённые: {float((user or {}).get('cash_balance',balance)):.2f} ₽ · Бонусы: {float((user or {}).get('bonus_balance',0)):.2f} ₽"
     if await welcome.received(call.from_user.id):
@@ -58,7 +60,8 @@ async def referral_info(call: CallbackQuery):
     text += tr('\n\nЛимит в сутки по Москве: {0} ₽\nНачислено сегодня: {1} ₽\nОсталось: {2} ₽', daily['limit'], daily['issued'], daily['remaining'])
     if daily['blocked']:
         text += tr('\nРеферальные начисления заблокированы администратором.')
-    kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text=tr('Мои рефералы'), callback_data='referral_users:0', icon_custom_emoji_id=icon_for('users'))], [InlineKeyboardButton(text=label_back, callback_data='my_profile', icon_custom_emoji_id=emoji_back)]])
+    share_url = 'https://t.me/share/url?' + urlencode({'url': ref_link})
+    kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text=tr('Скопировать ссылку'), copy_text=CopyTextButton(text=ref_link)), InlineKeyboardButton(text=tr('Поделиться'), url=share_url)], [InlineKeyboardButton(text=tr('Мои рефералы'), callback_data='referral_users:0', icon_custom_emoji_id=icon_for('users'))], [InlineKeyboardButton(text=label_back, callback_data='my_profile', icon_custom_emoji_id=emoji_back)]])
     await edit_message_safe(call, text, reply_markup=kb)
     await answer_safe(call)
 
