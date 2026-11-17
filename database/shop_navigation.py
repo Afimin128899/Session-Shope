@@ -60,7 +60,7 @@ def validate(mode, nation='all', year=0):
         raise ValueError(tr('Некорректный раздел каталога.'))
 
 
-async def _where(cur, user_id, mode, nation='all', year=0):
+async def _where(cur, user_id, mode, nation='all', year=0, *, min_age=0, two_fa=False):
     validate(mode, nation, year)
     country, spam_status = split_nation(nation)
     await cur.execute("SELECT slug,name FROM categories WHERE is_active=1 AND slug NOT LIKE 'section-%%'")
@@ -84,6 +84,12 @@ async def _where(cur, user_id, mode, nation='all', year=0):
         conditions.append(f'({NATION})=%s'); params.append(country)
     if spam_status is not None:
         conditions.append(f'({SPAM_GROUP})=%s'); params.append(spam_status)
+    if type(min_age) is not int or min_age not in {0,7,30,180,365} or type(two_fa) is not bool:
+        raise ValueError(tr('Некорректные характеристики.'))
+    if min_age:
+        conditions.append('a.registration_date<=DATE_SUB(UTC_DATE(),INTERVAL %s DAY)'); params.append(min_age)
+    if two_fa:
+        conditions.append("a.password IS NOT NULL AND a.password NOT IN ('','-')")
     if year:
         conditions.append('YEAR(a.registration_date)=%s'); params.append(year)
     return ' FROM accounts a JOIN categories c ON c.slug=a.country WHERE ' + ' AND '.join(conditions), params
@@ -123,12 +129,12 @@ async def years(user_id, mode, nation):
             return rows
 
 
-async def products(user_id, mode, nation='all', year=0, page=0, *, quantity=None):
+async def products(user_id, mode, nation='all', year=0, page=0, *, quantity=None, min_age=0, two_fa=False):
     if type(page) is not int or not 0 <= page <= 100000 or (quantity is not None and (type(quantity) is not int or not 1 <= quantity <= 20)):
         raise ValueError(tr('Некорректный размер списка.'))
     async with _get_pool().acquire() as conn:
         async with conn.cursor(aiomysql.DictCursor) as cur:
-            where, params = await _where(cur, user_id, mode, nation, year)
+            where, params = await _where(cur, user_id, mode, nation, year, min_age=min_age, two_fa=two_fa)
             await cur.execute('SELECT COUNT(*) AS n' + where, tuple(params))
             count = (await cur.fetchone())['n']; page = min(page, max(0, (count - 1) // PAGE_SIZE))
             await cur.execute('SELECT a.id,a.number,a.country,a.price,a.warranty_hours,a.spam_status,a.registration_date,a.is_premium' + where + ' ORDER BY a.price,a.id LIMIT %s OFFSET %s', (*params, quantity or PAGE_SIZE, 0 if quantity else page * PAGE_SIZE))
@@ -138,11 +144,11 @@ async def products(user_id, mode, nation='all', year=0, page=0, *, quantity=None
             return rows, count, page
 
 
-async def reserve_bulk(user_id, mode, nation, quantity, year=0):
+async def reserve_bulk(user_id, mode, nation, quantity, year=0, *, min_age=0, two_fa=False):
     if type(quantity) is not int or not 1 <= quantity <= 20:
         raise ValueError(tr('Количество: от 1 до 20.'))
     async with _transaction() as cur:
-        where, params = await _where(cur, user_id, mode, nation, year)
+        where, params = await _where(cur, user_id, mode, nation, year, min_age=min_age, two_fa=two_fa)
         await cur.execute('SELECT a.id' + where + ' ORDER BY a.price,a.id LIMIT %s', (*params, quantity))
         ids = sorted(row['id'] for row in await cur.fetchall())
         if len(ids) != quantity:
