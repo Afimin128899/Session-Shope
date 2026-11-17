@@ -11,6 +11,9 @@ _translations = json.loads(_catalog_path.read_text()) if _catalog_path.is_file()
 
 # New bot navigation labels do not require changing the preserved Mini App files.
 for _source, _english in {
+    'Скопировать ссылку': 'Copy link',
+    'Поделиться': 'Share',
+    'Написать в поддержку': 'Contact support',
     'Назад в настройки': 'Back to settings',
     'Назад в профиль': 'Back to profile',
     'Правила': 'Rules',
