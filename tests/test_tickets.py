@@ -167,15 +167,16 @@ class OrderMigrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(any("WHERE p.status = 'issued'" in q for q in sql))
 
     async def test_completion_updates_state_and_clears_session_atomically(self):
-        cur = MagicMock(execute=AsyncMock())
+        cur = MagicMock(execute=AsyncMock(), fetchall=AsyncMock(return_value=[]))
         from contextlib import asynccontextmanager
         @asynccontextmanager
         async def transaction():
             yield cur
         with patch.object(admin_tools, '_transaction', transaction):
             await db.complete_user_purchase(8)
-        self.assertIn("status = 'completed'", cur.execute.call_args_list[0].args[0])
-        self.assertIn('UPDATE accounts SET data', cur.execute.call_args_list[1].args[0])
+        self.assertIn('FOR UPDATE', cur.execute.call_args_list[0].args[0])
+        self.assertIn("status = 'completed'", cur.execute.call_args_list[1].args[0])
+        self.assertIn('UPDATE accounts SET data', cur.execute.call_args_list[2].args[0])
 
     def test_status_changes_follow_active_ticket_without_losing_completion(self):
         self.assertEqual(order_status({'status': 'issued'}), 'Оплачен и выдан')

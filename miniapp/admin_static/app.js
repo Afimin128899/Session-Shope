@@ -3,6 +3,7 @@ const tg = window.Telegram?.WebApp;
 const $ = id => document.getElementById(id);
 const content = $('content');
 const statusNames = {available:'В наличии',review:'На проверке',sold:'Продан',issued:'Выдан',completed:'Завершён',refunded:'Возвращён',pending:'Ожидает оплаты',credited:'Зачислен',expired:'Истёк',replaced:'Заменён'};
+let accessActionNotice='';
 let stockTimer=null,stockStatus='available';
 let page = 'overview', offset = 0, query = '', generation = 0, save = null, saving = false;
 const rub = value => new Intl.NumberFormat('ru-RU',{style:'currency',currency:'RUB'}).format(Number(value || 0));
@@ -60,10 +61,50 @@ $('editor').addEventListener('cancel', event => {event.preventDefault();if(!savi
 $('edit-form').addEventListener('submit', async event => {
   event.preventDefault(); if (saving || !save) return;
   saving = true;$('edit-form').querySelector('button[type=submit]').classList.add('is-busy');$('edit-form').querySelector('button[type=submit]').setAttribute('aria-busy','true'); const buttons = [...$('edit-form').querySelectorAll('button')]; buttons.forEach(b => b.disabled = true);
-  try { await save(); $('editor').close(); await load(); if(categoryPriceResult){$('notice').textContent=categoryPriceResult;categoryPriceResult='';} }
+  try { await save(); $('editor').close(); await load(); if(accessActionNotice){$('notice').textContent=accessActionNotice;accessActionNotice='';} if(categoryPriceResult){$('notice').textContent=categoryPriceResult;categoryPriceResult='';} }
   catch (error) { $('form-error').textContent = error.message; }
   finally { saving = false; buttons.forEach(b => b.disabled = false);$('edit-form').querySelector('button[type=submit]').classList.remove('is-busy');$('edit-form').querySelector('button[type=submit]').removeAttribute('aria-busy'); }
 });
+async function orderDetails(id) {
+  clearTimeout(stockTimer);const current=++generation;
+  const o=await api('orders/'+id);
+  if(current!==generation)return;
+  content.replaceChildren(button('Назад к списку',()=>load()),node('h2','Заказ #'+o.id));
+  const card=node('div',undefined,'card');content.append(card);
+  for(const [label,value] of [
+    ['Товар','#'+o.account_id],['Номер',o.number],['Telegram ID аккаунта',o.telegram_user_id],
+    ['Покупатель',o.user_id+(o.username?' · @'+o.username:'')],['Дата покупки (МСК, как сохранено)',o.date],
+    ['Оплачено',o.paid_amount==null?'Сумма не сохранена':o.paid_amount+' '+o.currency],
+    ['Статус',statusNames[o.status]||o.status],['Гарантия до (UTC)',o.warranty_until],
+    ['Гарантия, часов',o.warranty_hours],['Условия гарантии',o.warranty_policy],
+    ['Регистрация аккаунта',o.registration_date],['Обращение',o.ticket_id?'#'+o.ticket_id+' · '+o.ticket_status:null],
+    ['Возврат',o.refunded_amount==null?null:o.refunded_amount+' '+o.currency+' · '+o.refund_reason],
+    ['Доступ через магазин',o.access_revoked_at?'Отозван · '+o.access_revoked_at+' UTC · администратор '+o.access_revoked_by:'Не отозван'],
+    ['Причина отзыва',o.access_revoked_reason],
+  ]) row(card,label,value??'Не сохранено');
+  let snapshot;try{snapshot=JSON.parse(o.attributes_snapshot||'{}');}catch{snapshot={};}
+  if(snapshot&&typeof snapshot==='object'){
+    const labels={country:'Категория при покупке',registration_date:'Регистрация при покупке',is_premium:'Premium при покупке',features_note:'Описание при покупке',spam_status:'Спамблок при покупке',two_fa:'2FA при покупке'};
+    for(const [key,label] of Object.entries(labels))if(snapshot[key]!=null)row(card,label,String(snapshot[key]));
+  }
+  const tools=node('div',undefined,'tools');content.append(tools);
+  content.append(node('p','Отзыв блокирует новые коды и пароль через магазин. Уже полученные данные остаются у покупателя. Завершение других сеансов Telegram — отдельное действие: требуется действующая сессия магазина. Telegram может отклонить запрос; общую копию той же сессии отключить отдельно невозможно.','muted'));
+  if(!o.access_revoked_at&&['issued','completed'].includes(o.status))tools.append(button('Отозвать доступ через магазин',()=>{
+    form('Отозвать доступ · заказ #'+o.id,[['reason','Причина отзыва (3–500 символов)','','textarea']],v=>api('orders/'+o.id+'/revoke-access','POST',v));
+  }));
+  if(o.access_revoked_at&&o.status==='issued')tools.append(button('Завершить другие сеансы Telegram',()=>{
+    form('Завершить другие сеансы · заказ #'+o.id,[['confirmation','Для подтверждения введите номер заказа '+o.id,'']],async v=>{
+      if(v.confirmation!==String(o.id))throw Error('Номер заказа не совпадает.');
+      const result=await api('orders/'+o.id+'/terminate-sessions','POST',{});
+      if(['cleaned','single'].includes(result.status))accessActionNotice='Telegram подтвердил отсутствие других сеансов. Доступ через магазин остаётся отозван.';
+      if(!['cleaned','single'].includes(result.status))throw Error('Telegram не подтвердил завершение всех сеансов. Причина: '+(result.reason||'Остались другие сеансы')+'. Доступ через магазин остаётся отозван. Обновите детали для просмотра истории.');
+    });
+  }));
+  content.append(node('h3','История действий (UTC)'));
+  const history=node('div',undefined,'card');content.append(history);
+  for(const event of o.access_history||[])row(history,event.action,event.created_at+' · администратор '+event.admin_id+' · '+(typeof event.details==='string'?event.details:JSON.stringify(event.details)));
+  if(!o.access_history?.length)history.append(node('p','Действий пока нет.','muted'));
+}
 function stockEditor(item) {
   form('Товар #' + item.id, [
     ['price','Цена, ₽',item.price,'number'], ['category','Код категории',item.country],
@@ -210,6 +251,7 @@ async function load() {
       for (const item of items) {
         if (selected === 'stock') {
           const check=item.spam_check||{};const actions=['available','review'].includes(item.status)?[button('Изменить',()=>stockEditor(item))]:[];
+          if(item.order_id)actions.push(button('Заказ #'+item.order_id,()=>orderDetails(item.order_id)));
           if(item.status==='available'){
             const b=button(check.running?'Проверяется…':check.queued?'В очереди':'Проверить на спамблок',()=>queueSpam(item.id));
             b.disabled=Boolean(check.running||check.queued);actions.push(b);
@@ -218,7 +260,7 @@ async function load() {
           list.lastElementChild.classList.add('stock-row');
           const stockRow=list.lastElementChild,detail=stockRow.querySelector('.detail'),title=detail.querySelector('strong');detail.replaceChildren();
           const titleRow=node('div',undefined,'stock-title'),flag=node('img');const country=/^auto-([a-z]{2})-/.exec(item.country||'')?.[1]||(/^[a-z]{2}$/.test(item.country||'')?item.country:'unknown');flag.src='/assets/flags/'+country+'.svg';flag.alt='';flag.onerror=()=>{flag.onerror=null;flag.src='/assets/flags/unknown.svg';};titleRow.append(flag,title);detail.append(titleRow);
-          const meta=node('div',undefined,'stock-meta');meta.append(node('span',item.number),node('span','Регистрация: '+(item.registration_date?String(item.registration_date).slice(0,4):'не указана')));detail.append(meta);
+          const meta=node('div',undefined,'stock-meta');meta.append(node('span',item.number),node('span','Регистрация: '+(item.registration_date?String(item.registration_date).slice(0,4):'не указана')));detail.append(meta);if(item.order_id)detail.append(node('small','Заказ #'+item.order_id+' · покупатель '+item.buyer_id+' · '+item.purchased_at+' МСК · '+(item.paid_amount??'—')+' '+item.currency+(item.access_revoked_at?' · Доступ отозван':'')));
           const tags=node('div',undefined,'stock-tags');tags.append(node('span',statusNames[item.status]||item.status,'status-tag status-'+item.status),node('span',check.running?'Проверяется…':check.queued?'В очереди':check.label||'Не проверен','check-tag'));detail.append(tags);if(check.detail)detail.append(node('small',check.detail,'stock-check-detail'));
 
           {
@@ -229,7 +271,7 @@ async function load() {
             });label.append(box);list.lastElementChild.prepend(label);
           }
         }
-        if (selected === 'orders') row(list,'Заказ #' + item.id,(item.name || 'Товар') + ' · ID покупателя: ' + item.user_id + ' · ' + (statusNames[item.status] || item.status),item.currency === 'RUB' ? rub(item.paid_amount) : (item.paid_amount ?? '—') + ' ' + item.currency);
+        if (selected === 'orders') row(list,'Заказ #' + item.id,(item.name || 'Товар') + ' · Товар #' + item.account_id + ' · '+(item.number||'')+' · '+item.date+' МСК · ID покупателя: ' + item.user_id + ' · ' + (statusNames[item.status] || item.status),item.currency === 'RUB' ? rub(item.paid_amount) : (item.paid_amount ?? '—') + ' ' + item.currency,[button('Детали'+(item.access_revoked_at?' · Доступ отозван':''),()=>orderDetails(item.id))]);
         if (selected === 'categories') row(list,item.name,item.slug,item.is_active ? 'Включена' : 'Отключена',[button('Цена всех товаров', () => categoryPriceEditor(item)),button('Изменить', () => categoryEditor(item))]);
         if (selected === 'promos') row(list,item.code,'Использовано: ' + item.uses + ' из ' + item.max_uses,item.kind === 'discount' ? item.value + '%' : rub(item.value));
         if (selected === 'payments') row(list,item.provider + ' · ' + item.invoice_id,'ID: ' + item.user_id + ' · ' + (statusNames[item.status] || item.status) + ' · ' + item.created_at,rub(item.amount_rub));

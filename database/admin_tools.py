@@ -157,7 +157,7 @@ async def find_order(order_id):
         async with conn.cursor(aiomysql.DictCursor) as cur:
             await cur.execute(
                 "SELECT p.id, p.user_id, p.account_id, p.date, p.currency, u.username, "
-                "a.country, p.status, p.paid_amount, p.referrer_id, p.referral_bonus, t.id AS ticket_id, t.status AS ticket_status, r.reason AS refund_reason, r.amount AS refunded_amount, (a.data = '✅ Сессия удалена (Покупка завершена)') AS completed "
+                "a.country,a.number,a.telegram_user_id,a.registration_date,a.is_premium,p.warranty_until,p.warranty_hours,p.warranty_policy,p.attributes_snapshot,p.access_revoked_at,p.access_revoked_by,p.access_revoked_reason, p.status, p.paid_amount, p.referrer_id, p.referral_bonus, t.id AS ticket_id, t.status AS ticket_status, r.reason AS refund_reason, r.amount AS refunded_amount, (a.data = '✅ Сессия удалена (Покупка завершена)') AS completed "
                 "FROM purchases p LEFT JOIN users u ON u.id = p.user_id "
                 "LEFT JOIN accounts a ON a.id = p.account_id "
                 "LEFT JOIN support_tickets t ON t.purchase_id = p.id "

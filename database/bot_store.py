@@ -80,7 +80,7 @@ async def orders(user_id, page=0):
             count = (await cur.fetchone())['n']
             page = bounded_page(page, count)
             await cur.execute(
-                'SELECT p.id,p.date,p.status,p.paid_amount,p.currency,a.country,a.number,c.name,'
+                'SELECT p.id,p.date,p.status,p.paid_amount,p.currency,p.access_revoked_at,a.country,a.number,c.name,'
                 't.status AS ticket_status FROM purchases p JOIN accounts a ON a.id=p.account_id '
                 'LEFT JOIN categories c ON c.slug=a.country LEFT JOIN support_tickets t ON t.purchase_id=p.id '
                 'WHERE p.user_id=%s'+order_clause()+' ORDER BY p.id DESC LIMIT %s OFFSET %s',
@@ -92,9 +92,9 @@ async def orders(user_id, page=0):
 async def complete_order(user_id, purchase_id):
     from database.partners import order_clause
     async with _transaction() as cur:
-        await cur.execute('SELECT account_id,status FROM purchases WHERE id=%s AND user_id=%s'+order_clause('purchases')+' FOR UPDATE', (purchase_id, user_id))
+        await cur.execute('SELECT account_id,status,access_revoked_at FROM purchases WHERE id=%s AND user_id=%s'+order_clause('purchases')+' FOR UPDATE', (purchase_id, user_id))
         row = await cur.fetchone()
-        if not row or row['status'] not in {'issued', 'completed'}:
+        if not row or row.get('access_revoked_at') or row['status'] not in {'issued', 'completed'}:
             raise ValueError(tr('Заказ недоступен или возвращён на баланс.'))
         if row['status'] == 'completed':
             return False

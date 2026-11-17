@@ -77,7 +77,9 @@ async def render_order(call, purchase_id):
             until = datetime.fromisoformat(assurance['until']).astimezone(ZoneInfo('Europe/Moscow'))
             text += tr('\nДо {0} МСК.\n{1}', f'{until:%d.%m.%Y %H:%M}', f"{escape(assurance['policy'])}")
             rows.insert(0, button(tr('Обратиться по гарантии'), f'quality_warranty:{purchase_id}', 'warranty'))
-        if order['status'] == 'completed' or order.get('data') == bot_store.DELETED_SESSION:
+        if order.get('access_revoked_at'):
+            text += tr('\n\nДоступ через магазин отозван администратором. Обратитесь в поддержку по заказу.')
+        elif order['status'] == 'completed' or order.get('data') == bot_store.DELETED_SESSION:
             text += tr('\n\nДанные сессии удалены из рабочей базы. Получить код через магазин больше нельзя.')
         else:
             text += tr('\n\nВведите номер в Telegram, затем нажмите «Получить код». После входа смените пароль и привяжите свою почту.')

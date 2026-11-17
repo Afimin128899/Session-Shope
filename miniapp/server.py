@@ -257,7 +257,7 @@ async def order_detail(request):
         return response({'error': tr('Покупка не найдена.'), 'code': 'not_found'}, 404)
     if row.get('status') == 'refunded':
         row['password'] = None
-    result = {key: row.get(key) for key in ('id', 'account_id', 'telegram_user_id', 'number', 'password', 'paid_amount', 'currency', 'date', 'status', 'ticket_status')} | {'name': row.get('country', tr('Аккаунт')), 'product_id': f"#{row['account_id']:02d}" if row.get('account_id') else None, 'status_label': order_status(row)}
+    result = {key: row.get(key) for key in ('id', 'account_id', 'telegram_user_id', 'number', 'password', 'paid_amount', 'currency', 'date', 'status', 'ticket_status', 'access_revoked_at')} | {'name': row.get('country', tr('Аккаунт')), 'product_id': f"#{row['account_id']:02d}" if row.get('account_id') else None, 'status_label': order_status(row)}
     result['warranty'] = quality.warranty(row)
     result['characteristics'] = json.loads(row.get('attributes_snapshot') or '{}')
     from database.spam_checks import public as spam_status

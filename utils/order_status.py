@@ -6,6 +6,8 @@ TICKET_STATUSES = {'open': 'Ждёт поддержки', 'waiting_user': 'Жд�
 def order_status(order):
     if order.get('status') == 'refunded':
         return tr('Возвращён на баланс')
+    if order.get('access_revoked_at'):
+        return tr('Доступ через магазин отозван')
     if order.get('ticket_status') in {'open', 'waiting_user'}:
         return tr('Проблема · обращение в поддержку')
     if order.get('status') == 'completed' or order.get('completed'):
