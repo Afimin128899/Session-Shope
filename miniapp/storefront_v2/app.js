@@ -25,7 +25,7 @@ async function me(){
  state.me=await api('me');const user=state.me.user;
  $('wallet').replaceChildren(SbandUI.icon('wallet'),document.createTextNode(money(state.me.balance)));$('balance').textContent=money(state.me.balance);$('wallet-cash').textContent='Внесённые средства: '+money(state.me.cash_balance??state.me.balance);$('wallet-bonus').textContent='Бонусы: '+money(state.me.bonus_balance||0);
  $('username').textContent=user.username?'@'+user.username:user.first_name;
- $('user-id').textContent='ID: '+user.id;$('admin-link').hidden=!(state.me.is_admin||state.me.is_helper||state.me.is_partner_owner);window.dispatchEvent(new CustomEvent('market:identity'));
+ $('user-id').textContent='ID: '+user.id;$('admin-link').hidden=!(state.me.is_admin||state.me.is_helper||state.me.is_partner_owner);
  if(state.avatarOwner!==user.id){
   state.avatarOwner=user.id;$('avatar').textContent=(user.first_name||'S').slice(0,1).toUpperCase();
   async function loadPhoto(){
@@ -118,6 +118,12 @@ async function order(id){
  const value='Номер: '+(data.number||'—')+'\nПароль 2FA: '+(data.password||'Не установлен');
  body.append(el('div',value,'order-data'),btn('Скопировать данные',async()=>{await navigator.clipboard.writeText(value);toast('Скопировано');},'subtle full'));
  if(data.status==='issued'&&!data.access_revoked_at){
+  body.append(btn('Скачать Session + JSON',async()=>{
+   const response=await fetch('/api/orders/'+id+'/archive',{headers:{...SbandUI.scopeHeaders(),Authorization:'tma '+(tg?.initData||'')},cache:'no-store'});
+   if(!response.ok){const error=await response.json();throw Error(error.error||'Архив недоступен.');}
+   const url=URL.createObjectURL(await response.blob()),link=el('a');link.href=url;link.download='tg-order-'+id+'.zip';document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),30000);
+  },'subtle full'));
+
   body.append(el('p','Введите номер в Telegram и запросите вход. Затем нажмите кнопку ниже.','muted'));
   const result=el('div',undefined,'login-code-result');result.setAttribute('aria-live','polite');
   const fetchCode=btn('Получить код',async()=>{
@@ -246,4 +252,4 @@ document.querySelector('.brand').addEventListener('click',event=>{event.preventD
 const menuIcons={orders:'market',transactions:'history',promo:'ticket',rewards:'gift',referrals:'users',information:'info'};document.querySelectorAll('.menu-list [data-action]').forEach(b=>b.prepend(SbandUI.icon(menuIcons[b.dataset.action])));
 document.querySelectorAll('[data-tab]').forEach(b=>b.prepend(SbandUI.icon(b.dataset.tab)));document.querySelector('.search>span').replaceChildren(SbandUI.icon('search'));
 const polling=setInterval(()=>{if(state.tab==='messages'&&!document.hidden)chat().catch(()=>{});},6000);window.addEventListener('beforeunload',()=>clearInterval(polling));
-(async()=>{try{tg?.ready();tg?.expand();tg?.setHeaderColor('#0E1621');tg?.setBackgroundColor('#0E1621');await me();await market();}catch(e){$('categories').replaceChildren();empty($('categories'),clean(e.message));}})();
+(async()=>{try{tg?.ready();tg?.expand();tg?.setHeaderColor('#0a0a0a');tg?.setBackgroundColor('#0a0a0a');await me();await market();}catch(e){$('categories').replaceChildren();empty($('categories'),clean(e.message));}})();
