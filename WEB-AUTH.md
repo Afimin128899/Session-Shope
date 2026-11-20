@@ -35,6 +35,18 @@ AUTH_COOKIE_SECURE=1
 
 `AUTH_SMTP_SECURITY` принимает `ssl`, `starttls` или `none`. Не используйте `none` с SMTP-логином через открытую сеть. Оставьте `AUTH_COOKIE_SECURE=1` на рабочем домене.
 
+### Resend через HTTPS API
+
+Если VPS или Resend отклоняет SMTP, включите отправку через порт 443:
+
+```text
+AUTH_EMAIL_PROVIDER=resend
+RESEND_API_KEY=re_...
+AUTH_SMTP_FROM="SBAND ACCS <support@sbandsub.space>"
+```
+
+Вместо `RESEND_API_KEY` можно оставить ключ в `AUTH_SMTP_PASSWORD`, но отдельная переменная понятнее. Домен адреса отправителя должен иметь статус `Verified` в Resend.
+
 ## База данных
 
 `database.db.init_db()` создаёт таблицы `web_identities`, `web_email_codes` и `web_sessions`. Сессия хранится в браузере как `Secure`, `HttpOnly`, `SameSite=Lax` cookie. База хранит только SHA-256 хеш токена.
