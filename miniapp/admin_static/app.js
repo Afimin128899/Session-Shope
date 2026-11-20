@@ -217,7 +217,7 @@ async function load() {
     const descriptions={overview:'Остатки, заказы и быстрый доступ к работе.',stock:'Контролируй наличие, цены и состояние аккаунтов.',categories:'Структура магазина и цены по категориям.',users:'Найди пользователя и управляй его балансом.',orders:'Все заказы и история выдачи.',promos:'Бонусы и предложения для покупателей.',payments:'Статусы и история пополнений.'};headingText.append(node('p',descriptions[selected]||'','muted'));heading.append(headingText);content.append(heading);
     if (['stock','orders','users','payments'].includes(selected)) {
       const search = node('form',undefined,'tools'); const input = node('input');
-      input.type='search'; input.value=query; input.placeholder=selected === 'users' ? 'ID или имя пользователя' : 'Поиск'; input.setAttribute('aria-label','Поиск');
+      input.type='search'; input.value=query; input.placeholder=selected === 'users' ? 'ID, username или email' : 'Поиск'; input.setAttribute('aria-label','Поиск');
       const submit = node('button','Найти'); submit.type='submit'; search.append(input);
       if(selected==='stock'){const status=node('select');status.setAttribute('aria-label','Статус товара');for(const [value,title] of [['available','В наличии'],['review','На проверке'],['sold','Проданы'],['','Все статусы']]){const option=node('option',title);option.value=value;status.append(option);}status.value=stockStatus;status.addEventListener('change',()=>{stockStatus=status.value;query=input.value.trim();offset=0;load();});search.append(status);}search.append(submit);
       search.addEventListener('submit',event => {event.preventDefault();query=input.value.trim();offset=0;load();}); content.append(search);
@@ -245,7 +245,7 @@ async function load() {
     if (selected === 'users') {
       const user=result.user;
       if (!user) list.append(node('p','Пользователь не найден. Укажите ID или имя.','muted'));
-      else row(list,'@' + (user.username || user.id),'ID: ' + user.id + ' · ' + (user.balance_usdt ?? 0) + ' USDT',rub(user.balance),[button('Изменить баланс', () => balanceEditor(user))]);
+      else row(list,user.email || (user.username?'@'+user.username:String(user.id)),'ID: ' + user.id + ' · ' + (user.balance_usdt ?? 0) + ' USDT',rub(user.balance),[button('Изменить баланс', () => balanceEditor(user))]);
     } else {
       const items=result.items || [];
       if (!items.length) list.append(node('p','Записей пока нет.','muted'));

@@ -1,0 +1,13 @@
+# SBAND ACCS AI discovery
+Site: https://sbandsub.space/
+Language: ru
+Summary: https://sbandsub.space/summary.json
+LLM guide: https://sbandsub.space/llms.txt
+Full context: https://sbandsub.space/llms-full.txt
+Sitemap: https://sbandsub.space/sitemap.xml
+RSS: https://sbandsub.space/feed.xml
+FAQ: https://sbandsub.space/ai/faq.json
+Service: https://sbandsub.space/ai/service.json
+Public facts: https://sbandsub.space/about
+Markdown: https://sbandsub.space/index.md
+Private paths: /api/, /admin-app, /admin-assets/

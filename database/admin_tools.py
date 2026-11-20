@@ -123,18 +123,22 @@ async def remove_account(admin_id, account_id):
 
 async def find_user(query):
     query = query.strip().lstrip('@')
-    if not query or len(query) > 64:
+    if not query or len(query) > 254:
         return None
     async with _get_pool().acquire() as conn:
         async with conn.cursor(aiomysql.DictCursor) as cur:
             if query.isascii() and query.isdigit():
                 if not 0 < int(query) <= 9223372036854775807:
                     return None
-                condition, value = 'id = %s', int(query)
+                condition, value = 'u.id = %s', int(query)
+            elif '@' in query:
+                condition, value = 'i.email = LOWER(%s)', query
             else:
-                condition, value = 'LOWER(username) = LOWER(%s)', query
+                condition, value = 'LOWER(u.username) = LOWER(%s)', query
             await cur.execute(
-                f'SELECT id, username, balance, balance_usdt FROM users WHERE {condition} LIMIT 1',
+                'SELECT u.id,u.username,u.balance,u.balance_usdt,i.email '
+                "FROM users u LEFT JOIN web_identities i ON i.user_id=u.id AND i.provider='email' "
+                f'WHERE {condition} LIMIT 1',
                 (value,),
             )
             return await cur.fetchone()

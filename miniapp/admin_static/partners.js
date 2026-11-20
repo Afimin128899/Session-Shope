@@ -20,7 +20,7 @@ load=async function(){
    }
   }else if(selected==='partner-bans'){
    content.append(node('p','Блокировка действует во всех ботах магазина. Вы можете снять только собственную блокировку. Владелец основного бота может снять все.','muted'));
-   content.append(button('Заблокировать пользователя',()=>form('Общая блокировка',[['id','Telegram ID','','text'],['reason','Причина','','text']],v=>{const id=Number(v.id);if(!Number.isSafeInteger(id)||id<=0)throw Error('Нужен Telegram ID.');return api('partner-bans','POST',{user_id:id,reason:v.reason,enabled:true});}),true));
+    content.append(button('Заблокировать пользователя',()=>form('Общая блокировка',[['id','ID пользователя','','text'],['reason','Причина','','text']],v=>{const id=v.id.trim();if(!/^[1-9][0-9]{0,18}$/.test(id)||BigInt(id)>=2n**63n)throw Error('Нужен корректный ID пользователя.');return api('partner-bans','POST',{user_id:id,reason:v.reason,enabled:true});}),true));
    for(const b of result.items)row(content,String(b.user_id),b.reason,b.active?'Заблокирован':'Ваша блокировка снята',b.active?[button('Снять свою блокировку',()=>api('partner-bans','POST',{user_id:b.user_id,reason:'Снята партнёром',enabled:false}).then(()=>load()))]:[]);
   }else{
    content.append(node('p','Текст и подписи меняются только для этого бота. Фото загружается через его /admin; для основного бота — через настройки основного бота. Действия кнопок и платёжные настройки не меняются.','muted'));

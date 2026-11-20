@@ -144,7 +144,7 @@ async def begin_reply(call, state):
     if call.from_user.id not in ADMIN_IDS:
         return await answer_safe(call, tr('Нет доступа.'), show_alert=True)
     raw = call.data.split(':', 1)[1]
-    if not raw.isascii() or not raw.isdigit() or len(raw) > 16 or not 0 < int(raw) <= 4503599627370495:
+    if not raw.isascii() or not raw.isdigit() or len(raw) > 19 or not 0 < int(raw) < 2**63:
         return await answer_safe(call, tr('Некорректный пользователь.'), show_alert=True)
     await state.clear()
     await state.update_data(support_recipient=int(raw))
@@ -160,8 +160,24 @@ async def admin_message(message, state):
         await state.clear()
         return
     target = (await state.get_data()).get('support_recipient')
-    if type(target) is not int or not 0 < target <= 4503599627370495:
+    if type(target) is not int or not 0 < target < 2**63:
         await state.clear()
+        return
+    from database.web_auth import WEB_USER_ID_BASE
+    if target >= WEB_USER_ID_BASE:
+        body = (message.text or message.caption or '').strip()
+        if not body:
+            await message.answer(tr('Email-пользователю можно отправить текстовый ответ через веб-переписку.'))
+            return
+        try:
+            from database.direct_chat import append
+            await append(target, 'admin', body[:4000])
+        except Exception:
+            logger.warning('Web support reply save failed, recipient=%s', target)
+            await message.answer(tr('Не удалось сохранить ответ. Попробуйте позже.'))
+            return
+        await state.clear()
+        await message.answer(tr('Ответ сохранён. Пользователь увидит его в сообщениях на сайте.'), reply_markup=cancel_keyboard())
         return
     from services.partner_runtime import client_for,copy_between
     delivery_bot=await client_for(target) or message.bot

@@ -14,7 +14,8 @@ import config
 from database import db, commerce, quality, coupons, tickets, welcome
 from services import payments
 from services.demo import STORE
-from miniapp.auth import AuthError, validate_init_data
+from miniapp.auth import AuthError, resolve_identity
+from database.web_auth import EmailCodeError
 from miniapp import storage
 from utils.order_status import order_status
 from utils.version import BOT_VERSION
@@ -27,6 +28,7 @@ BOT = web.AppKey('bot', object)
 BOT_USERNAME = web.AppKey('bot_username', str)
 LIMITS = web.AppKey('limits', OrderedDict)
 logger = logging.getLogger(__name__)
+JS_SAFE_INTEGER = 2**53 - 1
 
 
 @web.middleware
@@ -40,20 +42,36 @@ async def locale_context(request, handler):
         LANGUAGE.reset(token)
 
 
+def browser_json(value):
+    """Keep identifiers exact when JSON is consumed by JavaScript."""
+    if type(value) is int and abs(value) > JS_SAFE_INTEGER:
+        return str(value)
+    if isinstance(value, dict):
+        return {key: browser_json(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [browser_json(item) for item in value]
+    return value
+
+
 def response(value, status=200):
-    return web.Response(text=json.dumps(value, default=str, ensure_ascii=False, allow_nan=False),
+    return web.Response(text=json.dumps(browser_json(value), default=str, ensure_ascii=False, allow_nan=False),
                         content_type='application/json', status=status)
 
 
 @web.middleware
 async def security(request, handler):
     from database.advertising import AccessDenied
+    from miniapp.browser_auth import EmailUnavailable
     try:
         result = await handler(request)
     except AccessDenied as exc:
         result = response({'error': str(exc), 'code': 'forbidden'}, 403)
     except AuthError as exc:
         result = response({'error': str(exc), 'code': 'unauthorized'}, 401)
+    except EmailCodeError as exc:
+        result = response({'error': str(exc), 'code': 'invalid_code'}, 401)
+    except EmailUnavailable:
+        result = response({'error': tr('Вход по почте временно недоступен.'), 'code': 'email_unavailable'}, 503)
     except storage.CheckoutError as exc:
         result = response({'error': str(exc), 'code': exc.code}, 409)
     except (ValueError, InvalidOperation, json.JSONDecodeError) as exc:
@@ -66,7 +84,17 @@ async def security(request, handler):
     except Exception as exc:
         logger.error('Mini App request failed: %s [%s]', request.path, type(exc).__name__)
         result = response({'error': tr('Сервис временно недоступен. Попробуйте позже.'), 'code': 'unavailable'}, 503)
-    result.headers.update({'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer', 'Cache-Control': 'no-store', 'Content-Security-Policy': "default-src 'self'; script-src 'self' https://telegram.org; style-src 'self' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https://t.me https://*.t.me https://telegram.org https://*.telegram.org; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'self' https://web.telegram.org https://*.telegram.org"})
+    public_document = request.path in {'/', '/shop', '/about', '/robots.txt', '/llms.txt',
+                                       '/llms-full.txt', '/ai.txt', '/sitemap.xml', '/summary.json'}
+    cache = ('no-store' if result.status >= 400 or request.path.startswith('/api/')
+             else 'public, max-age=300' if public_document else 'public, max-age=3600')
+    result.headers.update({
+        'X-Content-Type-Options': 'nosniff',
+        'Referrer-Policy': 'strict-origin-when-cross-origin',
+        'Cache-Control': cache,
+        'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
+        'Content-Security-Policy': "default-src 'self'; script-src 'self' https://telegram.org; style-src 'self' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https://t.me https://*.t.me https://telegram.org https://*.telegram.org; connect-src 'self'; frame-src https://oauth.telegram.org https://*.telegram.org; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'self' https://web.telegram.org https://*.telegram.org",
+    })
     return result
 
 
@@ -88,12 +116,13 @@ def limited(app, user_id, purchase=False):
 
 @web.middleware
 async def authenticate(request, handler):
-    if not request.path.startswith('/api/') or request.path in {'/api/health','/api/app-info'}:
+    from miniapp.browser_auth import PUBLIC_PATHS as AUTH_PATHS
+    if not request.path.startswith('/api/') or request.path in ({'/api/health','/api/app-info'} | AUTH_PATHS):
         return await handler(request)
-    authorization = request.headers.get('Authorization', '')
-    raw = authorization[4:] if authorization.startswith('tma ') else ''
-    user = validate_init_data(raw, request.app[TOKEN])
-    request['user'] = user
+    user = await resolve_identity(request, request.app[TOKEN])
+    if request.get('browser_session') and request.method not in {'GET', 'HEAD', 'OPTIONS'}:
+        from miniapp.browser_auth import ensure_same_origin
+        ensure_same_origin(request)
     if request.path.startswith('/api/demo/'):
         if user['id'] not in config.ADMIN_IDS:
             return response({'error': tr('Тестовый режим доступен только администратору.'), 'code': 'forbidden'}, 403)
@@ -110,7 +139,9 @@ async def authenticate(request, handler):
         if limited(request.app,user['id']):return response({'error':'Подождите.','code':'rate_limited'},429)
         return await handler(request)
     if await partners.banned(user['id']):return response({'error':'Доступ к магазину заблокирован.','code':'banned'},403)
-    if p and request.path=='/api/invoices' and request.method=='POST':return response({'error':'Пополните баланс через основной бот.','code':'main_topup'},409)
+    if p and request.path=='/api/invoices' and request.method=='POST':
+        if user.get('auth_method')=='email':return response({'error':'Для пополнения партнёрского магазина войдите через Telegram.','code':'telegram_required'},409)
+        return response({'error':'Пополните баланс через основной бот.','code':'main_topup'},409)
     profile = await db.get_user(user['id'])
     LANGUAGE.set(language(profile.get('language') if profile else 'ru'))
     request['language'] = LANGUAGE.get()
@@ -139,6 +170,8 @@ async def authenticate(request, handler):
     if not admin and settings.get('sub_channel_enabled') == '1' and (request.path not in {'/api/status', '/api/preferences/language'}):
         channel = settings.get('sub_channel_id')
         bot = request.app[BOT]
+        if user.get('auth_method') == 'email':
+            return response({'error': tr('Для проверки подписки войдите через Telegram.'), 'code': 'subscription_required'}, 403)
         if not channel or bot is None:
             return response({'error': tr('Проверка подписки временно недоступна.'), 'code': 'unavailable'}, 503)
         member = await bot.get_chat_member(channel, user['id'])
@@ -166,7 +199,10 @@ async def me(request):
     from utils.partner_context import CURRENT
     p=CURRENT.get()
     user = await db.get_user(request['user']['id'])
-    return response({'user': request['user'], 'balance': str(user['balance']), 'balance_usdt': str(user['balance_usdt']),
+    public_user = {key: value for key, value in request['user'].items() if key != 'identity_id'}
+    if public_user.get('auth_method') == 'email':
+        public_user['id'] = str(public_user['id'])
+    return response({'user': public_user, 'balance': str(user['balance']), 'balance_usdt': str(user['balance_usdt']),
                      'language':language(user.get('language')), 'shop_status':request['shop_status'],
                      'welcome_bonus': str(await welcome.received(request['user']['id'])),
                      'cash_balance':str(user.get('cash_balance',user['balance'])), 'bonus_balance':str(user.get('bonus_balance',0)), 'partner_id':p['bot_id'] if p else 0, 'is_partner_owner':bool(p and p['owner_id']==request['user']['id']), 'bot_username': request.app[BOT_USERNAME], 'test_mode_active': STORE.active(request['user']['id']), 'version': BOT_VERSION, 'is_helper':bool(not p and user.get('is_helper') == 1 and request['user']['id'] not in config.ADMIN_IDS), 'is_admin':not p and request['user']['id'] in config.ADMIN_IDS})
@@ -338,19 +374,24 @@ async def cart_checkout(request):
 
 
 async def payment_methods(request):
-    return response({'items': await payments.get_methods()})
+    items = await payments.get_methods()
+    if request['user'].get('auth_method') == 'email':
+        items = [dict(item, enabled=False) if item['id'] == 'stars' else item for item in items]
+    return response({'items': items})
 
 
 async def create_invoice(request):
     body = await json_body(request)
     if body.get('provider') == 'stars':
+        if request['user'].get('auth_method') == 'email':
+            raise storage.CheckoutError(tr('Для оплаты Telegram Stars войдите через Telegram.'), 'telegram_required')
         from services.stars import create_invoice as stars_invoice
         if type(body.get('stars')) is not int: raise ValueError
         return response(await stars_invoice(request.app[BOT],request['user']['id'],body['stars']),201)
     if not isinstance(body.get('amount'), str) or len(body['amount']) > 24 or not isinstance(body.get('provider'), str):
         raise ValueError
     try:
-        result = await payments.create_deposit(request['user']['id'], request['user']['username'], body['provider'], body['amount'])
+        result = await payments.create_deposit(request['user']['id'], request['user']['username'], body['provider'], body['amount'], payer_email=request['user'].get('email'))
     except ValueError as exc:
         raise storage.CheckoutError(str(exc), getattr(exc, 'code', 'invoice_unavailable')) from None
     return response(result, 201)
@@ -546,13 +587,27 @@ async def app_info(request):
 
 
 async def storefront(request):
-    return web.Response(text=(STATIC.parent / 'storefront_v2' / 'index.html').read_text(), content_type='text/html')
+    from miniapp.discovery import markdown_response, wants_markdown
+    if wants_markdown(request):
+        return markdown_response('homepage.md')
+    return web.Response(
+        text=(STATIC.parent / 'storefront_v2' / 'index.html').read_text(encoding='utf-8'),
+        content_type='text/html', headers={'Vary': 'Accept'},
+    )
 
 
 async def index(request):
+    from miniapp.discovery import markdown_response, wants_markdown
+    if wants_markdown(request):
+        return markdown_response('homepage.md')
     from miniapp.access import ADMIN_ONLY, CUSTOMER_ENABLED
     if request.app[ADMIN_ONLY] and not request.app[CUSTOMER_ENABLED]:
-        return web.Response(text=(STATIC.parent / 'preview_gate' / 'index.html').read_text(), content_type='text/html')
+        from miniapp.storefront_api import public_access
+        if not await public_access():
+            return web.Response(
+                text=(STATIC.parent / 'preview_gate' / 'index.html').read_text(encoding='utf-8'),
+                content_type='text/html', headers={'Vary': 'Accept'},
+            )
     return await storefront(request)
 
 
@@ -571,6 +626,7 @@ def create_app(*, token=None, bot=None, bot_username='', customer_enabled=None, 
     from miniapp.public_info import about
     app.add_routes([
         web.get('/about', about),
+        web.get('/shop', storefront),
         web.get('/api/storefront-preview', storefront),
         web.static('/store-assets', STATIC.parent / 'storefront_v2', show_index=False, follow_symlinks=False),
         web.static('/preview-assets', STATIC.parent / 'preview_gate', show_index=False, follow_symlinks=False),
@@ -608,6 +664,10 @@ def create_app(*, token=None, bot=None, bot_username='', customer_enabled=None, 
     register_advertising(app,response)
     from miniapp.partners_api import register as register_partners
     register_partners(app,response)
+    from miniapp.browser_auth import register as register_browser_auth
+    register_browser_auth(app,response)
+    from miniapp.discovery import register as register_discovery
+    register_discovery(app)
     return app
 
 

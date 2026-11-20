@@ -127,6 +127,14 @@ class AdminMutationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(params, (query,))
         self.assertNotIn('password', sql)
 
+    async def test_email_profile_search_uses_identity_join(self):
+        await storage.find_user('Buyer@Example.COM')
+        sql,params=self.cur.execute.call_args.args
+        self.assertIn('web_identities',sql)
+        self.assertIn('i.email = LOWER(%s)',sql)
+        self.assertEqual(params,('Buyer@Example.COM',))
+        self.assertNotIn('password',sql)
+
     async def test_order_search_does_not_select_credentials(self):
         await storage.find_order(5)
         sql, params = self.cur.execute.call_args.args

@@ -83,6 +83,16 @@ class DirectSupportTests(unittest.IsolatedAsyncioTestCase):
         with patch.object(support,'ADMIN_IDS',[]): await support.admin_message(msg,state)
         msg.bot.copy_message.assert_not_awaited();state.clear.assert_awaited_once()
 
+    async def test_admin_text_reply_reaches_email_user_web_conversation(self):
+        from database import direct_chat, web_auth
+        target=web_auth.WEB_USER_ID_BASE+7
+        msg=message(99);state=NS(get_data=AsyncMock(return_value={'support_recipient':target}),clear=AsyncMock())
+        with patch.object(support,'ADMIN_IDS',[99]),patch.object(direct_chat,'append',AsyncMock()) as append:
+            await support.admin_message(msg,state)
+        append.assert_awaited_once_with(target,'admin','Вопрос')
+        msg.bot.send_message.assert_not_awaited();msg.bot.copy_message.assert_not_awaited()
+        state.clear.assert_awaited_once()
+
     async def test_purchase_context_requires_ownership_but_general_help_does_not(self):
         call=NS(from_user=NS(id=42),data='purchase_help:7',answer=AsyncMock())
         with patch.object(db,'get_purchase_for_user',AsyncMock(return_value=None)) as get,patch.object(support,'begin',AsyncMock()) as begin:

@@ -339,6 +339,8 @@ async def init_db ():
                     await init_quality_schema(cur, DB_CONFIG["db"])
                     from database.welcome import init_schema as init_welcome_schema
                     await init_welcome_schema(cur)
+                    from database.web_auth import init_schema as init_web_auth_schema
+                    await init_web_auth_schema(cur)
 
                     await cur.execute("""
                         CREATE TABLE IF NOT EXISTS stock_subscriptions (
