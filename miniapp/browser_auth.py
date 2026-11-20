@@ -1,5 +1,6 @@
 """Email-code and Telegram Login Widget endpoints for ordinary browsers."""
 import asyncio
+import hashlib
 import logging
 import os
 import secrets
@@ -11,6 +12,7 @@ from email.message import EmailMessage
 from email.utils import formatdate, make_msgid, parseaddr
 from urllib.parse import urlsplit
 
+import aiohttp
 from aiohttp import web
 
 from database import web_auth
@@ -53,16 +55,29 @@ def secure_cookie():
     return os.getenv('AUTH_COOKIE_SECURE', '1').strip().lower() not in {'0', 'false', 'no'}
 
 
+def email_provider():
+    value = os.getenv('AUTH_EMAIL_PROVIDER', 'smtp').strip().lower()
+    if value not in {'smtp', 'resend'}:
+        raise EmailUnavailable('Unsupported email provider')
+    return value
+
+
+def sender_value():
+    sender = os.getenv('AUTH_SMTP_FROM', '').strip()
+    if not sender or '\n' in sender or '\r' in sender:
+        raise EmailUnavailable('Email sender is not configured')
+    try:
+        normalize_email(parseaddr(sender)[1])
+    except AuthError:
+        raise EmailUnavailable('Invalid email sender') from None
+    return sender
+
+
 def smtp_settings():
     host = os.getenv('AUTH_SMTP_HOST', '').strip()
-    sender = os.getenv('AUTH_SMTP_FROM', '').strip()
-    if not host or not sender or '\n' in sender or '\r' in sender:
+    sender = sender_value()
+    if not host:
         raise EmailUnavailable('Email delivery is not configured')
-    sender_address = parseaddr(sender)[1]
-    try:
-        normalize_email(sender_address)
-    except AuthError:
-        raise EmailUnavailable('Invalid SMTP sender') from None
     port = _integer_env('AUTH_SMTP_PORT', 587, 1, 65535)
     security = os.getenv('AUTH_SMTP_SECURITY', 'ssl' if port == 465 else 'starttls').strip().lower()
     if security not in {'ssl', 'starttls', 'none'}:
@@ -74,7 +89,58 @@ def smtp_settings():
     return host, port, security, username, password, sender
 
 
+def resend_settings():
+    key = os.getenv('RESEND_API_KEY', '').strip() or os.getenv('AUTH_SMTP_PASSWORD', '').strip()
+    if not key:
+        raise EmailUnavailable('Resend API key is not configured')
+    return key, sender_value()
+
+
+def check_email_settings():
+    return resend_settings() if email_provider() == 'resend' else smtp_settings()
+
+
+async def send_resend_code(recipient, code):
+    key, sender = resend_settings()
+    identity = hashlib.sha256((recipient + '\0' + code).encode('utf-8')).hexdigest()
+    headers = {
+        'Authorization': 'Bearer ' + key,
+        'Content-Type': 'application/json',
+        'Idempotency-Key': 'sband-login/' + identity,
+    }
+    payload = {
+        'from': sender,
+        'to': [recipient],
+        'subject': 'Код входа в SBAND ACCS',
+        'text': (
+            f'Код входа: {code}\n\n'
+            'Он действует 10 минут. Если вы не запрашивали вход, удалите это письмо.\n'
+        ),
+    }
+    try:
+        timeout = aiohttp.ClientTimeout(total=15)
+        async with aiohttp.ClientSession(trust_env=True, timeout=timeout) as session:
+            async with session.post(
+                'https://api.resend.com/emails', headers=headers, json=payload,
+                allow_redirects=False,
+            ) as reply:
+                if not 200 <= reply.status < 300:
+                    logger.warning('Resend email API rejected request [HTTP %s]', reply.status)
+                    raise EmailUnavailable('Resend rejected email')
+                result = await reply.json(content_type=None)
+                if not isinstance(result, dict) or not isinstance(result.get('id'), str):
+                    raise EmailUnavailable('Resend returned an invalid response')
+    except EmailUnavailable:
+        raise
+    except Exception as exc:
+        logger.warning('Resend email API failed [%s]', type(exc).__name__)
+        raise EmailUnavailable('Resend request failed') from None
+
+
 async def send_email_code(recipient, code):
+    if email_provider() == 'resend':
+        await send_resend_code(recipient, code)
+        return
     host, port, security, username, password, sender = smtp_settings()
     message = EmailMessage()
     message['From'] = sender
@@ -173,7 +239,7 @@ def register(app, response):
 
     async def email_start(request):
         ensure_same_origin(request)
-        smtp_settings()
+        check_email_settings()
         body = await json_body(request)
         email = normalize_email(body.get('email'))
         key = email_key(email)

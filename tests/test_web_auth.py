@@ -66,6 +66,49 @@ class BrowserAuthValidationTests(unittest.TestCase):
         with patch.dict(os.environ, settings, clear=True), self.assertRaises(browser_auth.EmailUnavailable):
             browser_auth.smtp_settings()
 
+    def test_resend_provider_requires_key_and_valid_sender(self):
+        settings = {
+            'AUTH_EMAIL_PROVIDER': 'resend',
+            'RESEND_API_KEY': 're_fixture',
+            'AUTH_SMTP_FROM': 'SBAND ACCS <support@sbandsub.space>',
+        }
+        with patch.dict(os.environ, settings, clear=True):
+            self.assertEqual(browser_auth.check_email_settings(), ('re_fixture', settings['AUTH_SMTP_FROM']))
+        settings.pop('RESEND_API_KEY')
+        with patch.dict(os.environ, settings, clear=True), self.assertRaises(browser_auth.EmailUnavailable):
+            browser_auth.check_email_settings()
+
+
+class ResendDeliveryTests(unittest.IsolatedAsyncioTestCase):
+    async def test_resend_uses_https_and_never_puts_key_in_payload(self):
+        calls = {}
+
+        class Reply:
+            status = 200
+            async def __aenter__(self): return self
+            async def __aexit__(self, *args): return False
+            async def json(self, **_kwargs): return {'id': 'email-fixture'}
+
+        class Session:
+            async def __aenter__(self): return self
+            async def __aexit__(self, *args): return False
+            def post(self, url, **kwargs):
+                calls.update(url=url, **kwargs)
+                return Reply()
+
+        settings = {
+            'AUTH_EMAIL_PROVIDER': 'resend',
+            'RESEND_API_KEY': 're_private_fixture',
+            'AUTH_SMTP_FROM': 'SBAND ACCS <support@sbandsub.space>',
+        }
+        with patch.dict(os.environ, settings, clear=True), \
+             patch.object(browser_auth.aiohttp, 'ClientSession', return_value=Session()):
+            await browser_auth.send_email_code('buyer@example.com', '123456')
+        self.assertEqual(calls['url'], 'https://api.resend.com/emails')
+        self.assertEqual(calls['json']['to'], ['buyer@example.com'])
+        self.assertNotIn('re_private_fixture', str(calls['json']))
+        self.assertEqual(calls['headers']['Authorization'], 'Bearer re_private_fixture')
+
 
 class EmailChallengePersistenceTests(unittest.IsolatedAsyncioTestCase):
     async def test_failed_attempt_is_committed_before_error_is_raised(self):
