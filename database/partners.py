@@ -192,8 +192,12 @@ async def set_content(actor,identity,key,value):
 
 async def ban(actor,identity,user,reason,enabled=True):
     if CURRENT.get() and identity!=bot_id():raise AccessDenied('Доступ только к своему боту.')
+    from database.web_auth import TELEGRAM_ID_LIMIT,WEB_USER_ID_BASE
+    if isinstance(user,str) and user.isascii() and user.isdigit() and len(user)<=19:
+        user=int(user)
     from config import ADMIN_IDS
-    if type(user) is not int or not 0<user<=4503599627370495 or user in ADMIN_IDS or not isinstance(reason,str) or not 1<=len(reason)<=300 or type(enabled) is not bool:raise ValueError('Укажите корректный ID и причину; владельца блокировать нельзя.')
+    valid_user=(type(user) is int and 0<user<2**63 and (user<TELEGRAM_ID_LIMIT or user>=WEB_USER_ID_BASE))
+    if not valid_user or user in ADMIN_IDS or not isinstance(reason,str) or not 1<=len(reason)<=300 or type(enabled) is not bool:raise ValueError('Укажите корректный ID и причину; владельца блокировать нельзя.')
     if identity:
         p=await get(identity)
         if not p or actor!=p['owner_id'] or p['status']!='enabled':raise AccessDenied('Доступ запрещён.')

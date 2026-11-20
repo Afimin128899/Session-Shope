@@ -50,7 +50,7 @@
  document.querySelectorAll('[data-quantity]').forEach(b=>b.addEventListener('click',()=>setQuantity(Number(b.dataset.quantity))));
  async function downloadArchive(id,button){
   {
-   const r=await fetch('/api/orders/'+id+'/archive',{headers:{...SbandUI.scopeHeaders(),Authorization:'tma '+(tg?.initData||'')},cache:'no-store'});
+   const r=await fetch('/api/orders/'+id+'/archive',{headers:{...SbandUI.scopeHeaders(),...authHeaders()},cache:'no-store'});
    if(!r.ok){const error=await r.json();throw Error(error.error||'Архив недоступен.');}
    const blob=await r.blob(),url=URL.createObjectURL(blob),a=el('a');a.href=url;a.download='tg-order-'+id+'.zip';document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),30000);toast('Архив заказа #'+id+' подготовлен');
   }
@@ -65,7 +65,8 @@
   row(summary,'Количество',String(quote.quantity)+' шт.');row(summary,'Оптовая скидка',String(quote.rate)+'%');
   row(summary,'Гарантия',quote.warranty_hours.map(h=>h>0?h+' ч.':'Без гарантии').join(' / '));
   const total=el('div',undefined,'checkout-total');total.append(el('span','К оплате'),el('strong',money(quote.total)));summary.append(total);body.append(summary);
-  body.append(el('p','Резерв действует 5 минут. Получатель: '+(state.me?.user.username?'@'+state.me.user.username:'Telegram ID '+state.me?.user.id)+'. Данные сохранятся в личном кабинете.','muted'));
+   const recipient=state.me?.user.email|| (state.me?.user.username?'@'+state.me.user.username:'ID '+state.me?.user.id);
+   body.append(el('p','Резерв действует 5 минут. Получатель: '+recipient+'. Данные сохранятся в личном кабинете.','muted'));
   const routes=el('div'),feedback=el('p','','checkout-feedback');feedback.setAttribute('role','status');body.append(routes);
   let method='balance';
   const pay=btn('Оплатить с баланса · '+money(quote.total),async()=>{
@@ -111,8 +112,8 @@
  $('browse-accounts').onclick=()=>$('configurator').scrollIntoView({behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth'});
  document.querySelectorAll('[data-terminal-info]').forEach(b=>b.onclick=information);
  document.querySelectorAll('[data-terminal-support]').forEach(b=>b.onclick=()=>navigate('messages'));
- $('telegram-login').onclick=async()=>{try{const d=await api('app-info');if(!d.bot_username)throw Error('Откройте магазин из меню Telegram-бота.');const link='https://t.me/'+d.bot_username;tg?.openTelegramLink?tg.openTelegramLink(link):location.assign(link);}catch(e){toast(e.message);}};
+  $('telegram-login').onclick=()=>showAuth('Выберите вход через Telegram или email.');
  fetch('/api/health',{cache:'no-store'}).then(r=>{const status=$('api-status');status.classList.toggle('online',r.ok);status.replaceChildren(el('i'),document.createTextNode(r.ok?'API Online':'API недоступен'));}).catch(()=>$('api-status').textContent='API недоступен');
- setTimeout(()=>{if(!state.me){guest=true;render();$('telegram-login').hidden=false;$('config-feedback').textContent='Для просмотра наличия и покупки откройте Mini App из Telegram-бота.';}},5000);
+  setTimeout(()=>{if(!state.me){guest=true;render();$('telegram-login').hidden=false;$('config-feedback').textContent='Войдите через Telegram или email, чтобы увидеть наличие и оформить покупку.';showAuth();}},5000);
  render();
 })();

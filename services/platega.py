@@ -41,17 +41,23 @@ def identity(value):
         return None
 
 
-async def create_invoice(amount, description, payload, user_id):
+async def create_invoice(amount, description, payload, user_id, *, payer_email=None):
     amount = money(amount, minimum=Decimal('1'))
     if type(user_id) is not int or not 0 < user_id <= 9223372036854775807:
         raise ValueError('Invalid Telegram payer')
+    if payer_email is not None:
+        if (not isinstance(payer_email, str) or not 3 <= len(payer_email) <= 254
+                or payer_email.count('@') != 1 or not payer_email.isascii()
+                or any(char in payer_email for char in '\r\n')):
+            raise ValueError('Invalid payer email')
+    payer_email = payer_email or f'{user_id}@telegram.org'
     result = await _request('POST', '/transaction/process', {
         'paymentMethod': 2,
         # The merchant memo also places paymentMethod inside paymentDetails.
         # Supply the same SBP value in both positions for that contract version.
         'paymentDetails': {'paymentMethod': 2, 'amount': float(amount), 'currency': 'RUB'},
         'description': description[:256], 'return': RETURN_URL, 'failedUrl': RETURN_URL,
-        'payload': payload, 'metadata': {'user_email': f'{user_id}@telegram.org'},
+        'payload': payload, 'metadata': {'user_email': payer_email},
     })
     if not result or not identity(result.get('transactionId')):
         return None

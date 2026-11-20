@@ -31,5 +31,5 @@ async def history(user_id,before=0):
 async def inbox():
     async with _get_pool().acquire() as conn:
         async with conn.cursor(aiomysql.DictCursor) as cur:
-            await cur.execute('SELECT m.user_id,m.body,m.author_role,m.created_at,u.username FROM direct_support_messages m JOIN (SELECT user_id,MAX(id) AS last_id FROM direct_support_messages GROUP BY user_id) latest ON latest.last_id=m.id LEFT JOIN users u ON u.id=m.user_id ORDER BY m.id DESC LIMIT 100')
+            await cur.execute("SELECT m.user_id,m.body,m.author_role,m.created_at,u.username,i.email FROM direct_support_messages m JOIN (SELECT user_id,MAX(id) AS last_id FROM direct_support_messages GROUP BY user_id) latest ON latest.last_id=m.id LEFT JOIN users u ON u.id=m.user_id LEFT JOIN web_identities i ON i.user_id=m.user_id AND i.provider='email' ORDER BY m.id DESC LIMIT 100")
             return {'items':list(await cur.fetchall())}

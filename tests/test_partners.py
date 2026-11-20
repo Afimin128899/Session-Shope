@@ -49,6 +49,16 @@ class PartnerPoliciesTests(IsolatedAsyncioTestCase):
         for action in [lambda:partners.set_content(42,777002,'welcome','X'),lambda:partners.ban(42,777002,51,'X')]:
             with self.assertRaises(PermissionError):await action()
 
+    async def test_email_user_id_can_be_blocked_without_javascript_rounding(self):
+        from database.web_auth import WEB_USER_ID_BASE
+        cur=NS(execute=AsyncMock())
+        @asynccontextmanager
+        async def transaction():yield cur
+        user=WEB_USER_ID_BASE+9
+        with patch.object(config,'ADMIN_IDS',[]),patch.object(partners,'get',AsyncMock(return_value=self.p)),patch.object(partners,'_transaction',transaction):
+            await partners.ban(42,777001,str(user),'Email profile')
+        self.assertEqual(cur.execute.call_args_list[0].args[1][0],user)
+
     async def test_handler_allowlist_is_narrow(self):
         handler=AsyncMock();event=NS(data='fixture')
         for module,name,allowed in [('handlers.user.shop','confirm_purchase',True),('handlers.navigation','cancel',True),('handlers.direct_support','user_message',True),('handlers.direct_support','admin_reply',False),('handlers.admin.manage','change_balance',False),('handlers.admin.advertising','campaigns',False),('handlers.userish.evil','test',False)]:

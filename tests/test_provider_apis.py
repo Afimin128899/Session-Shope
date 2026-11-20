@@ -54,6 +54,14 @@ class ProviderAPITests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(body['customer'],{'telegramId':'42','telegramUsername':'fixture'})
         self.assertNotIn('Rocket-Pay-Key',session.request.call_args.kwargs['headers'])
 
+    async def test_xrocket_never_labels_email_wallet_as_telegram_customer(self):
+        from database.web_auth import WEB_USER_ID_BASE
+        invoice={'id':'uuid','links':{'telegramBotLink':'https://t.me/fixture'}}
+        _,session,_=self.response(xrocket,{'data':invoice})
+        with patch.dict(os.environ,{'XROCKET_API_MODE':'exchange'}),patch.object(xrocket,'XROCKET_API_KEY','fake-test-key'):
+            self.assertEqual(await xrocket.create_invoice(1.25,'Description','client-order','owner-payload',WEB_USER_ID_BASE+1),invoice)
+        self.assertNotIn('customer',session.request.call_args.kwargs['json'])
+
     async def test_xrocket_tg_mode_uses_official_sdk_contract_without_fallback(self):
         invoice={'id':12,'link':'https://t.me/xrocket?start=fixture','payload':'owner-payload','status':'active'}
         _,session,_=self.response(xrocket,{'success':True,'data':invoice})

@@ -56,7 +56,7 @@ def parse_amount(value, provider=None):
     return amount
 
 
-async def create_deposit(user_id, username, provider, amount):
+async def create_deposit(user_id, username, provider, amount, *, payer_email=None):
     amount = parse_amount(amount, provider)
     if provider == 'platega' and await sbp_stub_enabled():
         raise PaymentUnavailable(tr('Оплата через СБП временно недоступна. Попробуйте позже или выберите другой способ оплаты.'))
@@ -69,7 +69,7 @@ async def create_deposit(user_id, username, provider, amount):
         invoice_id = invoice.get('invoice_id') if invoice else None
         url = invoice.get('bot_invoice_url') if invoice else None
     elif provider == 'platega':
-        invoice = await platega.create_invoice(amount, f'Пополнение SBAND ACCS на {amount:.2f} ₽', payload, user_id)
+        invoice = await platega.create_invoice(amount, f'Пополнение SBAND ACCS на {amount:.2f} ₽', payload, user_id, payer_email=payer_email)
         invoice_id = invoice.get('id') if invoice else None
         url = invoice.get('pay_url') if invoice else None
     elif provider == 'heleket':
@@ -164,6 +164,9 @@ async def check_pending(bot):
             await _health(row["provider"],True)
             if credited:
                 try:
+                    from database.web_auth import WEB_USER_ID_BASE
+                    if row['user_id'] >= WEB_USER_ID_BASE:
+                        continue
                     from utils.notification_language import send_translated
                     await send_translated(bot,row['user_id'],'✅ Оплата подтверждена автоматически. На баланс зачислено {0} ₽.',f'{credited[0]:.2f}')
                 except Exception:

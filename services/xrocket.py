@@ -69,13 +69,20 @@ async def create_invoice(amount_usdt, description, client_invoice_id, payload, t
             'description': description[:1000], 'payload': payload,
             'expiredIn': 3600, 'commentsEnabled': False,
         }, mode=mode)
-    return await _request('POST', '/invoices', {
+    body = {
         'priceAmount': f'{amount:.6f}', 'priceCurrency': 'USDT',
         'payoutCurrency': 'USDT', 'payCurrencies': ['USDT'],
         'clientInvoiceId': client_invoice_id, 'description': description[:1000],
         'expiresIn': 3600000, 'callback': {'payload': {'orderId': payload}},
-        'customer': {'telegramId': str(telegram_id), 'telegramUsername': (telegram_username or '').lstrip('@')},
-    }, mode=mode)
+    }
+    # Email-only users have an internal wallet ID, not a Telegram identity.
+    # Omitting optional customer metadata is safer than sending a false ID.
+    if type(telegram_id) is int and 0 < telegram_id < 2**52:
+        body['customer'] = {
+            'telegramId': str(telegram_id),
+            'telegramUsername': (telegram_username or '').lstrip('@'),
+        }
+    return await _request('POST', '/invoices', body, mode=mode)
 
 
 async def get_invoice(invoice_id):

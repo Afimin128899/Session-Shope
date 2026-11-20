@@ -68,6 +68,8 @@ def register(app,response):
 
     async def avatar(request):
         """Bot API fallback for clients whose signed initData has no photo_url."""
+        if request['user'].get('auth_method') == 'email':
+            return web.Response(status=404)
         user=request['user']['id'];cache=app[AVATARS];now=time.monotonic()
         saved=cache.get(user)
         if saved and saved['expires']>now:
@@ -164,14 +166,15 @@ def register(app,response):
     async def admin_chat(request):
         if 'user' not in request.match_info: return response(await direct_chat.inbox())
         raw=request.match_info['user']
-        if not raw.isascii() or not raw.isdigit() or not 0<int(raw)<2**52: raise ValueError('Некорректный пользователь.')
+        if not raw.isascii() or not raw.isdigit() or not 0<int(raw)<2**63: raise ValueError('Некорректный пользователь.')
         user=int(raw)
         if request.method=='GET': return response(await direct_chat.history(user,before(request)))
         request._client_max_size=32768
         body=(await json_body(request)).get('body')
         identity=await direct_chat.append(user,'admin',body)
         bot=request.app[BOT]
-        if bot:
+        from database.web_auth import WEB_USER_ID_BASE
+        if bot and user < WEB_USER_ID_BASE:
             try: await bot.send_message(user,'<b>Ответ поддержки</b>\n\n'+escape(body.strip()),parse_mode='HTML')
             except Exception: pass
         return response({'id':identity},201)

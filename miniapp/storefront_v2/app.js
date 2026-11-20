@@ -15,23 +15,72 @@ const clean=value=>String(value||'').replace(/[\p{Extended_Pictographic}\p{Regio
 function el(tag,text,cls){const n=document.createElement(tag);if(text!==undefined)n.textContent=String(text);if(cls)n.className=cls;return n;}
 function toast(value){$('toast').textContent=clean(value);$('toast').hidden=false;SbandUI.enter($('toast'));clearTimeout(toast.timer);toast.timer=setTimeout(()=>$('toast').hidden=true,5000);}
 function btn(text,action,cls=''){const b=el('button',text,cls);b.type='button';b.addEventListener('click',async()=>{try{await SbandUI.run(b,action);}catch(e){toast(e.message);}});return b;}
-async function api(path,body){const {response:r,data:d}=await SbandUI.request('/api/'+path,{method:body===undefined?'GET':'POST',headers:{Authorization:'tma '+(tg?.initData||''),...(body!==undefined?{'Content-Type':'application/json'}:{})},body:body===undefined?undefined:JSON.stringify(body),cache:'no-store'});if(!r.ok)throw Error(d.error||'Не удалось выполнить запрос.');return d;}
+function authHeaders(){return tg?.initData?{Authorization:'tma '+tg.initData}:{};}
+async function api(path,body){const {response:r,data:d}=await SbandUI.request('/api/'+path,{method:body===undefined?'GET':'POST',headers:{...authHeaders(),...(body!==undefined?{'Content-Type':'application/json'}:{})},body:body===undefined?undefined:JSON.stringify(body),cache:'no-store'});if(!r.ok){const error=Error(d.error||'Не удалось выполнить запрос.');error.status=r.status;error.code=d.code;throw error;}return d;}
 function open(title){$('modal-title').textContent=title;$('modal-content').replaceChildren();SbandUI.open($('modal'));return $('modal-content');}
 function row(parent,title,detail,action){const r=el('div',undefined,'row'),d=el('div');d.append(el('strong',title));if(detail)d.append(el('small',detail));r.append(d);if(action)r.append(action);parent.append(r);}
 function label(parent,text,input){const l=el('label',text,'form-label');l.append(input);parent.append(l);return input;}
 function empty(parent,text){parent.append(el('p',text,'empty'));}
 function date(value){if(!value)return '';const iso=String(value).replace(' ','T');const d=new Date(/[Z+]\d*/.test(iso)?iso:iso+'Z');return Number.isNaN(+d)?String(value):d.toLocaleString('ru-RU');}
+async function authRequest(path,body){
+ let response;
+  try{response=await fetch('/api/auth/'+path,{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify(body||{}),cache:'no-store'});}catch(_){throw Error('Нет соединения. Проверьте интернет и повторите.');}
+ let data={};try{data=await response.json();}catch(_){}
+ if(!response.ok){const error=Error(data.error||'Не удалось выполнить вход.');error.status=response.status;error.code=data.code;throw error;}
+ return data;
+}
+function authStatus(text,success=false){$('auth-status').textContent=clean(text);$('auth-status').classList.toggle('success',success);}
+let telegramWidgetLoaded=false;
+async function loadTelegramWidget(){
+ if(telegramWidgetLoaded)return;telegramWidgetLoaded=true;
+ try{
+  const response=await fetch('/api/app-info',{cache:'no-store'}),data=await response.json();
+  if(!response.ok||!/^[A-Za-z0-9_]{5,32}$/.test(data.bot_username||''))throw Error('Вход через Telegram пока недоступен.');
+  const script=document.createElement('script');script.async=true;script.src='https://telegram.org/js/telegram-widget.js?22';script.dataset.telegramLogin=data.bot_username;script.dataset.size='large';script.dataset.radius='8';script.dataset.userpic='false';script.dataset.requestAccess='write';script.dataset.onauth='SBandTelegramAuth(user)';script.onerror=()=>authStatus('Не удалось загрузить вход через Telegram. Можно войти по email.');$('telegram-widget').append(script);
+ }catch(e){authStatus(e.message);}
+}
+function showAuth(message=''){
+ $('auth-gate').hidden=false;document.body.classList.add('auth-required');document.querySelector('.shell').inert=true;
+ if(message)authStatus(message);loadTelegramWidget();
+}
+function hideAuth(){
+ $('auth-gate').hidden=true;document.body.classList.remove('auth-required');document.querySelector('.shell').inert=false;authStatus('');
+}
+async function finishBrowserAuth(){
+ state.me=null;
+ try{await me();hideAuth();await market();window.dispatchEvent(new Event('market:identity'));}
+ catch(e){showAuth(e.status===403?'Вход выполнен, но магазин пока закрыт.':e.message);}
+}
+window.SBandTelegramAuth=async user=>{
+ authStatus('Проверяем вход через Telegram…');
+ try{await authRequest('telegram',user);authStatus('Вход подтверждён.',true);await finishBrowserAuth();}catch(e){authStatus(e.message);}
+};
+$('email-start-form').addEventListener('submit',async event=>{
+ event.preventDefault();const form=event.currentTarget,button=form.querySelector('button'),email=$('auth-email').value.trim();
+ if(button.disabled)return;button.disabled=true;authStatus('Отправляем код…');
+ try{await authRequest('email/start',{email});$('email-sent').textContent='Код отправлен на '+email+'. Он действует 10 минут.';form.hidden=true;$('email-code-form').hidden=false;authStatus('Проверьте входящие и папку «Спам».',true);$('auth-code').focus();}
+ catch(e){authStatus(e.message);}finally{button.disabled=false;}
+});
+$('email-code-form').addEventListener('submit',async event=>{
+ event.preventDefault();const form=event.currentTarget,button=form.querySelector('button[type=submit]');
+ if(button.disabled)return;button.disabled=true;authStatus('Проверяем код…');
+ try{await authRequest('email/verify',{email:$('auth-email').value.trim(),code:$('auth-code').value.trim()});authStatus('Вход подтверждён.',true);await finishBrowserAuth();}
+ catch(e){authStatus(e.message);$('auth-code').select();}finally{button.disabled=false;}
+});
+$('email-back').onclick=()=>{$('email-code-form').hidden=true;$('email-start-form').hidden=false;$('auth-code').value='';authStatus('');$('auth-email').focus();};
 async function me(){
  state.me=await api('me');const user=state.me.user;
  $('wallet').replaceChildren(SbandUI.icon('wallet'),document.createTextNode(money(state.me.balance)));$('balance').textContent=money(state.me.balance);$('wallet-cash').textContent='Внесённые средства: '+money(state.me.cash_balance??state.me.balance);$('wallet-bonus').textContent='Бонусы: '+money(state.me.bonus_balance||0);
- $('username').textContent=user.username?'@'+user.username:user.first_name;
- $('user-id').textContent='ID: '+user.id;$('admin-link').hidden=!(state.me.is_admin||state.me.is_helper||state.me.is_partner_owner);
+  $('username').textContent=user.email|| (user.username?'@'+user.username:user.first_name);
+  $('user-id').textContent='ID: '+user.id;$('admin-link').hidden=!(state.me.is_admin||state.me.is_helper||state.me.is_partner_owner);
+  $('support-delivery').textContent=user.auth_method==='email'?'Ответ появится в этом разделе':'Ответ придёт сюда и в Telegram';
+ $('logout').hidden=!['email','telegram'].includes(user.auth_method);
  if(state.avatarOwner!==user.id){
   state.avatarOwner=user.id;$('avatar').textContent=(user.first_name||'S').slice(0,1).toUpperCase();
   async function loadPhoto(){
    let src=user.photo_url;
-   if(!src){const r=await fetch('/api/avatar',{headers:{...SbandUI.scopeHeaders(),Authorization:'tma '+(tg?.initData||'')},cache:'no-store'});if(!r.ok)return;src=URL.createObjectURL(await r.blob());state.avatarObjectURL=src;}
-   const image=el('img',undefined,'profile-photo');image.alt='Фото профиля Telegram';image.referrerPolicy='no-referrer';
+   if(!src){const r=await fetch('/api/avatar',{headers:{...SbandUI.scopeHeaders(),...authHeaders()},cache:'no-store'});if(!r.ok)return;src=URL.createObjectURL(await r.blob());state.avatarObjectURL=src;}
+   const image=el('img',undefined,'profile-photo');image.alt='Фото профиля';image.referrerPolicy='no-referrer';
    image.onload=()=>{if(state.avatarOwner===user.id)$('avatar').replaceChildren(image);};image.src=src;
   }
   loadPhoto().catch(()=>{});
@@ -119,7 +168,7 @@ async function order(id){
  body.append(el('div',value,'order-data'),btn('Скопировать данные',async()=>{await navigator.clipboard.writeText(value);toast('Скопировано');},'subtle full'));
  if(data.status==='issued'&&!data.access_revoked_at){
   body.append(btn('Скачать Session + JSON',async()=>{
-   const response=await fetch('/api/orders/'+id+'/archive',{headers:{...SbandUI.scopeHeaders(),Authorization:'tma '+(tg?.initData||'')},cache:'no-store'});
+   const response=await fetch('/api/orders/'+id+'/archive',{headers:{...SbandUI.scopeHeaders(),...authHeaders()},cache:'no-store'});
    if(!response.ok){const error=await response.json();throw Error(error.error||'Архив недоступен.');}
    const url=URL.createObjectURL(await response.blob()),link=el('a');link.href=url;link.download='tg-order-'+id+'.zip';document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),30000);
   },'subtle full'));
@@ -139,12 +188,15 @@ async function order(id){
 }
 async function orders(){const body=open('Мои покупки');let page=0;async function more(){const data=await api('orders?page='+page);if(!page&&!data.items.length)empty(body,'Покупок пока нет.');data.items.forEach(item=>row(body,'Заказ #'+item.id,(item.name||'Аккаунт')+' · '+(item.status_label||item.status),btn('Открыть',()=>order(item.id))));if(data.has_more){const b=btn('Показать ещё',async()=>{b.remove();page++;await more();},'full');body.append(b);}}await more();}
 async function profile(){await me();const summary=await api('wallet/summary');$('deposited').textContent=money(summary.deposited);$('spent').textContent=money(summary.spent);$('purchased').textContent=String(summary.purchase_count);}
-async function chat(older=false){if(state.tab!=='messages')return;state.chatMessages??=new Map();const first=Math.min(...state.chatMessages.keys());const data=await api('chat'+(older&&Number.isFinite(first)?'?before='+first:''));const latest=data.items.at(-1)?.id||0;if(!state.chatMessages.size||older)state.hasOlder=data.has_more;const changed=older||latest!==state.chatLast||!$('chat-history').childElementCount;data.items.forEach(item=>state.chatMessages.set(item.id,item));if(!older)state.chatLast=latest;if(!changed)return;const box=$('chat-history'),previous=box.scrollHeight;box.replaceChildren();if(!state.chatMessages.size)empty(box,'Напишите нам. Поддержка ответит здесь и в Telegram-боте.');[...state.chatMessages.values()].sort((a,b)=>a.id-b.id).forEach(item=>{const b=el('article',undefined,'bubble'+(item.author_role==='user'?' mine':''));b.append(document.createTextNode(item.body),el('small',(item.author_role==='admin'?'Поддержка':'Вы')+' · '+date(item.created_at)));box.append(b);});$('older-chat').hidden=!state.hasOlder;if(!older&&data.items.length)box.lastElementChild?.scrollIntoView({block:'nearest',behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth'});else if(older)window.scrollBy(0,box.scrollHeight-previous);}
+async function chat(older=false){if(state.tab!=='messages')return;state.chatMessages??=new Map();const first=Math.min(...state.chatMessages.keys());const data=await api('chat'+(older&&Number.isFinite(first)?'?before='+first:''));const latest=data.items.at(-1)?.id||0;if(!state.chatMessages.size||older)state.hasOlder=data.has_more;const changed=older||latest!==state.chatLast||!$('chat-history').childElementCount;data.items.forEach(item=>state.chatMessages.set(item.id,item));if(!older)state.chatLast=latest;if(!changed)return;const box=$('chat-history'),previous=box.scrollHeight;box.replaceChildren();if(!state.chatMessages.size)empty(box,state.me?.user.auth_method==='email'?'Напишите нам. Поддержка ответит в этом разделе.':'Напишите нам. Поддержка ответит здесь и в Telegram-боте.');[...state.chatMessages.values()].sort((a,b)=>a.id-b.id).forEach(item=>{const b=el('article',undefined,'bubble'+(item.author_role==='user'?' mine':''));b.append(document.createTextNode(item.body),el('small',(item.author_role==='admin'?'Поддержка':'Вы')+' · '+date(item.created_at)));box.append(b);});$('older-chat').hidden=!state.hasOlder;if(!older&&data.items.length)box.lastElementChild?.scrollIntoView({block:'nearest',behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth'});else if(older)window.scrollBy(0,box.scrollHeight-previous);}
 $('older-chat').onclick=()=>chat(true).catch(e=>toast(e.message));
 $('chat-form').addEventListener('submit',async event=>{event.preventDefault();const value=$('chat-body').value.trim();if(!value)return;const b=event.currentTarget.querySelector('button');if(b.disabled)return;b.disabled=true;b.classList.add('is-busy');b.setAttribute('aria-busy','true');try{await api('chat',{body:value});$('chat-body').value='';await chat();}catch(e){SbandUI.fieldError($('chat-body'),clean(e.message));}finally{b.disabled=false;b.classList.remove('is-busy');b.removeAttribute('aria-busy');}});
 async function topup(){
  const body=open('Пополнить баланс'),content=el('div'),notice=el('p',undefined,'topup-notice');
- if(state.me.partner_id){body.append(el('p','Пополнение — в основном боте. После оплаты подтвердите перевод внесённых средств в этот магазин. Бонусы не переводятся.','muted'));const link=el('a','Открыть основной бот','primary full');link.href='https://t.me/'+state.me.bot_username+'?start=fund_'+state.me.partner_id;link.target='_blank';link.rel='noopener noreferrer';body.append(link);return;}
+  if(state.me.partner_id){
+   if(state.me.user.auth_method==='email'){body.append(el('p','Пополнение партнёрского магазина привязано к Telegram ID. Выйдите и войдите через Telegram, чтобы средства поступили в нужный кошелёк.','muted'));body.append(btn('Сменить способ входа',async()=>{await SbandUI.close($('modal'));await authRequest('logout',{});state.me=null;showAuth('Войдите через Telegram для пополнения партнёрского магазина.');},'primary full'));return;}
+   body.append(el('p','Пополнение — в основном боте. После оплаты подтвердите перевод внесённых средств в этот магазин. Бонусы не переводятся.','muted'));const link=el('a','Открыть основной бот','primary full');link.href='https://t.me/'+state.me.bot_username+'?start=fund_'+state.me.partner_id;link.target='_blank';link.rel='noopener noreferrer';body.append(link);return;
+  }
  notice.setAttribute('role','status');notice.setAttribute('aria-live','polite');body.append(content,notice);
  function note(text,error=true){notice.textContent=clean(text);notice.classList.toggle('inline-error',error&&Boolean(text));const input=content.querySelector('input');if(input)input.setAttribute('aria-invalid',String(error&&Boolean(text)));}
  try{
@@ -244,6 +296,7 @@ document.addEventListener('keydown',event=>{if(event.key!=='/'||event.ctrlKey||e
 $('close-modal').onclick=()=>SbandUI.close($('modal'));$('modal').addEventListener('cancel',event=>{event.preventDefault();SbandUI.close($('modal'));});
 for(const id of ['wallet','topup'])$(id).onclick=()=>SbandUI.run($(id),topup).catch(e=>toast(e.message));
 $('admin-link').onclick=()=>location.assign('/admin-app'+location.search);
+$('logout').onclick=()=>SbandUI.run($('logout'),async()=>{await authRequest('logout',{});state.me=null;state.avatarOwner=null;showAuth('Вы вышли из аккаунта.');}).catch(e=>toast(e.message));
 $('browse-accounts').onclick=()=>$('catalog-section').scrollIntoView({behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth',block:'start'});
 document.querySelectorAll('#browse-accounts>span,.spotlight-button>span,.invite-arrow').forEach(n=>n.replaceChildren(SbandUI.icon('arrowUp')));
 document.querySelectorAll('[data-free-account]').forEach(b=>b.addEventListener('click',()=>SbandUI.run(b,freeAccount).catch(e=>toast(e.message))));
@@ -252,4 +305,4 @@ document.querySelector('.brand').addEventListener('click',event=>{event.preventD
 const menuIcons={orders:'market',transactions:'history',promo:'ticket',rewards:'gift',referrals:'users',information:'info'};document.querySelectorAll('.menu-list [data-action]').forEach(b=>b.prepend(SbandUI.icon(menuIcons[b.dataset.action])));
 document.querySelectorAll('[data-tab]').forEach(b=>b.prepend(SbandUI.icon(b.dataset.tab)));document.querySelector('.search>span').replaceChildren(SbandUI.icon('search'));
 const polling=setInterval(()=>{if(state.tab==='messages'&&!document.hidden)chat().catch(()=>{});},6000);window.addEventListener('beforeunload',()=>clearInterval(polling));
-(async()=>{try{tg?.ready();tg?.expand();tg?.setHeaderColor('#0a0a0a');tg?.setBackgroundColor('#0a0a0a');await me();await market();}catch(e){$('categories').replaceChildren();empty($('categories'),clean(e.message));}})();
+(async()=>{try{tg?.ready();tg?.expand();tg?.setHeaderColor('#0a0a0a');tg?.setBackgroundColor('#0a0a0a');await me();hideAuth();await market();}catch(e){if(e.status===401){showAuth();return;}$('categories').replaceChildren();empty($('categories'),clean(e.message));}})();
