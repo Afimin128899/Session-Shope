@@ -18,3 +18,8 @@ data/star-receipts/
 
 # Per-bot branding uploads
 data/partner-assets/
+
+
+# Private administrator session workbench
+runtime/admin-sessions/
+admin-sessions/

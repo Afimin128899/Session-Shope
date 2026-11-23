@@ -41,6 +41,7 @@ ADMIN_CATEGORIES = {
         ('На проверке', 'review_list:0', ICON_WARNING),
         ('Добавить по номеру', 'add_account_telethon', ICON_ADD),
         ('Загрузить .session', 'add_account_session', ICON_ACCOUNTS),
+        ('Новая сессия и очистка', 'session_tool:open', ICON_SETTINGS),
         ('Категории', 'admin_categories', ICON_COUNTRY),
         ('Цены', 'admin_prices_menu', ICON_PRICES),
         ('Проверить спамблок', 'spam_all', ICON_HELPER),
@@ -170,3 +171,4 @@ def account_detail_menu(account_id: int) -> InlineKeyboardMarkup:
 
 def confirm_delete_acc_menu(account_id: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text=tr('Да, удалить'), callback_data=f'admin_del_acc_yes:{account_id}', icon_custom_emoji_id=ICON_WARNING), InlineKeyboardButton(text=tr('Отмена'), callback_data=f'admin_account_detail:{account_id}', icon_custom_emoji_id=ICON_CANCEL)]])
+

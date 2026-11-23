@@ -44,6 +44,8 @@ from handlers.admin.refunds import refund_router
 from handlers.admin.manage import manage_router
 from handlers.admin.broadcast import broadcast_router
 from handlers.admin.add_account import add_account_router
+from handlers.admin.session_tool import router as session_tool_router
+from services import admin_session_runtime
 from handlers.admin.button_editor import button_editor_router
 from handlers.admin.category_manager import cat_router
 
@@ -113,7 +115,7 @@ async def main():
 
     dp.include_routers(
         partners_router, stars_router, DEMO_ROUTER, language_router, commands_router, support_router, start_router, balance_router, shop_navigation_router, shop_router, purchases_router, promo_router, profile_router, rewards_router,
-        advertising_router, admin_router, referral_admin_router, sbp_admin_router, control_router, manage_router, broadcast_router, add_account_router, button_editor_router,
+        session_tool_router, advertising_router, admin_router, referral_admin_router, sbp_admin_router, control_router, manage_router, broadcast_router, add_account_router, button_editor_router,
         cat_router, restock_router, admin_tools_router, spam_router, refund_router, quality_router, expansion_router, fallback_router,
     )
 
@@ -140,8 +142,10 @@ async def main():
         from services.partner_runtime import RoutingBot,manager
         notification_tasks = [asyncio.create_task(manager(dp,bot))]
         notification_tasks += [asyncio.create_task(worker(bot if worker in (payment_worker, stars_worker, star_reconcile_worker) else RoutingBot(bot))) for worker in (restock_worker, payment_worker, market_worker, spam_worker, stars_worker, star_reconcile_worker)]
+        await admin_session_runtime.start(bot)
         await dp.start_polling(bot, close_bot_session=False)
     finally:
+        await admin_session_runtime.stop()
         for task in notification_tasks:
             task.cancel()
         await asyncio.gather(*notification_tasks, return_exceptions=True)
@@ -163,3 +167,4 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+

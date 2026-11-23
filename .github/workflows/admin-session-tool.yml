@@ -1,0 +1,42 @@
+name: Admin session tool offline tests
+on:
+  push:
+    paths:
+      - 'services/admin_session_workbench/**'
+      - 'services/admin_session_runtime.py'
+      - 'handlers/admin/session_tool.py'
+      - 'keyboards/admin_kb.py'
+      - 'bot.py'
+      - 'tests/test_admin_session_*.py'
+      - 'requirements.txt'
+      - '.github/workflows/admin-session-tool.yml'
+  pull_request:
+    paths:
+      - 'services/admin_session_workbench/**'
+      - 'services/admin_session_runtime.py'
+      - 'handlers/admin/session_tool.py'
+      - 'keyboards/admin_kb.py'
+      - 'bot.py'
+      - 'tests/test_admin_session_*.py'
+      - 'requirements.txt'
+      - '.github/workflows/admin-session-tool.yml'
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r requirements.txt pytest==8.4.2 pytest-asyncio==1.2.0
+      - name: Run isolated admin tool and affected regression checks
+        run: >-
+          python -m pytest -q
+          tests/test_admin_session_tool.py
+          tests/test_admin_session_workflow.py
+          tests/test_admin_session_protocol.py
+          tests/test_admin_categories.py
+          tests/test_bot_ux.py
+          tests/test_session_inventory_jobs.py::AuthorizationTests
+          tests/test_session_inventory_jobs.py::ArchiveTests
+          tests/test_session_inventory_jobs.py::LeaseTests
