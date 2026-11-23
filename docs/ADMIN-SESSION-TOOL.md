@@ -55,6 +55,13 @@
 
 ## Офлайн-проверки
 
+Запрос кода допускает только один явный переход на дата-центр, указанный Telegram
+(`PHONE_MIGRATE`, `NETWORK_MIGRATE`, `USER_MIGRATE`). При `request_retries=0`
+включён `raise_last_call_error=True`: Telethon больше не подменяет причину ошибки
+общим `ValueError`. После выполненного библиотекой переключения запрос продолжается
+один раз. FloodWait, AuthRestart, ошибки сервера и сетевые таймауты не запускают
+повторную отправку кода. Повторный переход останавливает задачу до очистки.
+
 ```sh
 pip install -r requirements.txt pytest==8.4.2 pytest-asyncio==1.2.0
 python -m pytest -q tests/test_admin_session_tool.py tests/test_admin_session_workflow.py tests/test_admin_session_protocol.py tests/test_admin_categories.py tests/test_bot_ux.py tests/test_session_inventory_jobs.py::AuthorizationTests tests/test_session_inventory_jobs.py::ArchiveTests tests/test_session_inventory_jobs.py::LeaseTests
