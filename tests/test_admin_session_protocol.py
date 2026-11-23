@@ -1,11 +1,13 @@
 """Fake Telegram protocol responses: no network or usable account sessions."""
 import asyncio
+from pathlib import Path
+from tempfile import TemporaryDirectory
 from types import SimpleNamespace as NS
 import unittest
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, Mock, patch
 
 from telethon import errors, types, functions
-from services.admin_session_workbench.telegram import migrate, read_code, Source, UserFacingError
+from services.admin_session_workbench.telegram import migrate, read_code, Source, UserFacingError, make_client
 
 
 class Client(NS):
@@ -118,3 +120,91 @@ class LoginProgressTests(unittest.IsolatedAsyncioTestCase):
         await migrate(old,new,AsyncMock(return_value='12345'),report,{})
         self.assertLess(events.index('Вход в новую авторизацию'),events.index('actual-sign-in'))
         self.assertLess(events.index('actual-sign-in'),events.index('Новая авторизация подтверждена'))
+
+
+class ControlledRequestTests(unittest.IsolatedAsyncioTestCase):
+    """Exercise Telethon's real _call loop; only the network sender is fake."""
+
+    async def asyncSetUp(self):
+        self.directory = TemporaryDirectory()
+        self.client = make_client(Path(self.directory.name) / 'new.session', {}, 12345, '0' * 32)
+        self.original_sender = self.client._sender
+        self.client.session.set_dc(2, '149.154.167.51', 443)
+        self.client.is_user_authorized = AsyncMock(return_value=False)
+
+        async def switch(dc):
+            self.client.session.set_dc(dc, '149.154.167.51', 443)
+        self.client._switch_dc = AsyncMock(side_effect=switch)
+
+    async def asyncTearDown(self):
+        self.client._sender = self.original_sender
+        await self.client.disconnect()
+        self.directory.cleanup()
+
+    def sender(self, *responses):
+        def send(request, **kwargs):
+            response = next(results)
+            future = asyncio.get_running_loop().create_future()
+            if isinstance(response, Exception):
+                future.set_exception(response)
+            else:
+                future.set_result(response)
+            return future
+        results = iter(responses)
+        sender = NS(send=Mock(side_effect=send))
+        self.client._sender = sender
+        return sender
+
+    async def test_each_dc_redirect_continues_once_after_actual_telethon_switch(self):
+        for error in (errors.PhoneMigrateError, errors.NetworkMigrateError, errors.UserMigrateError):
+            with self.subTest(error=error.__name__):
+                self.client.session.set_dc(2, '149.154.167.51', 443)
+                self.client._switch_dc.reset_mock()
+                result = sent()
+                sender = self.sender(error(None, capture=4), result)
+                self.assertIs(await self.client.send_code_request('+15551112222'), result)
+                self.client._switch_dc.assert_awaited_once_with(4)
+                self.assertEqual(sender.send.call_count, 2)
+                requests = [call.args[0] for call in sender.send.call_args_list]
+                self.assertTrue(all(isinstance(r, functions.auth.SendCodeRequest) for r in requests))
+                self.assertIs(requests[0], requests[1])
+
+    async def test_repeated_dc_redirect_is_bounded(self):
+        sender = self.sender(errors.PhoneMigrateError(None, capture=4),
+                             errors.PhoneMigrateError(None, capture=5))
+        with self.assertRaisesRegex(UserFacingError, 'повторно сменил дата-центр'):
+            await self.client.send_code_request('+15551112222')
+        self.assertEqual(sender.send.call_count, 2)
+
+    async def test_flood_after_redirect_is_not_retried(self):
+        sender = self.sender(errors.PhoneMigrateError(None, capture=4),
+                             errors.FloodWaitError(None, capture=60))
+        with self.assertRaises(errors.FloodWaitError) as raised:
+            await self.client.send_code_request('+15551112222')
+        self.assertEqual(raised.exception.seconds, 60)
+        self.assertEqual(sender.send.call_count, 2)
+
+    async def test_other_errors_are_preserved_without_automatic_resend(self):
+        for error in (errors.FloodWaitError(None, capture=60), errors.AuthRestartError(None),
+                      errors.ServerError(None, 'internal'), asyncio.TimeoutError()):
+            with self.subTest(error=type(error).__name__):
+                self.client._flood_waited_requests.clear()
+                sender = self.sender(error)
+                with patch('telethon.client.users.asyncio.sleep', new_callable=AsyncMock):
+                    with self.assertRaises(type(error)):
+                        await self.client.send_code_request('+15551112222')
+                self.assertEqual(sender.send.call_count, 1)
+
+    async def test_successful_request_is_sent_once(self):
+        result = sent()
+        sender = self.sender(result)
+        self.assertIs(await self.client.send_code_request('+15551112222'), result)
+        self.assertEqual(sender.send.call_count, 1)
+
+    async def test_authorized_client_redirect_is_not_forced(self):
+        self.client.is_user_authorized.return_value = True
+        sender = self.sender(errors.PhoneMigrateError(None, capture=4))
+        with self.assertRaises(errors.PhoneMigrateError):
+            await self.client.send_code_request('+15551112222')
+        self.client._switch_dc.assert_not_awaited()
+        self.assertEqual(sender.send.call_count, 1)

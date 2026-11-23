@@ -43,8 +43,23 @@ class ControlledClient(TelegramClient):
         # Telethon 1.41's convenience wrapper retries AuthRestart internally and
         # raises RuntimeError for SentCodeSuccess. Preserve the actual RPC result
         # and let the migration state machine control every retry.
-        return await self(functions.auth.SendCodeRequest(
-            phone, self.api_id, self.api_hash, types.CodeSettings()))
+        request = functions.auth.SendCodeRequest(
+            phone, self.api_id, self.api_hash, types.CodeSettings())
+        for attempt in range(2):
+            try:
+                return await self(request)
+            except (errors.PhoneMigrateError, errors.NetworkMigrateError,
+                    errors.UserMigrateError) as exc:
+                # With request_retries=0 Telethon switches DC, then raises the
+                # last RPC error. Continue only this explicit redirect once.
+                # If Telethon refused to switch an authorized client, stop.
+                if self.session.dc_id != exc.new_dc:
+                    raise
+                if attempt:
+                    raise UserFacingError(
+                        'Telegram повторно сменил дата-центр; запрос кода остановлен. '
+                        'Исходная сессия сохранена') from None
+        # FloodWait, AuthRestart, timeouts and server failures are not retried.
 
 
 def make_client(path, config, api_id, api_hash):
@@ -58,7 +73,8 @@ def make_client(path, config, api_id, api_hash):
     # API credentials are exclusively supplied by environment, never uploaded JSON.
     options = {k: str(config[k]) for k in ('device_model', 'system_version', 'app_version', 'lang_code', 'system_lang_code') if k in config}
     return ControlledClient(str(path), api_id, api_hash, proxy=proxy, connection_retries=1,
-                          request_retries=0, flood_sleep_threshold=0, timeout=20,
+                          request_retries=0, raise_last_call_error=True,
+                          flood_sleep_threshold=0, timeout=20,
                           base_logger="admin_session_workbench.telethon", **options)
 
 
