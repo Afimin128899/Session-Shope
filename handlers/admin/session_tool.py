@@ -24,6 +24,14 @@ STATES = {'draft':'ждёт подтверждения', 'queued':'в очере
           'interrupted':'прервана перезапуском', 'expired':'срок хранения истёк'}
 
 
+UPLOAD_ERRORS = {
+    'Превышен размер загрузки', 'Слишком большой архив', 'Небезопасный путь ZIP',
+    'Нужны уникальные пары .session + .json в корне ZIP', 'Превышен размер распаковки',
+    'Разрешены .session и .zip', 'Сессии не найдены', 'Неверный формат Telethon session',
+    'Нет парного JSON', 'JSON должен быть объектом',
+}
+
+
 class SessionToolState(StatesGroup):
     upload = State()
 
@@ -79,11 +87,15 @@ async def open_tool(message, state):
     await state.clear()
     await message.answer(
         'Новая сессия → очистка → выход из старой\n\n'
-        'Отдельный инструмент для собственных аккаунтов администратора. Загрузите исходную .session или ZIP с парными JSON. '
+        'Загрузите исходную .session или ZIP с парными JSON. Номер вводить не нужно — бот получает его из исходной сессии.\n\n'
+        '1/4 — подключение к исходной сессии\n'
+        '2/4 — запрос и получение кода\n'
+        '3/4 — вход в новую авторизацию и сохранение\n'
+        '4/4 — очистка, сохранение результата и выход из старой\n\n'
         'Перед обработкой будет показан полный список действий. Новые сессии сохраняются, а выход выполняется только из загруженной старой авторизации. '
         'Инструмент не добавляет результат в товары и не обновляет сохранённые сессии магазина. '
         'Если исходная сессия используется товаром магазина, её отзыв сделает ту копию нерабочей.\n\n'
-        'Основа обработки номера и кода: Session PR #1. Telegram определяет доставку кода. '
+        'Проверка формата кода основана на Session PR #1. Telegram определяет доставку кода. '
         'Для ручного ввода используйте /session_tool_input ID значение.', reply_markup=menu(), parse_mode=None)
 
 
@@ -185,7 +197,8 @@ async def upload(message: Message, state: FSMContext):
             await message.answer(f'Задача {ident}\n\n{CLEANUP_CONFIRMATION}', reply_markup=confirmation(ident), parse_mode=None)
     except Exception as exc:
         # Never echo exceptions: ZIP/JSON/SQLite messages may contain secrets.
-        await message.answer(f'Файл не принят или уведомление не доставлено ({type(exc).__name__}). Проверьте формат и статус задач.', reply_markup=menu(), parse_mode=None)
+        hint = str(exc) if type(exc) is ValueError and str(exc) in UPLOAD_ERRORS else f'Ошибка {type(exc).__name__}; проверьте формат и статус задач'
+        await message.answer(f'Файл не принят или уведомление не доставлено: {hint}.', reply_markup=menu(), parse_mode=None)
     finally:
         shutil.rmtree(staging, ignore_errors=True)
 

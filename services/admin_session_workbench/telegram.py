@@ -144,7 +144,9 @@ async def migrate(old, new, ask, report, config, *, poll_seconds=45, sleep=async
     sent = await new.send_code_request(phone)
     for attempt in range(2):
         if isinstance(sent, types.auth.SentCodeSuccess):
+            await report('Вход в новую авторизацию')
             await verify_new(new, me.id)
+            await report('Новая авторизация подтверждена')
             return
         if not isinstance(sent, types.auth.SentCode):
             raise UserFacingError('Нестандартное подтверждение Telegram; автоматическая миграция остановлена')
@@ -175,6 +177,7 @@ async def migrate(old, new, ask, report, config, *, poll_seconds=45, sleep=async
                 sources, diagnostics = await code_sources(old)
                 sent = await new(functions.auth.ResendCodeRequest(phone, sent.phone_code_hash))
                 continue
+        await report('Вход в новую авторизацию')
         try:
             await new.sign_in(phone=phone, code=code, phone_code_hash=sent.phone_code_hash)
         except errors.SessionPasswordNeededError:
@@ -187,6 +190,7 @@ async def migrate(old, new, ask, report, config, *, poll_seconds=45, sleep=async
                 password = await ask('password', 'Пароль из JSON неверен. Введите пароль 2FA.')
                 await new.sign_in(password=password)
         await verify_new(new, me.id)
+        await report('Новая авторизация подтверждена')
         return
     raise UserFacingError('Повторная отправка исчерпана')
 

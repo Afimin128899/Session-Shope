@@ -338,3 +338,34 @@ class EarlyCancellationAndPathTests(unittest.IsolatedAsyncioTestCase):
             results = ingest(archive,root/'unpacked',100000)
             self.assertEqual(len(results),1)
             self.assertFalse((root/'unpacked'/'a').exists())
+
+
+class UploadMessageTests(unittest.IsolatedAsyncioTestCase):
+    asyncSetUp = AdminSessionToolTests.asyncSetUp
+    asyncTearDown = AdminSessionToolTests.asyncTearDown
+    message = AdminSessionToolTests.message
+
+    async def test_missing_zip_json_is_reported_as_actionable_format_error(self):
+        fixture = self.root/'fixture.session'
+        with sqlite3.connect(fixture) as connection:
+            connection.execute('CREATE TABLE sessions(dc_id,server_address,port,auth_key)')
+            connection.execute('INSERT INTO sessions VALUES(2,\'fixture.invalid\',443,?)',(b'x'*256,))
+        archive = self.root/'input.zip'
+        with zipfile.ZipFile(archive,'w') as bundle:
+            bundle.write(fixture,'fixture.session')
+        async def download(document,destination):
+            shutil.copyfile(archive,destination)
+        self.bot.download.side_effect = download
+        message = self.message()
+        message.document = NS(file_name='fixture.zip',file_size=archive.stat().st_size)
+        await ui.upload(message,self.state)
+        self.assertIn('Нет парного JSON',message.answer.call_args.args[0])
+        self.assertEqual(self.active.store.rows(42),[])
+
+    async def test_unknown_value_error_message_is_not_echoed(self):
+        message = self.message()
+        message.document = NS(file_name='fixture.session',file_size=10)
+        with patch.object(ui,'ingest',side_effect=ValueError('private-password-hash')):
+            await ui.upload(message,self.state)
+        self.assertNotIn('private-password-hash',str(message.answer.call_args))
+        self.assertIn('ValueError',message.answer.call_args.args[0])
