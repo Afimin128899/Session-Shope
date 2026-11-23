@@ -1,5 +1,7 @@
 import asyncio
 import hashlib
+import logging
+import traceback
 import json
 import shutil
 import time
@@ -11,6 +13,9 @@ from .files import persist_zip
 from .checkpoints import persist_new_session
 from .cleanup import deep_clean_account
 from .telegram import make_client, authorization, migrate, verify_new, UserFacingError
+
+
+logger = logging.getLogger(__name__)
 
 
 class Engine:
@@ -33,7 +38,8 @@ class Engine:
         future = asyncio.get_running_loop().create_future()
         key = (job['owner'], job['id'])
         self.inputs[key] = (kind, future)
-        await self.report(job, f'Ожидание {"кода" if kind == "code" else "пароля 2FA"}. {prompt}\nОтветьте: /session_tool_input {job["id"]} значение\nСообщение будет удалено по возможности.')
+        phase = ('2/4 ' if kind == 'code' else '3/4 ') if job.get('mode') == 'migrate_clean' else ''
+        await self.report(job, f'{phase}Ожидание {"кода" if kind == "code" else "пароля 2FA"}. {prompt}\nОтветьте: /session_tool_input {job["id"]} значение\nСообщение будет удалено по возможности.')
         try:
             return await asyncio.wait_for(future, timeout=600)
         except asyncio.TimeoutError:
@@ -51,15 +57,26 @@ class Engine:
     async def deliver(self, job):
         from aiogram.types import FSInputFile
         try:
-            await self.bot.send_document(job['owner'], FSInputFile(job['result'], filename=f"new-session-{job['id']}.zip"), caption=f"Результат {job['id']}")
+            caption = f"Задача {job['id']}\n{job['stage']}"
+            if job['state'] != 'done':
+                caption += '\nСохранённая копия новой сессии; операция не завершена успешно.'
+            await self.bot.send_document(job['owner'], FSInputFile(job['result'], filename=f"new-session-{job['id']}.zip"), caption=caption[:1000])
             self.store.update(job['id'], delivered=1)
         except Exception:
-            self.store.update(job['id'], stage='Результат сохранён. Ошибка отправки; используйте /archives')
+            self.store.update(job['id'], stage=job['stage']+'; ошибка отправки — откройте «Мои результаты»')
 
     async def migrate_clean(self, job, old, new, output, config, expected_id):
+        phase = 2
+        async def progress(text):
+            nonlocal phase
+            if text in {'Вход в новую авторизацию', 'Новая авторизация подтверждена'}:
+                phase = 3
+            await self.report(job, f'{phase}/4 {text}')
+        await self.report(job, '2/4 Запрос и получение кода новой авторизации')
         await migrate(old, new, lambda kind, text: self.ask(job, kind, text),
-                      lambda text: self.report(job, text), config)
+                      progress, config)
         await verify_new(new, expected_id)
+        await self.report(job, '3/4 Новый вход подтверждён. Сохраняю новую сессию')
         old_key = getattr(getattr(getattr(old, 'session', None), 'auth_key', None), 'key', None)
         new_key = getattr(getattr(getattr(new, 'session', None), 'auth_key', None), 'key', None)
         if isinstance(old_key, bytes) and isinstance(new_key, bytes) and old_key == new_key:
@@ -68,21 +85,22 @@ class Engine:
             'device_model', 'system_version', 'app_version', 'lang_code', 'system_lang_code'}}
         await new.disconnect()
         saved = persist_new_session(self.store.root, job['owner'], job['id'], 'before_cleanup', output, safe)
-        self.store.update(job['id'], result=str(saved.archive), stage='Новая сессия сохранена до очистки')
+        self.store.update(job['id'], result=str(saved.archive), stage='3/4 Новая сессия сохранена до очистки')
+        await self.report(job, '4/4 Очистка аккаунта через новую авторизацию')
         await new.connect()
         engine = self
         class Reporter:
             async def update(self, text, **kwargs):
-                await engine.report(job, text)
+                await engine.report(job, f'4/4 {text}')
         report = await deep_clean_account(new, Reporter())
         await verify_new(new, expected_id)
         await new.disconnect()
         saved = persist_new_session(self.store.root, job['owner'], job['id'], 'after_cleanup', output, safe)
-        self.store.update(job['id'], result=str(saved.archive), stage='Результат сохранён; исходная авторизация ещё активна')
+        self.store.update(job['id'], result=str(saved.archive), stage='4/4 Результат сохранён; исходная авторизация ещё активна')
         if report.errors or report.dialogs_failed:
             raise UserFacingError(f'Очистка частичная: ошибок {len(report.errors)}, диалогов {report.dialogs_failed}. '
                                   'Новая сессия сохранена; старая авторизация не отзывалась')
-        await self.report(job, 'Новая сессия сохранена. Завершаю только исходную авторизацию')
+        await self.report(job, '4/4 Результат сохранён. Завершаю только исходную авторизацию')
         try:
             async with asyncio.timeout(30):
                 result = await old(functions.auth.LogOutRequest())
@@ -92,12 +110,19 @@ class Engine:
             pass  # Source already revoked; the saved new authorization stays active.
         return str(saved.archive)
 
+    def fail(self, ident, state, reason):
+        stage = self.store.get(ident)['stage'] or ''
+        prefix = stage[:4] if len(stage) >= 4 and stage[0] in '1234' and stage[1:4] == '/4 ' else ''
+        self.store.update(ident, state=state, stage=prefix+reason)
+
     async def run_job(self, job):
         ident = job['id']
         work = self.store.root / 'work' / ident
         clients = []
         combined = job['mode'] == 'migrate_clean'
         try:
+            if combined:
+                await self.report(job, '1/4 Проверка исходного файла и подключение к сессии')
             work.mkdir(parents=True, exist_ok=True, mode=0o700)
             original = Path(job['source'])
             copied = work / 'source.session'
@@ -105,10 +130,10 @@ class Engine:
             config = json.loads(job['config'])
             old = make_client(copied, config, self.api_id, self.api_hash)
             clients.append(old)
-            await self.report(job, 'Подключение')
+            await self.report(job, '1/4 Подключение к исходной сессии' if combined else 'Подключение')
             await old.connect()
             status = await authorization(old)
-            await self.report(job, status)
+            await self.report(job, f'1/4 Исходная авторизация: {status}' if combined else status)
             if status != 'Активна':
                 raise UserFacingError(status)
             # Resolve real account ID before any operation; aliases of a session share a lock.
@@ -131,6 +156,8 @@ class Engine:
                 output = work / 'new.session'
                 new = make_client(output, config, self.api_id, self.api_hash)
                 clients.append(new)
+                if combined:
+                    await self.report(job, '2/4 Подготовка запроса кода новой авторизации')
                 await new.connect()
                 if combined:
                     result = await self.migrate_clean(job, old, new, output, config, me.id)
@@ -161,31 +188,35 @@ class Engine:
             clients.clear()
             if not combined:
                 result = persist_zip(self.store.root / 'results', ident, output, config)
-            stage = ('Готово: новая авторизация сохранена, очистка выполнена, старая завершена' if combined else 'Готово')
+            stage = ('4/4 Готово: новая авторизация сохранена, очистка выполнена, старая завершена' if combined else 'Готово')
             self.store.update(ident, state='done', stage=stage, result=result)
             await self.deliver(self.store.get(ident))
         except asyncio.CancelledError:
             if self.store.get(ident)['state'] != 'done':
-                self.store.update(ident, state='cancelled', stage='Отменена; исходный файл сохранён')
+                self.fail(ident, 'cancelled', 'Отменена; исходный файл сохранён')
             raise
         except errors.FloodWaitError as exc:
             current_account = self.store.get(ident)['account']
             self.store.cooldown(current_account, exc.seconds)
             self.store.cooldown(job['account'], exc.seconds)
-            self.store.update(ident, state='blocked', stage=f'Telegram FloodWait: {exc.seconds} с; автоматического повтора нет')
+            self.fail(ident, 'blocked', f'Telegram FloodWait: {exc.seconds} с; автоматического повтора нет')
         except UserFacingError as exc:
-            self.store.update(ident, state='failed', stage=str(exc))
+            self.fail(ident, 'failed', str(exc))
         except (errors.PhoneCodeInvalidError, errors.PhoneCodeExpiredError):
-            self.store.update(ident, state='failed', stage='Код неверен или истёк; исходный файл сохранён')
+            self.fail(ident, 'failed', 'Код неверен или истёк; исходный файл сохранён')
         except errors.PasswordHashInvalidError:
-            self.store.update(ident, state='failed', stage='Пароль 2FA неверен; исходный файл сохранён')
+            self.fail(ident, 'failed', 'Пароль 2FA неверен; исходный файл сохранён')
         except asyncio.TimeoutError:
-            self.store.update(ident, state='failed', stage='Таймаут подключения или ответа Telegram')
+            self.fail(ident, 'failed', 'Таймаут подключения или ответа Telegram')
         except OSError:
-            self.store.update(ident, state='failed', stage='Ошибка подключения или постоянного диска; исходный файл сохранён')
+            self.fail(ident, 'failed', 'Ошибка подключения или постоянного диска; исходный файл сохранён')
         except Exception as exc:
+            frames = ' > '.join(f'{Path(frame.filename).name}:{frame.lineno}:{frame.name}'
+                                for frame in traceback.extract_tb(exc.__traceback__)[-8:])
+            logger.error('task=%s stage=%s error=%s frames=%s', ident,
+                         self.store.get(ident)['stage'], type(exc).__name__, frames)
             # Only class name; exception strings may contain secrets or service text.
-            self.store.update(ident, state='failed', stage=f'Ошибка {type(exc).__name__}; исходный файл сохранён')
+            self.fail(ident, 'failed', f'Ошибка {type(exc).__name__}; исходный файл сохранён')
         finally:
             for client in reversed(clients):
                 try:
@@ -204,6 +235,8 @@ class Engine:
                     pass  # Leave the work folder intact if moving also fails.
             else:
                 shutil.rmtree(work, ignore_errors=True)
+            if combined and current['state'] in {'failed', 'blocked'}:
+                await self.report(job, current['stage'])
             if combined and current['result'] and current['state'] not in {'done', 'cancelled'}:
                 await self.deliver(current)
 

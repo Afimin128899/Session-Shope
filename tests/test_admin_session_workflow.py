@@ -230,3 +230,45 @@ async def test_wrong_account_or_reused_key_cannot_trigger_cleanup(setup):
     assert s.store.get(s.ident)['state'] == 'failed'
     s.cleaner.assert_not_awaited()
     assert not any(isinstance(c.args[0], functions.auth.LogOutRequest) for c in s.old.await_args_list)
+
+
+async def test_four_stages_are_ordered_and_result_explains_success(setup):
+    s = setup
+    await s.engine.run_job(s.store.claim())
+    texts = [call.args[1] for call in s.bot.send_message.await_args_list]
+    positions = [next(index for index,text in enumerate(texts) if f'{stage}/4' in text) for stage in range(1,5)]
+    assert positions == sorted(positions)
+    assert '4/4 Готово' in s.store.get(s.ident)['stage']
+    assert 'старая завершена' in s.bot.send_document.await_args.kwargs['caption']
+    assert s.events == ['clean-new','logout-source']
+
+
+async def test_initial_value_error_reports_failed_first_stage(setup, monkeypatch):
+    s = setup
+    monkeypatch.setattr(module,'make_client',MagicMock(side_effect=ValueError('private-error')))
+    await s.engine.run_job(s.store.claim())
+    job = s.store.get(s.ident)
+    assert job['state'] == 'failed'
+    assert job['stage'].startswith('1/4 ')
+    assert 'ValueError' in job['stage']
+    assert 'private-error' not in job['stage']
+    assert any('1/4' in call.args[1] and 'ValueError' in call.args[1] for call in s.bot.send_message.await_args_list)
+    s.cleaner.assert_not_awaited()
+
+
+async def test_partial_cleanup_archive_does_not_claim_success(setup):
+    s = setup
+    s.cleaner.side_effect = None
+    s.cleaner.return_value = CleanReport(errors=['SyntheticError'])
+    await s.engine.run_job(s.store.claim())
+    assert s.store.get(s.ident)['stage'].startswith('4/4 ')
+    assert 'не завершена успешно' in s.bot.send_document.await_args.kwargs['caption']
+    assert 'Готово' not in s.bot.send_document.await_args.kwargs['caption']
+
+
+async def test_value_error_log_has_phase_and_location_but_no_private_message(setup, monkeypatch, caplog):
+    s = setup
+    monkeypatch.setattr(module,'make_client',MagicMock(side_effect=ValueError('private-code-password-hash')))
+    await s.engine.run_job(s.store.claim())
+    assert '1/4' in caplog.text and 'error=ValueError' in caplog.text and 'frames=' in caplog.text
+    assert 'private-code-password-hash' not in caplog.text

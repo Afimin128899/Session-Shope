@@ -102,3 +102,19 @@ class AdminSessionProtocolTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(asyncio.CancelledError):
             await task
         new.sign_in.assert_not_awaited()
+
+
+class LoginProgressTests(unittest.IsolatedAsyncioTestCase):
+    async def test_login_progress_is_emitted_before_sign_in_and_confirmation_after(self):
+        old,new = fake(),fake()
+        new.send_code_request.return_value = sent(types.auth.SentCodeTypeSms(5))
+        events = []
+        async def report(text):
+            events.append(text)
+        async def signin(**kwargs):
+            self.assertEqual(events[-1],'Вход в новую авторизацию')
+            events.append('actual-sign-in')
+        new.sign_in.side_effect = signin
+        await migrate(old,new,AsyncMock(return_value='12345'),report,{})
+        self.assertLess(events.index('Вход в новую авторизацию'),events.index('actual-sign-in'))
+        self.assertLess(events.index('actual-sign-in'),events.index('Новая авторизация подтверждена'))
